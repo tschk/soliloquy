@@ -215,7 +215,3 @@ When adding new documentation:
 4. Include code examples where helpful
 5. Add cross-references to related docs
 
----
-
-**Last Updated**: 2024-11-26  
-**Maintainer**: Soliloquy OS Team
