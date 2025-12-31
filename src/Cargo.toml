@@ -1,0 +1,17 @@
+[package]
+name = "soliloquy_browser_optimizations"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "soliloquy_browser_optimizations"
+path = "lib.rs"
+
+[dependencies]
+log = "0.4"
+
+[dev-dependencies]
+env_logger = "0.10"
+
+[features]
+default = []
