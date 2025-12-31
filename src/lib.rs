@@ -8,13 +8,16 @@
 //! - `memory`: Tab residency management with tiered eviction
 //! - `zircon`: Zero-copy memory sharing and IPC primitives
 //! - `gpu`: GPU-accelerated layout and damage-based compositing
-//! - `cache`: Unified caching system (planned)
-//! - `v8_integration`: V8 optimizations (planned)
-//! - `network`: Network stack optimizations (planned)
+//! - `cache`: Unified caching system with LRU and texture atlasing
+//! - `v8_integration`: V8 snapshot/bytecode caching and GC scheduling
+//! - `network`: DNS prefetch and resource prioritization
 
 pub mod memory;
 pub mod zircon;
 pub mod gpu;
+pub mod cache;
+pub mod v8_integration;
+pub mod network;
 
 // Re-export commonly used types
 pub use memory::{
@@ -29,4 +32,16 @@ pub use zircon::{
 
 pub use gpu::{
     GpuLayoutCompute, LayoutNode, DamageTracker, CompositorLayer,
+};
+
+pub use cache::{
+    LruCache, TextureAtlasManager,
+};
+
+pub use v8_integration::{
+    V8BytecodeCache, GcScheduler, SnapshotManager,
+};
+
+pub use network::{
+    PrefetchManager, PriorityQueue,
 };
