@@ -56,6 +56,7 @@ rust_library(
     ],
     edition = "2021",
     deps = [
+        "//src:soliloquy_browser_optimizations",
         "//gen/fidl/fuchsia_ui_composition",
         "//gen/fidl/fuchsia_ui_views",
         "//gen/fidl/fuchsia_input",
