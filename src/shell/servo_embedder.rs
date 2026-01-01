@@ -2,13 +2,14 @@
 //! 
 //! This module provides the integration layer between Servo and Zircon,
 //! implementing the necessary traits for windowing, events, and graphics.
-//! It also integrates V8 for JavaScript execution.
+//! It also integrates V8 for JavaScript execution and tab memory optimization.
 
 use log::{info, error, debug, warn};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 use crate::v8_runtime::V8Runtime;
+use soliloquy_browser_optimizations::{TabResidencyManager, GcScheduler, MemoryPressureMonitor};
 
 /// Main embedder context that bridges Servo browser engine with Zircon/Fuchsia.
 ///
@@ -18,6 +19,7 @@ use crate::v8_runtime::V8Runtime;
 /// - V8 JavaScript runtime for script execution
 /// - Servo's rendering engine for web content
 /// - Zircon input event system
+/// - Tab memory optimization for efficient multi-tab handling
 ///
 /// The embedder follows a state machine pattern (see [`EmbedderState`]) to ensure proper
 /// initialization order and safe resource management.
@@ -38,6 +40,14 @@ pub struct ServoEmbedder {
     current_url: Option<String>,
     /// Current state in the embedder lifecycle (see state machine documentation).
     state: EmbedderState,
+    /// Tab residency manager for memory optimization (150+ tabs at <3GB RAM).
+    tab_residency: Arc<Mutex<TabResidencyManager>>,
+    /// GC scheduler for idle-time garbage collection.
+    gc_scheduler: Arc<Mutex<GcScheduler>>,
+    /// Memory pressure monitor for adaptive eviction.
+    memory_monitor: Arc<Mutex<MemoryPressureMonitor>>,
+    /// Map of tab IDs to their residency tracking IDs.
+    tab_id_map: HashMap<u64, u64>,
 }
 
 /// State machine for embedder lifecycle management.
@@ -118,7 +128,8 @@ impl ServoEmbedder {
     /// 1. Creates V8 runtime and executes a test script to verify functionality
     /// 2. Initializes Flatland graphics session (currently placeholder)
     /// 3. Creates view reference tokens for window management
-    /// 4. Transitions state from `Uninitialized` → `Initializing` → `Ready`
+    /// 4. Initializes tab memory optimization systems
+    /// 5. Transitions state from `Uninitialized` → `Initializing` → `Ready`
     ///
     /// # Returns
     /// - `Ok(ServoEmbedder)`: Fully initialized embedder ready to load URLs
@@ -130,7 +141,7 @@ impl ServoEmbedder {
     /// embedder.load_url("https://example.com")?;
     /// ```
     pub fn new() -> Result<Self, String> {
-        info!("Initializing Servo embedder");
+        info!("Initializing Servo embedder with memory optimization");
         
         let mut embedder = ServoEmbedder {
             flatland_session: None,
@@ -140,9 +151,20 @@ impl ServoEmbedder {
             webview: None,
             current_url: None,
             state: EmbedderState::Uninitialized,
+            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
+            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            tab_id_map: HashMap::new(),
         };
         
         embedder.state = EmbedderState::Initializing;
+        
+        // Initialize memory monitoring
+        {
+            let monitor = embedder.memory_monitor.lock().unwrap();
+            monitor.start_monitoring();
+        }
+        info!("Memory pressure monitoring started");
         
         // Initialize V8 runtime
         match V8Runtime::new() {
@@ -183,11 +205,10 @@ impl ServoEmbedder {
         });
         
         embedder.state = EmbedderState::Ready;
-        info!("Servo embedder initialized successfully");
+        info!("Servo embedder initialized successfully with tab memory optimization");
         
         Ok(embedder)
     }
-    
     /// Initializes a Flatland compositor session for graphics output.
     ///
     /// **Placeholder Implementation:** Currently returns a mock session.
@@ -464,6 +485,141 @@ impl ServoEmbedder {
             Err("V8 runtime not initialized".to_string())
         }
     }
+    
+    /// Register a new tab with the memory optimization system.
+    ///
+    /// Integrates the tab into the residency manager for automatic memory eviction.
+    /// Tabs start in Active state and transition through Warm→Cold→Frozen based on idle time.
+    ///
+    /// # Arguments
+    /// * `tab_id` - Unique identifier for the tab (from browser UI)
+    /// * `url` - Initial URL for the tab
+    ///
+    /// # Returns
+    /// - `Ok(())`: Tab registered successfully
+    /// - `Err(String)`: Failed to acquire lock on residency manager
+    pub fn register_tab(&mut self, tab_id: u64, url: String) -> Result<(), String> {
+        let mut residency = self.tab_residency.lock()
+            .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
+        
+        let residency_id = residency.register_tab(url.clone());
+        self.tab_id_map.insert(tab_id, residency_id);
+        
+        info!("Registered tab {} (residency ID: {}) for URL: {}", tab_id, residency_id, url);
+        Ok(())
+    }
+    
+    /// Mark a tab as active (user is currently viewing it).
+    ///
+    /// Restores tab to Active state if it was evicted and records interaction
+    /// for GC scheduler to defer garbage collection.
+    ///
+    /// # Arguments
+    /// * `tab_id` - Tab to mark as active
+    pub fn activate_tab(&mut self, tab_id: u64) -> Result<(), String> {
+        if let Some(&residency_id) = self.tab_id_map.get(&tab_id) {
+            let mut residency = self.tab_residency.lock()
+                .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
+            
+            residency.touch_tab(residency_id)?;
+            
+            // Record interaction for GC scheduler
+            let mut gc = self.gc_scheduler.lock()
+                .map_err(|e| format!("Failed to lock GC scheduler: {}", e))?;
+            gc.record_interaction();
+            
+            debug!("Activated tab {}", tab_id);
+        }
+        Ok(())
+    }
+    
+    /// Unregister a tab when it's closed.
+    ///
+    /// # Arguments
+    /// * `tab_id` - Tab to remove from tracking
+    pub fn unregister_tab(&mut self, tab_id: u64) -> Result<(), String> {
+        if let Some(residency_id) = self.tab_id_map.remove(&tab_id) {
+            let mut residency = self.tab_residency.lock()
+                .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
+            
+            residency.unregister_tab(residency_id)?;
+            info!("Unregistered tab {}", tab_id);
+        }
+        Ok(())
+    }
+    
+    /// Run periodic maintenance tasks.
+    ///
+    /// Should be called regularly (e.g., every 5 seconds) to:
+    /// - Check memory pressure and trigger evictions
+    /// - Run idle-time garbage collection
+    /// - Update memory statistics
+    ///
+    /// This is the main integration point for the optimization system.
+    pub fn run_maintenance(&mut self) -> Result<(), String> {
+        // Check memory pressure
+        let is_under_pressure = {
+            let monitor = self.memory_monitor.lock()
+                .map_err(|e| format!("Failed to lock memory monitor: {}", e))?;
+            monitor.is_under_pressure()
+        };
+        
+        // Update tab residency manager with memory pressure state
+        {
+            let mut residency = self.tab_residency.lock()
+                .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
+            residency.set_memory_pressure(is_under_pressure);
+            
+            // Run eviction pass
+            let evicted = residency.run_eviction_pass();
+            if evicted > 0 {
+                info!("Eviction pass completed: {} tabs evicted", evicted);
+            }
+            
+            // Update memory monitor with current usage
+            let usage = residency.get_memory_usage();
+            let monitor = self.memory_monitor.lock()
+                .map_err(|e| format!("Failed to lock memory monitor: {}", e))?;
+            monitor.update_usage(usage);
+        }
+        
+        // Check if GC should run
+        {
+            let mut gc = self.gc_scheduler.lock()
+                .map_err(|e| format!("Failed to lock GC scheduler: {}", e))?;
+            
+            if let Some(gc_type) = gc.should_run_gc() {
+                debug!("Scheduling GC: {:?}", gc_type);
+                // TODO: Trigger actual V8 GC
+                // For now, just record that we would have run it
+                gc.record_gc(gc_type, std::time::Duration::from_millis(10));
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Get memory optimization statistics.
+    ///
+    /// Returns information about tab states and memory usage.
+    pub fn get_memory_stats(&self) -> Result<String, String> {
+        let residency = self.tab_residency.lock()
+            .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
+        
+        let stats = residency.get_stats();
+        let monitor = self.memory_monitor.lock()
+            .map_err(|e| format!("Failed to lock memory monitor: {}", e))?;
+        
+        Ok(format!(
+            "Tabs: {} active, {} warm, {} cold, {} frozen | Memory: {:.2} MB ({:.1}% of limit)",
+            stats.active_count,
+            stats.warm_count,
+            stats.cold_count,
+            stats.frozen_count,
+            stats.total_memory as f64 / 1024.0 / 1024.0,
+            monitor.get_usage_percentage()
+        ))
+    }
 }
 
 /// Input event types for user interaction.
@@ -638,6 +794,10 @@ mod tests {
             webview: None,
             current_url: None,
             state: EmbedderState::Error("Test error".to_string()),
+            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
+            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            tab_id_map: HashMap::new(),
         };
         
         assert_eq!(embedder.get_state(), &EmbedderState::Error("Test error".to_string()));

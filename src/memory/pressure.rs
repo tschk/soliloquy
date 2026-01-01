@@ -119,24 +119,60 @@ impl SystemMemoryInfo {
     /// Get current system memory information
     #[cfg(target_os = "linux")]
     pub fn get() -> Result<Self, String> {
-        // TODO: Integrate with actual system memory APIs
-        // On Linux: read /proc/meminfo
-        // On Fuchsia: use kernel.stats API
+        use std::fs;
+        
+        // Read /proc/meminfo
+        let meminfo = fs::read_to_string("/proc/meminfo")
+            .map_err(|e| format!("Failed to read /proc/meminfo: {}", e))?;
+        
+        let mut total_memory = 0;
+        let mut available_memory = 0;
+        
+        for line in meminfo.lines() {
+            if line.starts_with("MemTotal:") {
+                if let Some(value) = parse_meminfo_value(line) {
+                    total_memory = value * 1024; // Convert KB to bytes
+                }
+            } else if line.starts_with("MemAvailable:") {
+                if let Some(value) = parse_meminfo_value(line) {
+                    available_memory = value * 1024; // Convert KB to bytes
+                }
+            }
+        }
+        
+        if total_memory == 0 {
+            return Err("Failed to parse MemTotal from /proc/meminfo".to_string());
+        }
+        
+        let used_memory = total_memory.saturating_sub(available_memory);
+        
         Ok(SystemMemoryInfo {
-            total_memory: 8 * 1024 * 1024 * 1024, // 8GB placeholder
-            available_memory: 4 * 1024 * 1024 * 1024,
-            used_memory: 4 * 1024 * 1024 * 1024,
+            total_memory,
+            available_memory,
+            used_memory,
         })
     }
 
     #[cfg(not(target_os = "linux"))]
     pub fn get() -> Result<Self, String> {
         // Placeholder for other platforms
+        // TODO: Implement for Fuchsia using kernel.stats API
         Ok(SystemMemoryInfo {
             total_memory: 8 * 1024 * 1024 * 1024,
             available_memory: 4 * 1024 * 1024 * 1024,
             used_memory: 4 * 1024 * 1024 * 1024,
         })
+    }
+}
+
+/// Parse a value from /proc/meminfo line (e.g., "MemTotal:       16384000 kB")
+#[cfg(target_os = "linux")]
+fn parse_meminfo_value(line: &str) -> Option<usize> {
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    if parts.len() >= 2 {
+        parts[1].parse::<usize>().ok()
+    } else {
+        None
     }
 }
 

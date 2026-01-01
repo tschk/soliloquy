@@ -19,3 +19,5 @@ env_logger = "0.10"
 
 [features]
 default = []
+# Enable real zstd compression (requires zstd crate dependency)
+real_compression = []
