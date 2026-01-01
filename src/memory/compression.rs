@@ -3,27 +3,79 @@
 //! Uses zstd for fast compression/decompression with good compression ratios.
 //! Target: <100ms decompression for "instant-back" user experience.
 
-use log::{debug, error};
+use log::{debug, warn};
 
 /// Compression level for zstd (1-22)
 /// Level 3 provides good balance of speed and compression ratio
 const ZSTD_COMPRESSION_LEVEL: i32 = 3;
 
 /// Compress data using zstd
+///
+/// TODO: Enable the `real_compression` feature and add zstd dependency before production use.
+#[cfg(not(feature = "real_compression"))]
 pub fn compress(data: &[u8]) -> Result<Vec<u8>, String> {
-    // Placeholder for actual zstd compression
-    // In production, this would use the zstd crate
-    debug!("Compressing {} bytes with zstd level {}", data.len(), ZSTD_COMPRESSION_LEVEL);
+    warn!(
+        "Using placeholder compression (no-op). Enable the `real_compression` feature \
+         to use real zstd compression."
+    );
+    debug!(
+        "Compressing {} bytes with zstd level {} (placeholder, no compression performed)",
+        data.len(),
+        ZSTD_COMPRESSION_LEVEL
+    );
     
     // For now, just return a copy to establish the interface
     Ok(data.to_vec())
 }
 
+/// Compress data using real zstd compression
+#[cfg(feature = "real_compression")]
+pub fn compress(data: &[u8]) -> Result<Vec<u8>, String> {
+    debug!(
+        "Compressing {} bytes with zstd level {} (real_compression feature enabled)",
+        data.len(),
+        ZSTD_COMPRESSION_LEVEL
+    );
+    
+    // TODO: Implement with zstd crate:
+    // zstd::encode_all(&data[..], ZSTD_COMPRESSION_LEVEL)
+    //     .map_err(|e| format!("zstd compression failed: {e}"))
+    
+    // Placeholder until zstd dependency is added
+    Ok(data.to_vec())
+}
+
 /// Decompress zstd-compressed data
+///
+/// TODO: Enable the `real_compression` feature and add zstd dependency before production use.
+#[cfg(not(feature = "real_compression"))]
 pub fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
-    debug!("Decompressing {} bytes", compressed.len());
+    warn!(
+        "Using placeholder decompression (no-op). Enable the `real_compression` feature \
+         to use real zstd decompression."
+    );
+    debug!(
+        "Decompressing {} bytes (placeholder, no decompression performed)",
+        compressed.len()
+    );
     
     // Placeholder for actual zstd decompression
+    Ok(compressed.to_vec())
+}
+
+/// Decompress data using real zstd decompression
+#[cfg(feature = "real_compression")]
+pub fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
+    debug!(
+        "Decompressing {} bytes (real_compression feature enabled)",
+        compressed.len()
+    );
+    
+    // TODO: Implement with zstd crate:
+    // zstd::decode_all(compressed)
+    //     .map_err(|e| format!("zstd decompression failed: {e}"))
+    
+    // Placeholder until zstd dependency is added
     Ok(compressed.to_vec())
 }
 

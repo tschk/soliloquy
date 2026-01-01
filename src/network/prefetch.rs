@@ -128,11 +128,11 @@ impl PrefetchManager {
             return None;
         }
 
-        // Sort by priority (highest first)
-        self.pending.sort_by(|a, b| b.priority.cmp(&a.priority));
+        // Sort by priority (lowest first) so highest is at the end
+        self.pending.sort_by(|a, b| a.priority.cmp(&b.priority));
         
-        // Take highest priority request
-        Some(self.pending.remove(0))
+        // Take highest priority request in O(1)
+        self.pending.pop()
     }
 
     /// Mark a prefetch as completed
