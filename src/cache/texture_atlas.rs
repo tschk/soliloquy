@@ -74,6 +74,14 @@ impl RectPacker {
     }
 
     /// Try to pack a rectangle into the atlas
+    ///
+    /// Note: This uses a naive O(w*h) grid search with 32-pixel steps.
+    /// For large atlases (2048x2048), this could iterate over 4096 positions.
+    /// For production use, consider more efficient packing algorithms like:
+    /// - Shelf packing (rows with increasing heights)
+    /// - Guillotine (recursive space subdivision)
+    /// - MaxRects (best area fit)
+    /// These provide better space utilization and O(n) or O(n log n) performance.
     fn pack(&mut self, width: u32, height: u32) -> Option<AtlasRect> {
         // Try to find a spot using simple shelf algorithm
         for y in (0..self.height).step_by(32) {

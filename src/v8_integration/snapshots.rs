@@ -160,6 +160,10 @@ impl V8BytecodeCache {
     }
 
     /// Evict least recently used entry
+    ///
+    /// Note: This uses O(n) linear search to find LRU entry.
+    /// For production with many entries, consider using a more efficient data structure
+    /// like a combination of HashMap + doubly-linked list, or maintaining sorted order.
     fn evict_lru(&mut self) {
         if let Some((url, _)) = self.cache
             .iter()
@@ -270,12 +274,14 @@ fn current_timestamp() -> u64 {
         .as_secs()
 }
 
-/// Compute simple hash of source code
+/// Compute hash of source code using std::hash
 pub fn hash_source(source: &str) -> u64 {
-    // Simple hash implementation (use a proper hash in production)
-    source.bytes().fold(0u64, |acc, b| {
-        acc.wrapping_mul(31).wrapping_add(b as u64)
-    })
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    
+    let mut hasher = DefaultHasher::new();
+    source.hash(&mut hasher);
+    hasher.finish()
 }
 
 #[cfg(test)]

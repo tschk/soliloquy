@@ -132,6 +132,10 @@ impl<T: Clone> LruCache<T> {
     }
 
     /// Evict one entry based on priority score
+    /// 
+    /// Note: This uses O(n) linear search to find minimum priority.
+    /// For production with many entries, consider using a min-heap (BinaryHeap with Reverse)
+    /// to achieve O(log n) evictions.
     fn evict_one(&mut self) {
         if self.entries.is_empty() {
             return;

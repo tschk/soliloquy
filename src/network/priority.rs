@@ -156,6 +156,8 @@ pub struct PriorityQueue {
     max_concurrent: usize,
     /// Currently active requests
     active_count: usize,
+    /// Whether the queue needs sorting
+    needs_sort: bool,
 }
 
 impl PriorityQueue {
@@ -168,6 +170,7 @@ impl PriorityQueue {
             next_id: 1,
             max_concurrent,
             active_count: 0,
+            needs_sort: false,
         }
     }
 
@@ -185,7 +188,7 @@ impl PriorityQueue {
         );
 
         self.requests.push(request);
-        self.requests.sort();
+        self.needs_sort = true;
 
         id
     }
@@ -194,6 +197,12 @@ impl PriorityQueue {
     pub fn dequeue(&mut self) -> Option<ResourceRequest> {
         if self.active_count >= self.max_concurrent {
             return None;
+        }
+
+        // Sort only when dequeuing if needed
+        if self.needs_sort {
+            self.requests.sort();
+            self.needs_sort = false;
         }
 
         if let Some(request) = self.requests.pop() {
