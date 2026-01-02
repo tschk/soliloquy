@@ -7,8 +7,15 @@
 //!
 //! VMOs are Zircon's core primitive for shared memory with kernel-enforced
 //! security boundaries and copy-on-write semantics.
+//!
+//! This implementation provides two modes:
+//! - **fuchsia feature**: Uses real fuchsia_zircon::Vmo kernel APIs
+//! - **Default**: Uses placeholder implementation for development/testing
 
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
+
+#[cfg(feature = "fuchsia")]
+use fuchsia_zircon as zx;
 
 /// Handle to a Zircon Virtual Memory Object
 ///
@@ -17,8 +24,14 @@ use log::{debug, error, info};
 /// - Imported into GPU as buffers
 /// - Shared with zero-copy overhead
 pub struct ZirconVmo {
-    /// VMO handle (placeholder - real implementation uses fuchsia_zircon::Vmo)
+    #[cfg(feature = "fuchsia")]
+    /// Real Zircon VMO handle
+    vmo: zx::Vmo,
+    
+    #[cfg(not(feature = "fuchsia"))]
+    /// Placeholder handle for development
     handle: u64,
+    
     /// Size in bytes
     size: usize,
     /// Human-readable name for debugging
@@ -38,14 +51,35 @@ impl ZirconVmo {
 
         debug!("Creating VMO '{}' with size {} bytes", name, aligned_size);
 
-        // Placeholder: actual implementation would call zx_vmo_create
-        let handle = Self::allocate_handle();
-
-        Ok(ZirconVmo {
-            handle,
-            size: aligned_size,
-            name: name.to_string(),
-        })
+        #[cfg(feature = "fuchsia")]
+        {
+            let vmo = zx::Vmo::create(aligned_size as u64)
+                .map_err(|e| format!("zx_vmo_create failed: {:?}", e))?;
+            
+            // Set the VMO name for debugging
+            vmo.set_name(name.as_bytes())
+                .map_err(|e| format!("Failed to set VMO name: {:?}", e))?;
+            
+            info!("Created real Zircon VMO '{}' with handle {:?}", name, vmo);
+            
+            Ok(ZirconVmo {
+                vmo,
+                size: aligned_size,
+                name: name.to_string(),
+            })
+        }
+        
+        #[cfg(not(feature = "fuchsia"))]
+        {
+            warn!("Using placeholder VMO (fuchsia feature not enabled)");
+            let handle = Self::allocate_handle();
+            
+            Ok(ZirconVmo {
+                handle,
+                size: aligned_size,
+                name: name.to_string(),
+            })
+        }
     }
 
     /// Get the size of the VMO
@@ -54,6 +88,12 @@ impl ZirconVmo {
     }
 
     /// Get the VMO handle (for passing to other APIs)
+    #[cfg(feature = "fuchsia")]
+    pub fn raw_handle(&self) -> zx::Handle {
+        self.vmo.as_handle_ref().raw_handle()
+    }
+    
+    #[cfg(not(feature = "fuchsia"))]
     pub fn handle(&self) -> u64 {
         self.handle
     }
@@ -70,29 +110,77 @@ impl ZirconVmo {
     pub fn create_cow_clone(&self) -> Result<Self, String> {
         debug!("Creating COW clone of VMO '{}'", self.name);
 
-        // Placeholder: actual implementation would call zx_vmo_create_child
-        let handle = Self::allocate_handle();
-
-        Ok(ZirconVmo {
-            handle,
-            size: self.size,
-            name: format!("{}_clone", self.name),
-        })
+        #[cfg(feature = "fuchsia")]
+        {
+            use zx::VmoChildOptions;
+            
+            let child_vmo = self.vmo.create_child(
+                VmoChildOptions::COPY_ON_WRITE,
+                0,
+                self.size as u64
+            ).map_err(|e| format!("zx_vmo_create_child failed: {:?}", e))?;
+            
+            let clone_name = format!("{}_clone", self.name);
+            child_vmo.set_name(clone_name.as_bytes())
+                .map_err(|e| format!("Failed to set child VMO name: {:?}", e))?;
+            
+            info!("Created COW child VMO '{}'", clone_name);
+            
+            Ok(ZirconVmo {
+                vmo: child_vmo,
+                size: self.size,
+                name: clone_name,
+            })
+        }
+        
+        #[cfg(not(feature = "fuchsia"))]
+        {
+            let handle = Self::allocate_handle();
+            
+            Ok(ZirconVmo {
+                handle,
+                size: self.size,
+                name: format!("{}_clone", self.name),
+            })
+        }
     }
 
     /// Map the VMO into the current process address space
     pub fn map(&self) -> Result<MappedMemory, String> {
         debug!("Mapping VMO '{}' into address space", self.name);
 
-        // Placeholder: actual implementation would call zx_vmar_map
-        Ok(MappedMemory {
-            vmo_handle: self.handle,
-            size: self.size,
-            addr: 0, // Placeholder address
-        })
+        #[cfg(feature = "fuchsia")]
+        {
+            // On Fuchsia, we would use zx_vmar_map to map the VMO
+            // This requires access to the VMAR (Virtual Memory Address Region)
+            // which is typically obtained from the process handle
+            
+            warn!("Real VMO mapping requires VMAR - using placeholder for now");
+            
+            // Placeholder: actual implementation would:
+            // 1. Get the root VMAR from fuchsia_runtime
+            // 2. Call vmar.map() with the VMO
+            // 3. Return the mapped address
+            
+            Ok(MappedMemory {
+                _vmo: None,  // Would hold a reference to prevent unmapping
+                size: self.size,
+                addr: 0, // Placeholder address
+            })
+        }
+        
+        #[cfg(not(feature = "fuchsia"))]
+        {
+            Ok(MappedMemory {
+                vmo_handle: self.handle,
+                size: self.size,
+                addr: 0, // Placeholder address
+            })
+        }
     }
 
-    // Helper to allocate unique handles (placeholder)
+    // Helper to allocate unique handles (placeholder for non-Fuchsia)
+    #[cfg(not(feature = "fuchsia"))]
     fn allocate_handle() -> u64 {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT_HANDLE: AtomicU64 = AtomicU64::new(1);
@@ -100,17 +188,32 @@ impl ZirconVmo {
     }
 }
 
+#[cfg(feature = "fuchsia")]
 impl Drop for ZirconVmo {
     fn drop(&mut self) {
-        debug!("Dropping VMO '{}' (handle: {})", self.name, self.handle);
+        debug!("Dropping real Zircon VMO '{}'", self.name);
+        // Zircon VMO will be automatically closed when zx::Vmo is dropped
+    }
+}
+
+#[cfg(not(feature = "fuchsia"))]
+impl Drop for ZirconVmo {
+    fn drop(&mut self) {
+        debug!("Dropping placeholder VMO '{}' (handle: {})", self.name, self.handle);
         // Placeholder: actual implementation would call zx_handle_close
     }
 }
 
 /// Mapped memory region backed by a VMO
 pub struct MappedMemory {
-    /// Original VMO handle
+    #[cfg(feature = "fuchsia")]
+    /// Reference to VMO to keep it alive
+    _vmo: Option<zx::Vmo>,
+    
+    #[cfg(not(feature = "fuchsia"))]
+    /// Original VMO handle (placeholder)
     vmo_handle: u64,
+    
     /// Size of the mapping
     size: usize,
     /// Virtual address (placeholder)
@@ -129,6 +232,15 @@ impl MappedMemory {
     }
 }
 
+#[cfg(feature = "fuchsia")]
+impl Drop for MappedMemory {
+    fn drop(&mut self) {
+        debug!("Unmapping real Zircon memory region");
+        // On Fuchsia, unmapping would happen automatically when the VMAR mapping is dropped
+    }
+}
+
+#[cfg(not(feature = "fuchsia"))]
 impl Drop for MappedMemory {
     fn drop(&mut self) {
         debug!("Unmapping memory region (VMO handle: {})", self.vmo_handle);
