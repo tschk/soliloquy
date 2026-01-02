@@ -9,6 +9,12 @@ fuchsia/
 vendor/servo/
 .build-tools/
 
+# Ignore cache directories
+demo_cache/
+*.db
+*.db-shm
+*.db-wal
+
 # Ignore OS files
 .DS_Store
 *.swp
