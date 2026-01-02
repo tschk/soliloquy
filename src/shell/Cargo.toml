@@ -30,6 +30,9 @@ name = "v8_test"
 path = "v8_test.rs"
 
 [dependencies]
+# Optimization crate from PR 22
+soliloquy_browser_optimizations = { path = "../../src" }
+
 # Workspace dependencies
 log.workspace = true
 futures.workspace = true
@@ -45,24 +48,7 @@ wgpu = { version = "26", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
 gpui = { git = "https://github.com/zed-industries/zed", features = ["test-support"], optional = true }
 
-<<<<<<< HEAD
 # FIDL dependencies
-=======
-# V8 Runtime
-rusty_v8 = "0.32.1"
-
-# Logging
-log = "0.4"
-
-# Browser optimizations
-soliloquy_browser_optimizations = { path = "../../src" }
-
-# FIDL dependencies - local generated bindings
-fuchsia_ui_composition = { path = "../../gen/fidl/fuchsia_ui_composition" }
-fuchsia_ui_views = { path = "../../gen/fidl/fuchsia_ui_views" }
-fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app" }
-fuchsia_input = { path = "../../gen/fidl/fuchsia_input" }
->>>>>>> 35b59be (Integrate optimization system with shell and add production features)
 fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl" }
 fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async", optional = true }
 fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-component", optional = true }

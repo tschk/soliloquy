@@ -32,17 +32,13 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>, String> {
 #[cfg(feature = "real_compression")]
 pub fn compress(data: &[u8]) -> Result<Vec<u8>, String> {
     debug!(
-        "Compressing {} bytes with zstd level {} (real_compression feature enabled)",
+        "Compressing {} bytes with zstd level {}",
         data.len(),
         ZSTD_COMPRESSION_LEVEL
     );
     
-    // TODO: Implement with zstd crate:
-    // zstd::encode_all(&data[..], ZSTD_COMPRESSION_LEVEL)
-    //     .map_err(|e| format!("zstd compression failed: {e}"))
-    
-    // Placeholder until zstd dependency is added
-    Ok(data.to_vec())
+    zstd::encode_all(data, ZSTD_COMPRESSION_LEVEL)
+        .map_err(|e| format!("zstd compression failed: {}", e))
 }
 
 /// Decompress zstd-compressed data
@@ -67,16 +63,12 @@ pub fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
 #[cfg(feature = "real_compression")]
 pub fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
     debug!(
-        "Decompressing {} bytes (real_compression feature enabled)",
+        "Decompressing {} bytes",
         compressed.len()
     );
     
-    // TODO: Implement with zstd crate:
-    // zstd::decode_all(compressed)
-    //     .map_err(|e| format!("zstd decompression failed: {e}"))
-    
-    // Placeholder until zstd dependency is added
-    Ok(compressed.to_vec())
+    zstd::decode_all(compressed)
+        .map_err(|e| format!("zstd decompression failed: {}", e))
 }
 
 /// Estimate compression ratio for given data type
@@ -118,5 +110,36 @@ mod tests {
     fn test_compression_ratios() {
         assert!(estimate_compression_ratio(DataType::Dom) < 0.5);
         assert!(estimate_compression_ratio(DataType::ImageData) > 0.5);
+    }
+
+    #[cfg(feature = "real_compression")]
+    #[test]
+    fn test_real_compression_reduces_size() {
+        // Highly repetitive data should compress well with real compression
+        let repetitive = b"AAAAAAAAAA".repeat(1000);
+        let compressed = compress(&repetitive).expect("Compression should succeed");
+        
+        let ratio = compressed.len() as f64 / repetitive.len() as f64;
+        assert!(ratio < 0.1, 
+            "Compression ratio {} should be < 0.1 for repetitive data", ratio);
+        
+        let decompressed = decompress(&compressed).expect("Decompression should succeed");
+        assert_eq!(&repetitive[..], &decompressed[..]);
+    }
+
+    #[test]
+    fn test_empty_data() {
+        let empty: &[u8] = &[];
+        let compressed = compress(empty).expect("Should handle empty data");
+        let decompressed = decompress(&compressed).expect("Should decompress empty data");
+        assert_eq!(empty, &decompressed[..]);
+    }
+
+    #[test]
+    fn test_large_data() {
+        let large = vec![42u8; 1024 * 1024]; // 1MB of data
+        let compressed = compress(&large).expect("Should handle large data");
+        let decompressed = decompress(&compressed).expect("Should decompress large data");
+        assert_eq!(&large[..], &decompressed[..]);
     }
 }
