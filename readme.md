@@ -7,7 +7,7 @@ A minimal, web-native operating system built on the Zircon microkernel with Serv
 Soliloquy is an experimental OS that brings web technologies to the system level. It uses:
 - **Zircon** - Microkernel from Fuchsia
 - **Servo + V8** - Desktop environment (when display available)
-- **Svelte 5 UI** - Modern reactive frontend
+- **Svelte 5 UI** - Modern reactive frontend -> migrating to [Equilibrium (repo private for now)](https://github.com/atechnology-company/equilibrium)
 - **WGPU** - Graphics via Vulkan
 
 ## Contributing
@@ -50,7 +50,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 - Fuchsia Project - Zircon microkernel
 - Servo Project - Browser engine
 - V8 Project - JavaScript runtime
-- Radxa - Hardware platform
+- Radxa - Hardware platform (really just the sbc i have)
 
 ---
 
