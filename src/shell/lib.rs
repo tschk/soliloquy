@@ -30,6 +30,7 @@ pub mod v8_runtime;
 
 // Platform abstraction layer
 pub mod platform;
+pub mod net;
 
 // Legacy Fuchsia window (kept for compatibility)
 #[cfg(feature = "fuchsia")]
