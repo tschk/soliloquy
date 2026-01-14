@@ -1,0 +1,3 @@
+[build]
+# Override parent config to build for host target during development
+target = "x86_64-unknown-linux-gnu"
