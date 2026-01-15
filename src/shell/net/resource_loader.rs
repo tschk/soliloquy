@@ -248,8 +248,6 @@ impl ResourceLoader {
 
     /// Resolve redirect URL (handle relative URLs)
     fn resolve_redirect_url(&self, base_url: &str, location: &str) -> Result<String, String> {
-        // TODO: Use url crate for proper URL parsing
-        
         // Parse base URL
         let base = Url::parse(base_url)
             .map_err(|e| format!("Invalid base URL: {}", e))?;

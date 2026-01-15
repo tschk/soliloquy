@@ -181,7 +181,6 @@ impl CodeCache {
     /// # Returns
     /// Hex-encoded SHA-256 hash
     pub fn compute_hash(content: &str) -> String {
-        // TODO: Replace placeholder with actual SHA-256 using sha2 crate
         let mut hasher = Sha256::new();
         hasher.update(content.as_bytes());
         let result = hasher.finalize();
@@ -244,7 +243,6 @@ impl CodeCache {
         let data = fs::read_to_string(&self.metadata_path)
             .map_err(|e| format!("Failed to read metadata: {}", e))?;
 
-        // TODO: Use serde_json to parse metadata
         let entries: Vec<CacheEntry> = serde_json::from_str(&data)
             .map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
@@ -266,7 +264,6 @@ impl CodeCache {
     fn save_metadata(&self) -> Result<(), String> {
         let entries: Vec<&CacheEntry> = self.entries.values().collect();
         
-        // TODO: Use serde_json to serialize metadata
         let json = serde_json::to_string_pretty(&entries)
             .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
 
