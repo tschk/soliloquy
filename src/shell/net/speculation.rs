@@ -88,7 +88,6 @@ pub struct SpeculationRules {
 impl SpeculationRules {
     /// Parse speculation rules from JSON
     pub fn from_json(json: &str) -> Result<Self, String> {
-        // TODO: Use serde_json to parse speculation rules JSON
         serde_json::from_str(json)
             .map_err(|e| format!("Failed to parse speculation rules: {}", e))
     }

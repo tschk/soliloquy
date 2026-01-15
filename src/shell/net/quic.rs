@@ -282,7 +282,6 @@ impl QuicTransport {
     /// * `origin` - Origin hostname
     /// * `alt_svc_header` - Alt-Svc header value
     pub fn cache_alt_svc(&self, origin: &str, alt_svc_header: &str) {
-        // TODO: Implement Alt-Svc header parsing
         // Format: h3=":443"; ma=2592000
         
         // Simple parser for common format
