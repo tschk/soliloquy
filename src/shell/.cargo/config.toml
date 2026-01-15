@@ -1,6 +1,3 @@
 [build]
-target = "aarch64-unknown-fuchsia"
-
-[target.aarch64-unknown-fuchsia]
-linker = "rust-lld"
-rustflags = ["-C", "link-arg=--sysroot=/path/to/fuchsia/sdk/arch/arm64/sysroot"]
+# Override parent config to build for host target during development
+target = "x86_64-unknown-linux-gnu"

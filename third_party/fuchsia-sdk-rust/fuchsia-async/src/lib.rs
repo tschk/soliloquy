@@ -25,8 +25,3 @@ where
     futures::executor::block_on(fut)
 }
 
-pub use fuchsia_async_macro::run_singlethreaded;
-
-mod fuchsia_async_macro {
-    pub use super::run_singlethreaded;
-}
