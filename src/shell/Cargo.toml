@@ -1,9 +1,8 @@
 [package]
-name = "soliloquy_shell"
-version = "0.1.0"
-edition = "2021"
-description = "Soliloquy desktop shell with Servo rendering and V8 JavaScript"
-rust-version = "1.75.0"
+name = "soliloquy-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [lib]
 name = "soliloquy_shell"
@@ -19,6 +18,10 @@ path = "main_desktop.rs"
 required-features = ["desktop"]
 
 [[bin]]
+name = "soliloquy_shell_simple"
+path = "main_simple.rs"
+
+[[bin]]
 name = "soliloquy_test"
 path = "main_test.rs"
 
@@ -27,62 +30,70 @@ name = "v8_test"
 path = "v8_test.rs"
 
 [dependencies]
-# V8 Runtime - always required
-rusty_v8 = "0.32.1"
+# Workspace dependencies
+log.workspace = true
+futures.workspace = true
+rusty_v8.workspace = true
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+async-trait.workspace = true
 
-# Logging - always required
-log = "0.4"
-env_logger = "0.11"
-
-# Async runtime
-futures = "0.3"
-tokio = { version = "1.40", features = ["full"], optional = true }
-
-# Networking and HTTP/3 QUIC
-quinn = "0.11"           # QUIC transport
-rustls = "0.23"          # TLS for QUIC
-hyper = "1.0"            # HTTP client
-h3 = "0.0.4"             # HTTP/3 protocol
-sha2 = "0.10"            # For cache keys
-lru = "0.12"             # LRU cache
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-rand = "0.8"             # For generating IDs
-
-# Desktop dependencies (Linux/macOS)
+# Desktop dependencies (Linux/macOS) - Kept from HEAD
 winit = { version = "0.30", optional = true }
 wgpu = { version = "26", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
 gpui = { git = "https://github.com/zed-industries/zed", features = ["test-support"], optional = true }
 
-# Fuchsia dependencies (optional for Fuchsia builds)
+# FIDL dependencies
+fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl" }
 fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async", optional = true }
 fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-component", optional = true }
 fuchsia-syslog = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-syslog", optional = true }
 fuchsia-zircon = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-zircon", optional = true }
 
-# FIDL dependencies - local generated bindings (optional for Fuchsia)
+# Generated FIDL bindings
 fuchsia_ui_composition = { path = "../../gen/fidl/fuchsia_ui_composition", optional = true }
 fuchsia_ui_views = { path = "../../gen/fidl/fuchsia_ui_views", optional = true }
 fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app", optional = true }
 fuchsia_input = { path = "../../gen/fidl/fuchsia_input", optional = true }
-fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl", optional = true }
 
-# Servo dependencies (will be enabled when servo fork is ready)
-# servo = { path = "../../../vendor/servo" }
+# Networking dependencies
+quinn = "0.11"
+rustls = "0.23"
+hyper = { version = "1.4", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["client", "http1", "http2"] }
+http-body-util = "0.1"
+h3 = "0.0.6"
+h3-quinn = "0.0.7"
+
+# Crypto and hashing
+sha2 = "0.10"
+rand = "0.8"
+
+# Data structures
+lru = "0.12"
+
+# URL parsing
+url = "2.5"
+
+# Time utilities
+chrono = "0.4"
+
+# Glob pattern matching
+glob = "0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Linux-specific dependencies
 x11rb = { version = "0.13", optional = true }
 wayland-client = { version = "0.31", optional = true }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-# macOS-specific dependencies (Metal is handled by wgpu)
+[dev-dependencies]
+tokio-test.workspace = true
+env_logger.workspace = true
 
 [features]
 default = ["desktop"]
-
-# Desktop feature for Linux/macOS builds
 desktop = [
     "winit",
     "wgpu",
@@ -90,10 +101,6 @@ desktop = [
     "tokio",
     "gpui",
 ]
-
-gpui = ["dep:gpui"]
-
-# Fuchsia feature for Fuchsia OS builds
 fuchsia = [
     "fuchsia-async",
     "fuchsia-component",
@@ -105,25 +112,6 @@ fuchsia = [
     "fuchsia_input",
     "fidl",
 ]
-
-# Optional Linux display server support
+gpui = ["dep:gpui"]
 x11 = ["x11rb"]
 wayland = ["wayland-client"]
-
-[dev-dependencies]
-# Test dependencies
-tokio-test = "0.4"
-criterion = "0.5"
-
-[profile.dev]
-opt-level = 0
-debug = true
-
-[profile.release]
-opt-level = 3
-lto = "thin"
-codegen-units = 1
-
-[profile.release-with-debug]
-inherits = "release"
-debug = true

@@ -27,10 +27,10 @@ pub mod engine_bridge;
 pub mod optimizations;
 pub mod servo_embedder;
 pub mod v8_runtime;
+pub mod net;
 
 // Platform abstraction layer
 pub mod platform;
-pub mod net;
 
 // Legacy Fuchsia window (kept for compatibility)
 #[cfg(feature = "fuchsia")]
