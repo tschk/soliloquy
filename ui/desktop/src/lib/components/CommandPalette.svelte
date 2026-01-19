@@ -18,11 +18,24 @@ let dialogRef: HTMLDivElement | null = null;
 let inputRef: HTMLInputElement | null = null;
 
 $: isUrlQuery = isValidUrl(query.trim());
-$: filteredSuggestions = suggestions.filter(({ title, description }) => {
-if (!query.trim()) return true;
-const needle = query.toLowerCase();
-return title.toLowerCase().includes(needle) || description.toLowerCase().includes(needle);
-});
+
+$: preparedSuggestions = suggestions.map((suggestion) => ({
+	suggestion,
+	lowerTitle: suggestion.title.toLowerCase(),
+	lowerDescription: suggestion.description.toLowerCase()
+}));
+
+$: filteredSuggestions = (() => {
+	const trimmedQuery = query.trim();
+	if (!trimmedQuery) return suggestions;
+
+	const needle = trimmedQuery.toLowerCase();
+	return preparedSuggestions
+		.filter(({ lowerTitle, lowerDescription }) => {
+			return lowerTitle.includes(needle) || lowerDescription.includes(needle);
+		})
+		.map(({ suggestion }) => suggestion);
+})();
 
 function closePalette() {
 query = '';
