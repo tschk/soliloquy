@@ -78,15 +78,15 @@ fn (mut app App) cupboard_store(memory Memory) !string {
 	}
 	
 	mut mem := memory
-	mem.id = time.now().unix.str() + '_' + mem.user_id
-	mem.created_at = time.now().unix
-	mem.updated_at = time.now().unix
+	mem.id = time.now().unix().str() + '_' + mem.user_id
+	mem.created_at = time.now().unix()
+	mem.updated_at = time.now().unix()
 	
 	app.cupboard.memories[mem.id] = mem
 	
 	$if fuchsia {
 		// Persist to Zircon storage asynchronously
-		app.persist_memory(mem)
+		go app.persist_memory(mem)
 	}
 	
 	println('Stored memory: ${mem.id} (${mem.source})')
@@ -94,7 +94,7 @@ fn (mut app App) cupboard_store(memory Memory) !string {
 }
 
 // Persist a memory to Zircon storage
-fn (mut app App) persist_memory(mem Memory) {
+fn (app App) persist_memory(mem Memory) {
 	$if fuchsia {
 		import os
 		import json
@@ -143,20 +143,20 @@ fn (mut app App) cupboard_delete(memory_id string) !bool {
 	
 	$if fuchsia {
 		// Mark as deleted in Zircon storage (tombstone)
-		app.persist_deletion(memory_id)
+		go app.persist_deletion(memory_id)
 	}
 	
 	return true
 }
 
 // Persist deletion to Zircon storage
-fn (mut app App) persist_deletion(memory_id string) {
+fn (app App) persist_deletion(memory_id string) {
 	$if fuchsia {
 		import os
 		import time
 		
 		storage_path := '/data/cupboard/deletions.log'
-		entry := '${time.now().unix}:${memory_id}\n'
+		entry := '${time.now().unix()}:${memory_id}\n'
 		
 		os.write_file(storage_path, entry) or { return }
 	}
