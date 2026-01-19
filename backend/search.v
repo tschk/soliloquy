@@ -169,9 +169,12 @@ pub fn (mut app App) search() vweb.Result {
 		}
 		else {
 			// Search mode: combine Cupboard + Web results
-			cupboard_cards := app.search_cupboard(session.user_id, payload.query) or { []SearchCard{} }
-			web_cards := app.search_web(payload.query) or { []SearchCard{} }
-			
+			h_cupboard := spawn app.search_cupboard(session.user_id, payload.query)
+			h_web := spawn app.search_web(payload.query)
+
+			cupboard_cards := h_cupboard.wait() or { []SearchCard{} }
+			web_cards := h_web.wait() or { []SearchCard{} }
+
 			cards << cupboard_cards
 			cards << web_cards
 		}
