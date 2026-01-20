@@ -5,6 +5,7 @@
 resolver = "2"
 members = [
     "src/shell",
+    "src/rv8",
     "test/support",
     "gen/fidl/fuchsia_ui_composition",
     "gen/fidl/fuchsia_ui_views",
@@ -30,7 +31,7 @@ exclude = [
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
-license = "MIT OR Apache-2.0"
+license-file = "LICENSE"
 
 [workspace.dependencies]
 # Core dependencies
@@ -38,8 +39,9 @@ futures = "0.3"
 log = "0.4"
 env_logger = "0.10"
 
-# V8 Runtime
-rusty_v8 = "0.106"
+# V8 Runtime (local fork)
+# Note: Use workspace dependency or patch section
+rusty_v8 = "0.32"
 
 # Async runtime
 tokio = { version = "1.40", features = ["full"] }
@@ -51,3 +53,8 @@ serde_json = "1.0"
 
 # Testing
 tokio-test = "0.4"
+
+# Patch crates.io dependencies to use local forks
+# Uncomment when rusty_v8 fork has custom changes
+# [patch.crates-io]
+# rusty_v8 = { path = "vendor/rusty_v8_fork" }

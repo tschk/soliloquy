@@ -8,7 +8,7 @@ Soliloquy is an experimental OS that brings web technologies to the system level
 - **Zircon** - Microkernel from Fuchsia
 - **Servo + V8** - Desktop environment (when display available)
 - **Svelte 5 UI** - Modern reactive frontend -> migrating to [Equilibrium (repo private for now)](https://github.com/atechnology-company/equilibrium)
-- **WGPU** - Graphics via Vulkan
+- **WGPU** - Graphics via Vulkan + Magma
 
 ## Contributing
 
@@ -36,18 +36,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 - **[C-to-V Translation](docs/translations/c2v_translations.md)** - Zircon subsystem translations
 - **[Contributing](docs/contributing.md)** - Contribution guidelines
 
-## Recent Updates
-
-**Latest PRs:**
-- PR #5: Servo desktop UI scaffold
-- PR #4: macOS build stabilization
-- PR #3: fx tooling hardening
-- PR #2: V8 runtime integration
-- PR #1: Soliloquy HAL + GPIO driver
-
 ## Acknowledgments
 
-- Fuchsia Project - Zircon microkernel
+- Fuchsia Project and Google - Zircon microkernel
 - Servo Project - Browser engine
 - V8 Project - JavaScript runtime
 - Radxa - Hardware platform (really just the sbc i have)
@@ -55,3 +46,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 ---
 
 **Note:** This is an experimental OS project. Not intended for production use.
+
+a creation by [atechnology company](https://atechnology.company/) - part of the plates ecosystem

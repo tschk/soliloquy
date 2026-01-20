@@ -2,6 +2,8 @@
 name = "soliloquy_shell"
 version = "0.1.0"
 edition = "2021"
+description = "Soliloquy desktop shell with Servo rendering and V8 JavaScript"
+rust-version = "1.75.0"
 
 [lib]
 name = "soliloquy_shell"
@@ -12,6 +14,11 @@ name = "soliloquy_shell"
 path = "main.rs"
 
 [[bin]]
+name = "soliloquy_desktop"
+path = "main_desktop.rs"
+required-features = ["desktop"]
+
+[[bin]]
 name = "soliloquy_test"
 path = "main_test.rs"
 
@@ -20,35 +27,88 @@ name = "v8_test"
 path = "v8_test.rs"
 
 [dependencies]
-# Fuchsia dependencies
-fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async" }
-fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-component" }
-fuchsia-syslog = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-syslog" }
-fuchsia-zircon = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-zircon" }
-futures = "0.3"
-env_logger = "0.10"
-
-# Servo dependencies (commented out until properly integrated)
-# servo = { path = "../../../vendor/servo" }
-
-# V8 Runtime
+# V8 Runtime - always required
 rusty_v8 = "0.32.1"
 
-# Logging
+# Logging - always required
 log = "0.4"
+env_logger = "0.11"
 
-# FIDL dependencies - local generated bindings
-fuchsia_ui_composition = { path = "../../gen/fidl/fuchsia_ui_composition" }
-fuchsia_ui_views = { path = "../../gen/fidl/fuchsia_ui_views" }
-fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app" }
-fuchsia_input = { path = "../../gen/fidl/fuchsia_input" }
-fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl" }
+# Async runtime
+futures = "0.3"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time"], optional = true }
+
+# Desktop dependencies (Linux/macOS)
+winit = { version = "0.30", optional = true }
+wgpu = { version = "26", optional = true }
+raw-window-handle = { version = "0.6", optional = true }
+
+# Fuchsia dependencies (optional for Fuchsia builds)
+fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async", optional = true }
+fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-component", optional = true }
+fuchsia-syslog = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-syslog", optional = true }
+fuchsia-zircon = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-zircon", optional = true }
+
+# FIDL dependencies - local generated bindings (optional for Fuchsia)
+fuchsia_ui_composition = { path = "../../gen/fidl/fuchsia_ui_composition", optional = true }
+fuchsia_ui_views = { path = "../../gen/fidl/fuchsia_ui_views", optional = true }
+fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app", optional = true }
+fuchsia_input = { path = "../../gen/fidl/fuchsia_input", optional = true }
+fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl", optional = true }
+
+# Servo dependencies (will be enabled when servo fork is ready)
+# servo = { path = "../../../vendor/servo" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux-specific dependencies
+x11rb = { version = "0.13", optional = true }
+wayland-client = { version = "0.31", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS-specific dependencies (Metal is handled by wgpu)
 
 [features]
-default = []
-fuchsia = []
+default = ["desktop"]
+
+# Desktop feature for Linux/macOS builds
+desktop = [
+    "winit",
+    "wgpu",
+    "raw-window-handle",
+    "tokio",
+]
+
+# Fuchsia feature for Fuchsia OS builds
+fuchsia = [
+    "fuchsia-async",
+    "fuchsia-component",
+    "fuchsia-syslog",
+    "fuchsia-zircon",
+    "fuchsia_ui_composition",
+    "fuchsia_ui_views",
+    "fuchsia_ui_app",
+    "fuchsia_input",
+    "fidl",
+]
+
+# Optional Linux display server support
+x11 = ["x11rb"]
+wayland = ["wayland-client"]
 
 [dev-dependencies]
 # Test dependencies
 tokio-test = "0.4"
-soliloquy_test_support = { path = "../../test/support" }
+criterion = "0.5"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true

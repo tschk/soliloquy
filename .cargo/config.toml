@@ -1,3 +1,12 @@
+# Soliloquy Cargo Configuration
+#
+# This configuration supports multiple build modes:
+# - Desktop (Linux/macOS): Use native target (default)
+# - Fuchsia: Use aarch64-unknown-fuchsia target
+#
+# For Fuchsia builds, run with: cargo build --target aarch64-unknown-fuchsia
+
+# Fuchsia target configuration (used only when explicitly specified)
 [target.aarch64-unknown-fuchsia]
 rustflags = [
     "-C", "link-arg=--target=aarch64-unknown-fuchsia",
@@ -5,9 +14,10 @@ rustflags = [
     "-C", "link-arg=${FUCHSIA_DIR}/prebuilt/third_party/clang/${CLANG_HOST_ARCH}/lib/aarch64-unknown-fuchsia/lib",
 ]
 
-[build]
-target = "aarch64-unknown-fuchsia"
+# Uncomment the following to build for Fuchsia by default:
+# [build]
+# target = "aarch64-unknown-fuchsia"
 
-# Note: When building, ensure FUCHSIA_DIR and CLANG_HOST_ARCH are set:
+# Note: For Fuchsia builds, ensure FUCHSIA_DIR and CLANG_HOST_ARCH are set:
 # export FUCHSIA_DIR=/path/to/fuchsia
 # export CLANG_HOST_ARCH=linux-x64  # or mac-x64 for macOS
