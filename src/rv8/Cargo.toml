@@ -1,0 +1,114 @@
+[package]
+name = "roverate"
+version = "0.1.0"
+edition = "2021"
+description = "roverate - rv8 - A modern browser engine with Servo rendering and V8 JavaScript"
+license = "MIT OR Apache-2.0"
+rust-version = "1.75.0"
+authors = ["ATechnology Company"]
+repository = "https://github.com/atechnology-company/soliloquy"
+keywords = ["browser", "servo", "v8", "webengine", "rendering"]
+categories = ["web-programming", "rendering", "gui"]
+
+[lib]
+name = "roverate"
+path = "lib.rs"
+
+[[bin]]
+name = "rv8"
+path = "main.rs"
+
+[dependencies]
+# V8 JavaScript Engine
+# Using crates.io version; switch to local fork when ready:
+# rusty_v8 = { path = "../../vendor/rusty_v8_fork" }
+rusty_v8 = "0.32"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Async runtime
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "fs", "net", "io-util", "macros"] }
+futures = "0.3"
+async-channel = "2.2"
+
+# Windowing and graphics
+winit = "0.30"
+wgpu = "26"
+raw-window-handle = "0.6"
+
+# Networking
+reqwest = { version = "0.12", features = ["json", "cookies", "gzip", "brotli"] }
+url = "2.5"
+http = "1.0"
+bytes = "1.5"
+
+# HTML/CSS Parsing (lightweight, before Servo integration)
+html5ever = "0.29"
+markup5ever = "0.14"
+cssparser = "0.34"
+selectors = "0.28"
+
+# Storage
+sled = "0.34"  # Embedded database for profiles/cache
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# IPC
+ipc-channel = "0.18"
+
+# Performance
+parking_lot = "0.12"
+crossbeam = "0.8"
+rayon = "1.10"
+
+# Memory
+memmap2 = "0.9"
+
+# System info
+num_cpus = "1.16"
+dirs = "6"
+
+# Platform-specific
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", optional = true }
+wayland-client = { version = "0.31", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc2 = "0.5"
+
+[features]
+default = ["multi-process"]
+multi-process = []
+single-process = []
+x11 = ["x11rb"]
+wayland = ["wayland-client"]
+gpu-compositing = []
+hardware-acceleration = []
+
+[dev-dependencies]
+criterion = "0.5"
+tokio-test = "0.4"
+
+# Benchmarks will be added later
+# [[bench]]
+# name = "rendering"
+# harness = false
+
+# [[bench]]
+# name = "js_execution"
+# harness = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true

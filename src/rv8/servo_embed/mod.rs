@@ -1,0 +1,202 @@
+//! Servo embedding for RV8
+//!
+//! This module provides an interface to integrate Servo's rendering
+//! capabilities while using V8 for JavaScript execution.
+//!
+//! Architecture:
+//! - Servo handles HTML/CSS parsing, layout, and painting
+//! - V8 (from rv8) handles JavaScript execution
+//! - This module bridges the two engines
+
+use log::{debug, error, info};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use crate::js::JsEngine;
+use crate::renderer::RenderFrame;
+
+/// Servo embedding configuration
+#[derive(Debug, Clone)]
+pub struct ServoConfig {
+    /// Initial viewport width
+    pub width: u32,
+    /// Initial viewport height
+    pub height: u32,
+    /// Enable hardware acceleration
+    pub hardware_acceleration: bool,
+    /// Enable WebGL
+    pub webgl: bool,
+    /// Enable WebGPU
+    pub webgpu: bool,
+    /// User agent string
+    pub user_agent: String,
+    /// Resource directory path
+    pub resources_path: Option<String>,
+}
+
+impl Default for ServoConfig {
+    fn default() -> Self {
+        ServoConfig {
+            width: 1280,
+            height: 800,
+            hardware_acceleration: true,
+            webgl: true,
+            webgpu: false,
+            user_agent: crate::user_agent(),
+            resources_path: None,
+        }
+    }
+}
+
+/// Servo embedder for RV8
+pub struct ServoEmbedder {
+    /// Configuration
+    config: ServoConfig,
+    /// V8 JavaScript engine
+    js_engine: Arc<Mutex<JsEngine>>,
+    /// Current document URL
+    current_url: String,
+    /// Document title
+    title: String,
+    /// Is currently loading
+    loading: bool,
+    /// Load progress (0-100)
+    load_progress: u8,
+}
+
+impl ServoEmbedder {
+    /// Create a new Servo embedder
+    pub async fn new(config: ServoConfig) -> Result<Self, String> {
+        info!("Initializing Servo embedder with V8");
+
+        let js_engine =
+            JsEngine::new().map_err(|e| format!("Failed to create V8 engine: {}", e))?;
+
+        info!("V8 JavaScript engine version: {}", JsEngine::version());
+
+        Ok(ServoEmbedder {
+            config,
+            js_engine: Arc::new(Mutex::new(js_engine)),
+            current_url: String::new(),
+            title: String::new(),
+            loading: false,
+            load_progress: 0,
+        })
+    }
+
+    /// Navigate to a URL
+    pub async fn navigate(&mut self, url: &str) -> Result<(), String> {
+        info!("Navigating to: {}", url);
+
+        self.current_url = url.to_string();
+        self.loading = true;
+        self.load_progress = 0;
+
+        // TODO: Actually fetch and parse HTML via Servo
+        // For now, simulate loading
+
+        // Execute any inline scripts via V8
+        // self.execute_document_scripts().await?;
+
+        self.loading = false;
+        self.load_progress = 100;
+
+        Ok(())
+    }
+
+    /// Execute JavaScript in the context of the current document
+    pub async fn execute_script(&self, script: &str) -> Result<String, String> {
+        let mut engine = self.js_engine.lock().await;
+        engine.execute_to_string(script)
+    }
+
+    /// Get the current render frame
+    pub fn get_render_frame(&self) -> Option<RenderFrame> {
+        // TODO: Get frame from Servo's compositor
+        Some(RenderFrame::new(self.config.width, self.config.height))
+    }
+
+    /// Resize the viewport
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.config.width = width;
+        self.config.height = height;
+        debug!("Viewport resized to {}x{}", width, height);
+    }
+
+    /// Handle mouse event
+    pub fn handle_mouse_move(&mut self, x: f32, y: f32) {
+        // TODO: Forward to Servo's event handling
+        debug!("Mouse move: ({}, {})", x, y);
+    }
+
+    /// Handle mouse click
+    pub fn handle_mouse_click(&mut self, x: f32, y: f32, button: MouseButton) {
+        // TODO: Forward to Servo's event handling
+        debug!("Mouse click: ({}, {}) button={:?}", x, y, button);
+    }
+
+    /// Handle key event
+    pub fn handle_key(&mut self, key: &str, pressed: bool) {
+        // TODO: Forward to Servo's event handling
+        debug!("Key event: {} pressed={}", key, pressed);
+    }
+
+    /// Handle scroll event
+    pub fn handle_scroll(&mut self, delta_x: f32, delta_y: f32) {
+        // TODO: Forward to Servo's event handling
+        debug!("Scroll: ({}, {})", delta_x, delta_y);
+    }
+
+    // Getters
+    pub fn current_url(&self) -> &str {
+        &self.current_url
+    }
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+    pub fn is_loading(&self) -> bool {
+        self.loading
+    }
+    pub fn load_progress(&self) -> u8 {
+        self.load_progress
+    }
+    pub fn viewport_size(&self) -> (u32, u32) {
+        (self.config.width, self.config.height)
+    }
+}
+
+/// Mouse button type
+#[derive(Debug, Clone, Copy)]
+pub enum MouseButton {
+    Left,
+    Middle,
+    Right,
+}
+
+/// DOM element representation
+#[derive(Debug, Clone)]
+pub struct DomElement {
+    /// Tag name (e.g., "div", "p", "a")
+    pub tag: String,
+    /// Element ID
+    pub id: Option<String>,
+    /// CSS classes
+    pub classes: Vec<String>,
+    /// Bounding box (x, y, width, height)
+    pub bounds: (f32, f32, f32, f32),
+}
+
+/// Document information
+#[derive(Debug, Clone)]
+pub struct DocumentInfo {
+    /// Document URL
+    pub url: String,
+    /// Document title
+    pub title: String,
+    /// Content type
+    pub content_type: String,
+    /// Character encoding
+    pub charset: String,
+    /// Is secure (HTTPS)
+    pub secure: bool,
+}
