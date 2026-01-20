@@ -1,6 +1,6 @@
-# RV8 Browser Engine
+# Rover/rv8
 
-**Roverate V8** - A modern browser engine combining Servo's rendering with V8's JavaScript execution.
+A modern browser engine combining Servo's rendering with V8's JavaScript execution.
 
 ## Architecture
 
@@ -71,10 +71,10 @@ src/rv8/
     └── preload.rs      # Resource prefetching
 ```
 
-## Development
+## Integrates with the Plates ecosystem (optional)
 
-See [TODO.md](./TODO.md) for the roadmap.
-
-## License
-
-MIT OR Apache-2.0
+## 4 different views
+- Arc
+- Chrome/Standard
+- Minimal
+- and our own take on the browser

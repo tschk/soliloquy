@@ -30,17 +30,7 @@ fn main() {
         .format_timestamp_millis()
         .init();
 
-    info!("╔══════════════════════════════════════════════════════════╗");
-    info!("║           Soliloquy Desktop Shell v0.1.0                 ║");
-    info!("║           Servo + V8 | Linux/macOS                       ║");
-    info!("╚══════════════════════════════════════════════════════════╝");
-
-    // Detect platform
-    #[cfg(target_os = "linux")]
-    info!("Platform: Linux");
-
-    #[cfg(target_os = "macos")]
-    info!("Platform: macOS");
+    info!("Soliloquy Desktop v0.1");
 
     // Initialize optimizations
     let settings = OptimizationSettings::desktop();

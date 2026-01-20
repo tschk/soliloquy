@@ -58,3 +58,10 @@ tokio-test = "0.4"
 # Uncomment when rusty_v8 fork has custom changes
 # [patch.crates-io]
 # rusty_v8 = { path = "vendor/rusty_v8_fork" }
+
+log = "0.4"
+env_logger = "0.11"
+anyhow = "1.0"
+thiserror = "1.0"
+lazy_static = "1.4"
+tokio = { version = "1", features = ["full"] }

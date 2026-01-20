@@ -1,8 +1,8 @@
 [package]
-name = "roverate"
+name = "rv8"
 version = "0.1.0"
 edition = "2021"
-description = "roverate - rv8 - A modern browser engine with Servo rendering and V8 JavaScript"
+description = "rover, a modern browser engine with Servo rendering and V8 JavaScript"
 license = "MIT OR Apache-2.0"
 rust-version = "1.75.0"
 authors = ["ATechnology Company"]
@@ -35,10 +35,7 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "f
 futures = "0.3"
 async-channel = "2.2"
 
-# Windowing and graphics
-winit = "0.30"
-wgpu = "26"
-raw-window-handle = "0.6"
+# gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
 
 # Networking
 reqwest = { version = "0.12", features = ["json", "cookies", "gzip", "brotli"] }

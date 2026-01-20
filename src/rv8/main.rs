@@ -3,12 +3,10 @@
 //! Launches the RV8 browser with multi-process architecture.
 
 use log::{error, info};
+use roverate::compositor;
+use roverate::networking;
 use std::env;
 
-use roverate::compositor;
-use roverate::core::{Browser, BrowserConfig};
-use roverate::networking;
-use roverate::optimizations::OptimizationFlags;
 use roverate::renderer;
 // storage and ipc are not used directly vs via other modules, but if needed:
 // use roverate::ipc;
@@ -25,13 +23,7 @@ fn main() {
         .with_thread_ids(true)
         .init();
 
-    info!("╔══════════════════════════════════════════════════════════╗");
-    info!(
-        "║                  RV8 Browser v{}                       ║",
-        env!("CARGO_PKG_VERSION")
-    );
-    info!("║           Servo Rendering + V8 JavaScript                ║");
-    info!("╚══════════════════════════════════════════════════════════╝");
+    info!("roverate v0.1");
 
     // Parse command line args
     let args: Vec<String> = env::args().collect();
@@ -57,51 +49,19 @@ fn main() {
     run_browser_process(initial_url);
 }
 
+// mod ui;
+
 /// Run the main browser process (UI, coordination)
-fn run_browser_process(initial_url: &str) {
+fn run_browser_process(_initial_url: &str) {
     info!("Starting browser process...");
 
-    // Configure browser
-    let config = BrowserConfig {
-        multi_process: true,
-        gpu_compositing: true,
-        hardware_acceleration: true,
-        user_data_dir: dirs::data_local_dir()
-            .map(|p| p.join("rv8"))
-            .unwrap_or_else(|| std::path::PathBuf::from(".rv8")),
-        ..Default::default()
-    };
+    // TODO: Spawn backend logic in background thread if needed
+    // let rt = tokio::runtime::Builder::new_multi_thread() ...
 
-    // Initialize optimization flags
-    let opt_flags = OptimizationFlags::chrome_like();
-    info!("Optimizations: {:?}", opt_flags);
-
-    // Create and run browser
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(num_cpus::get().min(8))
-        .enable_all()
-        .build()
-        .expect("Failed to create Tokio runtime");
-
-    rt.block_on(async {
-        match Browser::new(config).await {
-            Ok(mut browser) => {
-                info!("Browser initialized successfully");
-
-                // Create initial tab
-                if let Err(e) = browser.new_tab(initial_url).await {
-                    error!("Failed to create initial tab: {}", e);
-                }
-
-                // Run event loop
-                browser.run().await;
-            }
-            Err(e) => {
-                error!("Failed to initialize browser: {}", e);
-                std::process::exit(1);
-            }
-        }
-    });
+    // GPUI integration disabled due to dependency conflict (core-graphics)
+    // ui::run_app(gpui::App::new());
+    info!("GPUI disabled. Browser process running in headless mode.");
+    std::thread::park();
 
     info!("Browser process terminated");
 }
