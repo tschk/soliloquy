@@ -3,10 +3,10 @@
 //! This module provides IPC mechanisms for communication between
 //! browser, renderer, GPU, and network processes.
 
+use ipc_channel::ipc::{self, IpcOneShotServer, IpcReceiver, IpcSender};
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tokio::sync::mpsc;
 
 pub mod messages;
 

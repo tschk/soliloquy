@@ -42,6 +42,7 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time"], o
 winit = { version = "0.30", optional = true }
 wgpu = { version = "26", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
+gpui = { git = "https://github.com/zed-industries/zed", features = ["test-support"], optional = true }
 
 # Fuchsia dependencies (optional for Fuchsia builds)
 fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async", optional = true }
@@ -76,7 +77,10 @@ desktop = [
     "wgpu",
     "raw-window-handle",
     "tokio",
+    "gpui",
 ]
+
+gpui = ["dep:gpui"]
 
 # Fuchsia feature for Fuchsia OS builds
 fuchsia = [

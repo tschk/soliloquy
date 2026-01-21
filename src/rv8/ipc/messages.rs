@@ -43,9 +43,15 @@ pub enum BrowserMessage {
     RendererCrashed { tab_id: u64, reason: String },
 }
 
+use ipc_channel::ipc::IpcSender;
+
 /// Messages from browser to renderer process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RendererMessage {
+    /// Initialize IPC (handshake)
+    Initialize {
+        browser_tx: IpcSender<BrowserMessage>,
+    },
     /// Navigate to URL
     Navigate { url: String },
     /// Reload page

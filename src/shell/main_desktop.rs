@@ -11,6 +11,8 @@
 //! ```
 
 mod engine_bridge;
+#[cfg(feature = "gpui")]
+mod gpui_app;
 mod optimizations;
 mod platform;
 mod servo_embedder;
@@ -81,11 +83,21 @@ fn main() {
     // Create native window
     #[cfg(feature = "desktop")]
     {
+        #[cfg(feature = "gpui")]
+        {
+            info!("Launching GPUI Shell...");
+            gpui_app::run();
+            // GPUI takes over the main thread, so we return after it closes
+            info!("Soliloquy Desktop Shell shutdown complete");
+            return;
+        }
+
         info!("Creating native window...");
 
         #[cfg(target_os = "linux")]
         {
             use platform::linux::LinuxWindow;
+            // ... rest of linux window code ...
 
             let window = match LinuxWindow::new() {
                 Ok(w) => {
