@@ -11,7 +11,7 @@ struct OnboardingUpdate {
 @['/api/user/onboarding'; post]
 pub fn (mut app App) update_onboarding() vweb.Result {
 	payload := json.decode(OnboardingUpdate, app.req.data) or {
-		return app.server_error('Invalid payload')
+		return app.server_error_msg('Invalid payload')
 	}
 	
 	println('Updating onboarding status: ${payload}')
@@ -34,7 +34,7 @@ pub fn (mut app App) get_current_pickup() vweb.Result {
 	
 	// Forward request to Tableware
 	pickup_resp := http.get('${app.config.tableware_base_url}/pickups.current') or {
-		return app.server_error('Failed to fetch pickup')
+		return app.server_error_msg('Failed to fetch pickup')
 	}
 	
 	app.set_content_type('application/json')

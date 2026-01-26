@@ -128,12 +128,12 @@ pub fn (mut app App) search() vweb.Result {
 	}
 	
 	payload := json.decode(SearchRequest, app.req.data) or {
-		return app.server_error('Invalid payload')
+		return app.server_error_msg('Invalid payload')
 	}
 	
 	// Parse query to determine intent
 	cmd_result := app.parse_command(payload.query) or {
-		return app.server_error('Failed to parse command')
+		return app.server_error_msg('Failed to parse command')
 	}
 	
 	mut cards := []SearchCard{}
@@ -203,7 +203,7 @@ pub fn (mut app App) search_suggestions() vweb.Result {
 	}
 	
 	payload := json.decode(SearchRequest, app.req.data) or {
-		return app.server_error('Invalid payload')
+		return app.server_error_msg('Invalid payload')
 	}
 	
 	// TODO: Return search suggestions based on Cupboard + recent searches

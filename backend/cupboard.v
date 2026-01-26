@@ -3,6 +3,7 @@ module main
 import vweb
 import json
 import time
+import os
 
 // Cupboard - Universal memory storage for Soliloquy
 // Stores user memories, pickups, clipboard history, and universal context
@@ -30,9 +31,10 @@ pub mut:
 
 struct CupboardContext {
 mut:
-	memories    map[string]Memory
-	embeddings  map[string][]f32
-	initialized bool
+	memories      map[string]Memory
+	embeddings    map[string][]f32
+	user_memories map[string][]string
+	initialized   bool
 }
 
 pub fn (mut app App) init_cupboard() {
@@ -41,8 +43,9 @@ pub fn (mut app App) init_cupboard() {
 	app.cupboard.initialized = true
 	app.cupboard.memories = map[string]Memory{}
 	app.cupboard.embeddings = map[string][]f32{}
+	app.cupboard.user_memories = map[string][]string{}
 	
-	$if fuchsia {
+	$if fuchsia ? {
 		// Initialize Zircon storage channel for persistence
 		if storage_channel := app.get_zircon_channel('storage') {
 			println('📦 Cupboard using Zircon persistent storage')
@@ -57,11 +60,9 @@ pub fn (mut app App) init_cupboard() {
 
 // Load memories from Zircon persistent storage
 fn (mut app App) load_persisted_memories() {
-	$if fuchsia {
+	$if fuchsia ? {
 		// Request stored memories from Zircon storage service
 		// This reads from the component's /data directory
-		import os
-		
 		storage_path := '/data/cupboard/memories.json'
 		if os.exists(storage_path) {
 			data := os.read_file(storage_path) or { return }
@@ -83,8 +84,9 @@ fn (mut app App) cupboard_store(memory Memory) !string {
 	mem.updated_at = time.now().unix()
 	
 	app.cupboard.memories[mem.id] = mem
+	app.cupboard.user_memories[mem.user_id] << mem.id
 	
-	$if fuchsia {
+	$if fuchsia ? {
 		// Persist to Zircon storage asynchronously
 		go app.persist_memory(mem)
 	}
@@ -95,10 +97,7 @@ fn (mut app App) cupboard_store(memory Memory) !string {
 
 // Persist a memory to Zircon storage
 fn (app App) persist_memory(mem Memory) {
-	$if fuchsia {
-		import os
-		import json
-		
+	$if fuchsia ? {
 		// Ensure storage directory exists
 		storage_dir := '/data/cupboard'
 		if !os.is_dir(storage_dir) {
@@ -139,9 +138,20 @@ fn (mut app App) cupboard_delete(memory_id string) !bool {
 		return error('Cupboard not initialized')
 	}
 	
+	// Remove from index
+	if mem := app.cupboard.memories[memory_id] {
+		if mut user_mems := app.cupboard.user_memories[mem.user_id] {
+			idx := user_mems.index(memory_id)
+			if idx != -1 {
+				user_mems.delete(idx)
+				app.cupboard.user_memories[mem.user_id] = user_mems
+			}
+		}
+	}
+
 	app.cupboard.memories.delete(memory_id)
 	
-	$if fuchsia {
+	$if fuchsia ? {
 		// Mark as deleted in Zircon storage (tombstone)
 		go app.persist_deletion(memory_id)
 	}
@@ -151,10 +161,7 @@ fn (mut app App) cupboard_delete(memory_id string) !bool {
 
 // Persist deletion to Zircon storage
 fn (app App) persist_deletion(memory_id string) {
-	$if fuchsia {
-		import os
-		import time
-		
+	$if fuchsia ? {
 		storage_path := '/data/cupboard/deletions.log'
 		entry := '${time.now().unix()}:${memory_id}\n'
 		
@@ -184,7 +191,7 @@ pub fn (mut app App) cupboard_store_endpoint() vweb.Result {
 	}
 	
 	payload := json.decode(MemoryStoreRequest, app.req.data) or {
-		return app.server_error('Invalid payload')
+		return app.server_error_msg('Invalid payload')
 	}
 	
 	memory := Memory{
@@ -197,7 +204,7 @@ pub fn (mut app App) cupboard_store_endpoint() vweb.Result {
 	}
 	
 	memory_id := app.cupboard_store(memory) or {
-		return app.server_error('Failed to store memory: ${err}')
+		return app.server_error_msg('Failed to store memory: ${err}')
 	}
 	
 	return app.json({
@@ -224,13 +231,13 @@ pub fn (mut app App) cupboard_retrieve_endpoint() vweb.Result {
 	}
 	
 	payload := json.decode(MemoryRetrieveRequest, app.req.data) or {
-		return app.server_error('Invalid payload')
+		return app.server_error_msg('Invalid payload')
 	}
 	
 	limit := if payload.limit > 0 { payload.limit } else { 10 }
 	
 	memories := app.cupboard_retrieve(session.user_id, payload.query, limit) or {
-		return app.server_error('Failed to retrieve memories: ${err}')
+		return app.server_error_msg('Failed to retrieve memories: ${err}')
 	}
 	
 	return app.json(memories)
@@ -253,11 +260,11 @@ pub fn (mut app App) cupboard_delete_endpoint() vweb.Result {
 	}
 	
 	payload := json.decode(MemoryDeleteRequest, app.req.data) or {
-		return app.server_error('Invalid payload')
+		return app.server_error_msg('Invalid payload')
 	}
 	
 	_ := app.cupboard_delete(payload.id) or {
-		return app.server_error('Failed to delete memory: ${err}')
+		return app.server_error_msg('Failed to delete memory: ${err}')
 	}
 	
 	return app.json({
