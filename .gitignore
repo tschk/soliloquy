@@ -45,3 +45,4 @@ __pycache__/
 tools/build_manager/build_manager_gui/node_modules/
 tools/build_manager/build_manager_gui/dist/
 tools/build_manager/build_manager_gui/src-tauri/target/
+tools/bootloader/
