@@ -718,6 +718,10 @@ mod tests {
             webview: None,
             current_url: None,
             state: EmbedderState::Uninitialized,
+            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
+            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            tab_id_map: HashMap::new(),
         };
         
         let result = embedder.load_url("https://example.com");
@@ -735,6 +739,10 @@ mod tests {
             webview: None,
             current_url: None,
             state: EmbedderState::Initializing,
+            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
+            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            tab_id_map: HashMap::new(),
         };
         
         let result = embedder.load_url("https://example.com");
