@@ -1,6 +1,9 @@
 module main
 
 import vweb
+$if fuchsia ? {
+	import os
+}
 
 const (
 	port = 3030
@@ -56,6 +59,7 @@ fn main() {
 			initialized: false
 			memories: map[string]Memory{}
 			embeddings: map[string][]f32{}
+			user_memory_counts: map[string]int{}
 		}
 		device_registry: DeviceRegistry{
 			devices: map[string]DeviceInfo{}
@@ -105,8 +109,7 @@ fn main() {
 
 // Signal to launcher that desktop mode is ready
 fn signal_desktop_ready() {
-	$if fuchsia {
-		import os
+	$if fuchsia ? {
 		// Write signal file that launcher watches
 		os.write_file('/tmp/soliloquy_desktop_ready', 'ready') or {}
 	}

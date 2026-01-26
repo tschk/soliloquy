@@ -27,7 +27,7 @@ pub mut:
 
 // Detect display using native Zircon bindings
 pub fn detect_display() DisplayInfo {
-	$if fuchsia {
+	$if fuchsia ? {
 		return detect_display_zircon()
 	} $else {
 		// Non-Fuchsia platforms: display detection not applicable
@@ -123,7 +123,7 @@ fn no_display_info() DisplayInfo {
 
 // Get hostname for network display
 fn get_hostname() string {
-	$if fuchsia {
+	$if fuchsia ? {
 		return 'soliloquy'
 	} $else {
 		return 'localhost'
@@ -167,7 +167,7 @@ pub fn (mut app App) display_info() vweb.Result {
 // API endpoint: Get all displays
 @['/api/display/list'; get]
 pub fn (mut app App) display_list() vweb.Result {
-	$if fuchsia {
+	$if fuchsia ? {
 		result := scenic.detect_displays()
 		
 		if result.query_result != .success {

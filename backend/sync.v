@@ -54,13 +54,13 @@ fn (mut app App) register_device(device_id string, device_name string) {
 		DeviceInfo{
 			id: device_id
 			name: device_name
-			last_seen: time.now().unix
+			last_seen: time.now().unix()
 			sync_count: 0
 			memory_count: 0
 		}
 	}
 	
-	device.last_seen = time.now().unix
+	device.last_seen = time.now().unix()
 	device.sync_count++
 	
 	app.device_registry.devices[device_id] = device
@@ -144,7 +144,7 @@ pub fn (mut app App) sync_push() vweb.Result {
 	response := SyncResponse{
 		synced_count: synced
 		new_items: []
-		timestamp: time.now().unix
+		timestamp: time.now().unix()
 	}
 	
 	return app.json(response)
@@ -190,7 +190,7 @@ pub fn (mut app App) sync_pull() vweb.Result {
 	response := SyncResponse{
 		synced_count: 0
 		new_items: new_items
-		timestamp: time.now().unix
+		timestamp: time.now().unix()
 	}
 	
 	return app.json(response)
@@ -229,6 +229,6 @@ pub fn (mut app App) sync_status() vweb.Result {
 		'mode': mode
 		'devices_connected': device_count.str()
 		'cupboard_memories': app.cupboard.memories.len.str()
-		'timestamp': time.now().unix.str()
+		'timestamp': time.now().unix().str()
 	})
 }

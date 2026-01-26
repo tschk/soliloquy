@@ -12,6 +12,9 @@ import vweb
 
 // Import Zircon V bindings
 import ipc { ZxStatus, Channel, create_channel_pair, endpoint_0, endpoint_1 }
+$if fuchsia ? {
+	import os
+}
 
 // Zircon channel for IPC
 struct ZirconChannel {
@@ -30,7 +33,7 @@ mut:
 
 // Initialize Zircon IPC bridge
 pub fn (mut app App) init_zircon() {
-	$if fuchsia {
+	$if fuchsia ? {
 		println('🔌 Initializing Zircon IPC bridge')
 		app.zircon.enabled = true
 		app.zircon.channels = map[string]ZirconChannel{}
@@ -44,7 +47,7 @@ pub fn (mut app App) init_zircon() {
 
 // Initialize connections to core Zircon services
 fn (mut app App) init_zircon_channels() {
-	$if fuchsia {
+	$if fuchsia ? {
 		// Create channel for storage service (Cupboard persistence)
 		if storage_channel := create_service_channel('fuchsia.io.Directory') {
 			app.zircon.channels['storage'] = storage_channel
@@ -67,9 +70,7 @@ fn (mut app App) init_zircon_channels() {
 
 // Create a channel to a Zircon service
 fn create_service_channel(service_name string) ?ZirconChannel {
-	$if fuchsia {
-		import os
-		
+	$if fuchsia ? {
 		service_path := '/svc/${service_name}'
 		
 		if !os.exists(service_path) {
@@ -170,7 +171,7 @@ pub fn (mut app App) zircon_status() vweb.Result {
 	
 	return app.json({
 		'enabled': app.zircon.enabled.str()
-		'platform': $if fuchsia { 'fuchsia' } $else { 'host' }
+		'platform': $if fuchsia ? { 'fuchsia' } $else { 'host' }
 		'channels': channel_list.join(',')
 		'channel_count': app.zircon.channels.len.str()
 	})

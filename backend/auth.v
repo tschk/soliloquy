@@ -69,7 +69,7 @@ pub fn (mut app App) google_callback() vweb.Result {
 	}
 	
 	// Generate session token
-	session_token := time.now().unix.str() + user_info.id
+	session_token := time.now().unix().str() + user_info.id
 	
 	app.sessions[session_token] = Session{
 		user_id: user_info.id
