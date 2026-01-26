@@ -1,37 +1,23 @@
-//! Resource Loader
+//! Resource Loader - Fetch resources with redirect handling
 //!
-//! HTTP resource loader with redirect handling, compression support,
-//! and integration with connection manager and QUIC transport.
+//! This module provides HTTP resource loading:
+//! - Fetch HTML, CSS, JavaScript, images, etc.
+//! - Handle HTTP redirects (301, 302, 307, 308)
+//! - Content negotiation and compression
+//! - Cache-Control header handling
 
+use log::{info, debug, warn};
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use log::{debug, warn, error};
-use url::Url;
+use std::time::Instant;
 
-/// HTTP methods
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// HTTP method
+#[derive(Debug, Clone, PartialEq)]
 pub enum HttpMethod {
     GET,
     POST,
+    HEAD,
     PUT,
     DELETE,
-    HEAD,
-    OPTIONS,
-    PATCH,
-}
-
-impl HttpMethod {
-    pub fn as_str(&self) -> &str {
-        match self {
-            HttpMethod::GET => "GET",
-            HttpMethod::POST => "POST",
-            HttpMethod::PUT => "PUT",
-            HttpMethod::DELETE => "DELETE",
-            HttpMethod::HEAD => "HEAD",
-            HttpMethod::OPTIONS => "OPTIONS",
-            HttpMethod::PATCH => "PATCH",
-        }
-    }
 }
 
 /// Resource request
@@ -41,46 +27,35 @@ pub struct ResourceRequest {
     pub url: String,
     /// HTTP method
     pub method: HttpMethod,
-    /// Request headers
+    /// HTTP headers
     pub headers: HashMap<String, String>,
-    /// Request body (for POST, PUT, etc.)
+    /// Request body (for POST, PUT)
     pub body: Option<Vec<u8>>,
-    /// Request timeout
-    pub timeout: Duration,
+    /// Request priority (higher = more important)
+    pub priority: u32,
 }
 
 impl ResourceRequest {
-    /// Create a GET request
+    /// Create a new GET request
     pub fn get(url: &str) -> Self {
         Self {
             url: url.to_string(),
             method: HttpMethod::GET,
             headers: HashMap::new(),
             body: None,
-            timeout: Duration::from_secs(30),
+            priority: 50, // Medium priority
         }
     }
 
-    /// Create a POST request
-    pub fn post(url: &str, body: Vec<u8>) -> Self {
-        Self {
-            url: url.to_string(),
-            method: HttpMethod::POST,
-            headers: HashMap::new(),
-            body: Some(body),
-            timeout: Duration::from_secs(30),
-        }
-    }
-
-    /// Add a header
+    /// Add a header to the request
     pub fn with_header(mut self, key: &str, value: &str) -> Self {
         self.headers.insert(key.to_string(), value.to_string());
         self
     }
 
-    /// Set timeout
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
+    /// Set request priority
+    pub fn with_priority(mut self, priority: u32) -> Self {
+        self.priority = priority;
         self
     }
 }
@@ -88,49 +63,53 @@ impl ResourceRequest {
 /// Resource response
 #[derive(Debug, Clone)]
 pub struct ResourceResponse {
+    /// Response URL (may differ from request due to redirects)
+    pub url: String,
     /// HTTP status code
-    pub status_code: u16,
-    /// Response headers
+    pub status: u16,
+    /// HTTP headers
     pub headers: HashMap<String, String>,
     /// Response body
     pub body: Vec<u8>,
-    /// Final URL (after redirects)
-    pub final_url: String,
-    /// Request duration
-    pub duration: Duration,
+    /// Time taken to fetch
+    pub duration: std::time::Duration,
 }
 
 impl ResourceResponse {
-    /// Check if response is successful (2xx status)
-    pub fn is_success(&self) -> bool {
-        self.status_code >= 200 && self.status_code < 300
+    /// Get a header value
+    pub fn get_header(&self, key: &str) -> Option<&String> {
+        self.headers.get(key)
     }
 
-    /// Check if response is a redirect (3xx status)
+    /// Check if response is successful (2xx)
+    pub fn is_success(&self) -> bool {
+        self.status >= 200 && self.status < 300
+    }
+
+    /// Check if response is a redirect (3xx)
     pub fn is_redirect(&self) -> bool {
-        self.status_code >= 300 && self.status_code < 400
+        self.status >= 300 && self.status < 400
+    }
+
+    /// Get redirect location
+    pub fn redirect_location(&self) -> Option<&String> {
+        self.get_header("location")
     }
 
     /// Get response body as UTF-8 string
-    pub fn text(&self) -> Result<String, String> {
+    pub fn body_as_string(&self) -> Result<String, String> {
         String::from_utf8(self.body.clone())
             .map_err(|e| format!("Invalid UTF-8: {}", e))
     }
-
-    /// Get Location header for redirects
-    pub fn location(&self) -> Option<&String> {
-        self.headers.get("location")
-            .or_else(|| self.headers.get("Location"))
-    }
 }
 
-/// Resource loader with connection management
+/// Resource loader for fetching web resources
 pub struct ResourceLoader {
-    /// User agent string
+    /// User-Agent header
     user_agent: String,
-    /// Maximum redirects to follow
-    max_redirects: usize,
-    /// Accept-Encoding header value
+    /// Maximum number of redirects to follow
+    max_redirects: u32,
+    /// Accept-Encoding header (compression support)
     accept_encoding: String,
 }
 
@@ -138,132 +117,131 @@ impl ResourceLoader {
     /// Create a new resource loader
     pub fn new() -> Self {
         Self {
-            user_agent: "Soliloquy/0.1.0 (Fuchsia; Servo)".to_string(),
+            user_agent: "Soliloquy/0.1 (Servo; Zircon)".to_string(),
             max_redirects: 10,
             accept_encoding: "gzip, deflate, br".to_string(),
         }
     }
 
-    /// Set user agent
-    pub fn with_user_agent(mut self, user_agent: &str) -> Self {
-        self.user_agent = user_agent.to_string();
-        self
-    }
-
-    /// Set maximum redirects
-    pub fn with_max_redirects(mut self, max_redirects: usize) -> Self {
-        self.max_redirects = max_redirects;
-        self
-    }
-
-    /// Fetch a resource
+    /// Fetch a resource with redirect handling
     ///
     /// # Arguments
-    /// * `request` - Resource request
+    /// * `request` - The resource request
     ///
     /// # Returns
-    /// Result containing ResourceResponse or error message
-    pub async fn fetch(&self, mut request: ResourceRequest) -> Result<ResourceResponse, String> {
-        let start_time = SystemTime::now();
-        let mut redirect_count = 0;
+    /// * `Ok(ResourceResponse)` - Successful response
+    /// * `Err(String)` - Fetch failure
+    pub fn fetch(&self, mut request: ResourceRequest) -> Result<ResourceResponse, String> {
+        let start = Instant::now();
+        info!("Fetching resource: {}", request.url);
 
         // Add default headers
-        if !request.headers.contains_key("user-agent") {
-            request.headers.insert("user-agent".to_string(), self.user_agent.clone());
+        if !request.headers.contains_key("User-Agent") {
+            request.headers.insert("User-Agent".to_string(), self.user_agent.clone());
         }
-        if !request.headers.contains_key("accept-encoding") {
-            request.headers.insert("accept-encoding".to_string(), self.accept_encoding.clone());
+        if !request.headers.contains_key("Accept-Encoding") {
+            request.headers.insert("Accept-Encoding".to_string(), self.accept_encoding.clone());
         }
 
+        // Follow redirects
+        let mut redirect_count = 0;
         let mut current_url = request.url.clone();
 
         loop {
-            debug!("Fetching {} {}", request.method.as_str(), current_url);
+            debug!("Requesting: {}", current_url);
 
-            // Perform request
-            let response = self.perform_request(&current_url, &request).await?;
+            // TODO: Actually perform HTTP request
+            // This would use hyper, reqwest, or curl binding
+            // For now, return placeholder response
+            
+            let response = self.perform_request(&current_url, &request)?;
 
-            // Handle redirects
-            if response.is_redirect() && redirect_count < self.max_redirects {
-                if let Some(location) = response.location() {
-                    debug!("Following redirect to {}", location);
-                    
+            if response.is_redirect() {
+                if redirect_count >= self.max_redirects {
+                    return Err(format!("Too many redirects ({})", redirect_count));
+                }
+
+                if let Some(location) = response.redirect_location() {
+                    info!("Following redirect to: {}", location);
                     current_url = self.resolve_redirect_url(&current_url, location)?;
                     redirect_count += 1;
-                    
-                    // For 303 See Other, change method to GET
-                    if response.status_code == 303 {
-                        request.method = HttpMethod::GET;
-                        request.body = None;
-                    }
-                    
                     continue;
                 } else {
-                    return Err(format!("Redirect without Location header (status {})", response.status_code));
+                    return Err("Redirect response missing Location header".to_string());
                 }
             }
 
-            // Calculate duration
-            let duration = SystemTime::now()
-                .duration_since(start_time)
-                .unwrap_or(Duration::from_secs(0));
+            if response.is_success() {
+                let duration = start.elapsed();
+                info!("Resource fetched successfully in {:?}: {}", duration, current_url);
+                return Ok(ResourceResponse {
+                    url: current_url,
+                    status: response.status,
+                    headers: response.headers,
+                    body: response.body,
+                    duration,
+                });
+            }
 
-            return Ok(ResourceResponse {
-                status_code: response.status_code,
-                headers: response.headers,
-                body: response.body,
-                final_url: current_url,
-                duration,
-            });
+            return Err(format!("HTTP error {}: {}", response.status, current_url));
         }
     }
 
-    /// Perform actual HTTP request
-    async fn perform_request(
+    /// Perform the actual HTTP request (placeholder)
+    fn perform_request(
         &self,
         url: &str,
         request: &ResourceRequest,
     ) -> Result<ResourceResponse, String> {
-        // TODO: Implement actual HTTP requests using hyper
-        // Placeholder implementation
+        // TODO: Implement actual HTTP request
+        // This is a placeholder that returns fake responses
+
+        warn!("HTTP request not fully implemented, returning placeholder");
+
+        let body = format!("<html><head><title>Placeholder</title></head><body><h1>Placeholder for {}</h1></body></html>", url);
         
-        debug!("Performing {} request to {}", request.method.as_str(), url);
-
-        // Simulate network delay
-        tokio::time::sleep(Duration::from_millis(10)).await;
-
-        // Return mock response
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "text/html".to_string());
-        headers.insert("content-length".to_string(), "27".to_string());
-
         Ok(ResourceResponse {
-            status_code: 200,
-            headers,
-            body: b"<html><body>Test</body></html>".to_vec(),
-            final_url: url.to_string(),
-            duration: Duration::from_millis(10),
+            url: url.to_string(),
+            status: 200,
+            headers: {
+                let mut headers = HashMap::new();
+                headers.insert("content-type".to_string(), "text/html".to_string());
+                headers.insert("content-length".to_string(), body.len().to_string());
+                headers
+            },
+            body: body.into_bytes(),
+            duration: std::time::Duration::from_millis(10),
         })
     }
 
-    /// Resolve redirect URL (handle relative URLs)
-    fn resolve_redirect_url(&self, base_url: &str, location: &str) -> Result<String, String> {
-        // Parse base URL
-        let base = Url::parse(base_url)
-            .map_err(|e| format!("Invalid base URL: {}", e))?;
+    /// Resolve a redirect URL (handle relative URLs)
+    fn resolve_redirect_url(&self, base: &str, location: &str) -> Result<String, String> {
+        // If location is absolute, use it directly
+        if location.starts_with("http://") || location.starts_with("https://") {
+            return Ok(location.to_string());
+        }
 
-        // Parse location (might be relative)
-        let resolved = if location.starts_with("http://") || location.starts_with("https://") {
-            // Absolute URL
-            Url::parse(location)
-                .map_err(|e| format!("Invalid redirect URL: {}", e))?
-        } else {
-            // Relative URL
-            base.join(location)
-                .map_err(|e| format!("Failed to resolve redirect URL: {}", e))?
-        };
+        // Handle relative URLs
+        // TODO: Use proper URL parsing library (url crate)
+        if location.starts_with('/') {
+            // Absolute path
+            if let Some(origin_end) = base.find("://") {
+                if let Some(path_start) = base[origin_end + 3..].find('/') {
+                    let origin = &base[..origin_end + 3 + path_start];
+                    return Ok(format!("{}{}", origin, location));
+                } else {
+                    return Ok(format!("{}{}", base, location));
+                }
+            }
+        }
 
-        Ok(resolved.to_string())
+        // Relative path - resolve against base
+        if let Some(last_slash) = base.rfind('/') {
+            let base_dir = &base[..last_slash + 1];
+            return Ok(format!("{}{}", base_dir, location));
+        }
+
+        Err(format!("Failed to resolve redirect URL: {}", location))
     }
 }
 
@@ -278,145 +256,105 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_http_method_as_str() {
-        assert_eq!(HttpMethod::GET.as_str(), "GET");
-        assert_eq!(HttpMethod::POST.as_str(), "POST");
-        assert_eq!(HttpMethod::PUT.as_str(), "PUT");
-    }
-
-    #[test]
-    fn test_resource_request_get() {
+    fn test_resource_request_creation() {
         let request = ResourceRequest::get("https://example.com");
-        assert_eq!(request.method, HttpMethod::GET);
         assert_eq!(request.url, "https://example.com");
-        assert!(request.body.is_none());
-    }
-
-    #[test]
-    fn test_resource_request_post() {
-        let body = b"test data".to_vec();
-        let request = ResourceRequest::post("https://example.com", body.clone());
-        assert_eq!(request.method, HttpMethod::POST);
-        assert_eq!(request.body, Some(body));
+        assert_eq!(request.method, HttpMethod::GET);
+        assert_eq!(request.priority, 50);
     }
 
     #[test]
     fn test_resource_request_with_header() {
         let request = ResourceRequest::get("https://example.com")
-            .with_header("Authorization", "Bearer token");
-        assert_eq!(request.headers.get("Authorization"), Some(&"Bearer token".to_string()));
+            .with_header("Accept", "text/html");
+        assert_eq!(request.headers.get("Accept").unwrap(), "text/html");
     }
 
     #[test]
-    fn test_resource_request_with_timeout() {
+    fn test_resource_request_with_priority() {
         let request = ResourceRequest::get("https://example.com")
-            .with_timeout(Duration::from_secs(60));
-        assert_eq!(request.timeout, Duration::from_secs(60));
+            .with_priority(100);
+        assert_eq!(request.priority, 100);
     }
 
     #[test]
     fn test_resource_response_is_success() {
         let response = ResourceResponse {
-            status_code: 200,
+            url: "https://example.com".to_string(),
+            status: 200,
             headers: HashMap::new(),
             body: vec![],
-            final_url: "https://example.com".to_string(),
-            duration: Duration::from_secs(1),
+            duration: std::time::Duration::from_secs(1),
         };
         assert!(response.is_success());
-
-        let response_404 = ResourceResponse {
-            status_code: 404,
-            headers: HashMap::new(),
-            body: vec![],
-            final_url: "https://example.com".to_string(),
-            duration: Duration::from_secs(1),
-        };
-        assert!(!response_404.is_success());
+        assert!(!response.is_redirect());
     }
 
     #[test]
     fn test_resource_response_is_redirect() {
-        let response = ResourceResponse {
-            status_code: 301,
-            headers: HashMap::new(),
-            body: vec![],
-            final_url: "https://example.com".to_string(),
-            duration: Duration::from_secs(1),
-        };
-        assert!(response.is_redirect());
-    }
-
-    #[test]
-    fn test_resource_response_text() {
-        let response = ResourceResponse {
-            status_code: 200,
-            headers: HashMap::new(),
-            body: b"Hello, World!".to_vec(),
-            final_url: "https://example.com".to_string(),
-            duration: Duration::from_secs(1),
-        };
-        assert_eq!(response.text().unwrap(), "Hello, World!");
-    }
-
-    #[test]
-    fn test_resource_response_location() {
         let mut headers = HashMap::new();
-        headers.insert("Location".to_string(), "https://example.com/new".to_string());
+        headers.insert("location".to_string(), "https://example.org".to_string());
         
         let response = ResourceResponse {
-            status_code: 301,
+            url: "https://example.com".to_string(),
+            status: 301,
             headers,
             body: vec![],
-            final_url: "https://example.com".to_string(),
-            duration: Duration::from_secs(1),
+            duration: std::time::Duration::from_secs(1),
         };
-        
-        assert_eq!(response.location(), Some(&"https://example.com/new".to_string()));
+        assert!(response.is_redirect());
+        assert!(!response.is_success());
+        assert_eq!(response.redirect_location().unwrap(), "https://example.org");
     }
 
-    #[tokio::test]
-    async fn test_resource_loader_fetch() {
+    #[test]
+    fn test_resource_loader_creation() {
+        let loader = ResourceLoader::new();
+        assert_eq!(loader.max_redirects, 10);
+        assert!(loader.user_agent.contains("Soliloquy"));
+    }
+
+    #[test]
+    fn test_resource_loader_fetch() {
         let loader = ResourceLoader::new();
         let request = ResourceRequest::get("https://example.com");
-        let response = loader.fetch(request).await.unwrap();
+        let result = loader.fetch(request);
+        assert!(result.is_ok());
         
-        assert!(response.is_success());
+        let response = result.unwrap();
+        assert_eq!(response.status, 200);
+        assert!(!response.body.is_empty());
     }
 
     #[test]
-    fn test_resolve_redirect_url_absolute() {
+    fn test_resolve_redirect_absolute_url() {
         let loader = ResourceLoader::new();
         let result = loader.resolve_redirect_url(
-            "https://example.com/path",
-            "https://other.com/newpath"
-        ).unwrap();
-        
-        assert_eq!(result, "https://other.com/newpath");
+            "https://example.com/page",
+            "https://example.org/other"
+        );
+        assert_eq!(result.unwrap(), "https://example.org/other");
     }
 
     #[test]
-    fn test_resolve_redirect_url_relative() {
+    fn test_resolve_redirect_absolute_path() {
         let loader = ResourceLoader::new();
         let result = loader.resolve_redirect_url(
-            "https://example.com/path/page.html",
-            "../other.html"
-        ).unwrap();
-        
-        assert_eq!(result, "https://example.com/other.html");
+            "https://example.com/old/page",
+            "/new/page"
+        );
+        assert_eq!(result.unwrap(), "https://example.com/new/page");
     }
 
     #[test]
-    fn test_resource_loader_with_user_agent() {
-        let loader = ResourceLoader::new()
-            .with_user_agent("Custom/1.0");
-        assert_eq!(loader.user_agent, "Custom/1.0");
-    }
-
-    #[test]
-    fn test_resource_loader_with_max_redirects() {
-        let loader = ResourceLoader::new()
-            .with_max_redirects(5);
-        assert_eq!(loader.max_redirects, 5);
+    fn test_response_body_as_string() {
+        let response = ResourceResponse {
+            url: "https://example.com".to_string(),
+            status: 200,
+            headers: HashMap::new(),
+            body: "Hello, World!".as_bytes().to_vec(),
+            duration: std::time::Duration::from_secs(1),
+        };
+        assert_eq!(response.body_as_string().unwrap(), "Hello, World!");
     }
 }

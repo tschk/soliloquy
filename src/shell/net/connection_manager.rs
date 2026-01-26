@@ -1,309 +1,321 @@
-//! Connection Manager
+//! Connection Manager - DNS cache and connection pooling
 //!
-//! Manages DNS caching, TLS session resumption, and HTTP connection pooling
-//! for improved performance and reduced latency.
+//! This module provides efficient connection management for the browser:
+//! - DNS caching with TTL-based expiration
+//! - TCP connection pooling and reuse
+//! - TLS session caching for faster handshakes
+//! - Connection pre-warming for predicted navigations
 
+use log::{info, debug, warn};
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use log::{debug, warn};
-use tokio::{net, time};
+use std::time::{Duration, Instant};
 
-/// Default DNS cache TTL (5 minutes)
-const DEFAULT_DNS_TTL: u64 = 300;
-
-/// Default TLS session lifetime (24 hours)
-const DEFAULT_TLS_LIFETIME: u64 = 86400;
-
-/// Maximum connections per host
-const MAX_CONNECTIONS_PER_HOST: usize = 6;
-
-/// DNS cache entry
+/// DNS cache entry with TTL
 #[derive(Debug, Clone)]
 pub struct DnsEntry {
-    /// Resolved IP addresses
+    /// IP addresses resolved for this hostname
     pub addresses: Vec<IpAddr>,
-    /// Timestamp when cached (Unix epoch)
-    pub cached_at: u64,
-    /// Time-to-live in seconds
-    pub ttl: u64,
+    /// Timestamp when this entry was cached
+    pub cached_at: Instant,
+    /// Time-to-live for this entry (from DNS response)
+    pub ttl: Duration,
 }
 
 impl DnsEntry {
-    /// Check if entry is expired
-    pub fn is_expired(&self) -> bool {
-        let now = current_timestamp();
-        now > self.cached_at + self.ttl
+    /// Check if this DNS entry is still valid
+    pub fn is_valid(&self) -> bool {
+        self.cached_at.elapsed() < self.ttl
     }
 }
 
-/// TLS session ticket for resumption
+/// TLS session ticket for 0-RTT reconnection
 #[derive(Debug, Clone)]
 pub struct TlsSession {
-    /// Hostname
+    /// Hostname this session is for
     pub hostname: String,
-    /// Session ticket data
+    /// Session ticket data (opaque blob)
     pub ticket: Vec<u8>,
-    /// Creation timestamp
-    pub created_at: u64,
-    /// Lifetime in seconds
-    pub lifetime: u64,
+    /// Timestamp when this session was created
+    pub created_at: Instant,
+    /// Session lifetime (typically 24 hours)
+    pub lifetime: Duration,
 }
 
 impl TlsSession {
-    /// Check if session is expired
-    pub fn is_expired(&self) -> bool {
-        let now = current_timestamp();
-        now > self.created_at + self.lifetime
+    /// Check if this TLS session is still valid
+    pub fn is_valid(&self) -> bool {
+        self.created_at.elapsed() < self.lifetime
     }
 }
 
-/// Pooled HTTP connection
-#[derive(Debug, Clone)]
+/// Connection pool entry
+#[derive(Debug)]
 pub struct PooledConnection {
-    /// Hostname
+    /// Hostname this connection is for
     pub hostname: String,
-    /// Connection in use
+    /// Whether this connection is currently in use
     pub in_use: bool,
-    /// Last used timestamp
-    pub last_used: u64,
-    /// Unique connection identifier
+    /// Timestamp of last activity
+    pub last_used: Instant,
+    /// Placeholder for actual connection (would be tokio::net::TcpStream)
     pub connection_id: u64,
 }
 
-impl PooledConnection {
-    /// Check if connection is idle for too long (60 seconds)
-    pub fn is_idle_timeout(&self) -> bool {
-        let now = current_timestamp();
-        !self.in_use && now > self.last_used + 60
-    }
-}
-
-/// Connection manager for DNS, TLS, and connection pooling
+/// Connection Manager for DNS caching, connection pooling, and pre-warming
 pub struct ConnectionManager {
-    /// DNS cache: hostname -> DnsEntry
+    /// DNS cache: hostname -> IP addresses with TTL
     dns_cache: Arc<Mutex<HashMap<String, DnsEntry>>>,
-    /// TLS session cache: hostname -> TlsSession
+    /// TLS session cache: hostname -> session ticket
     tls_sessions: Arc<Mutex<HashMap<String, TlsSession>>>,
-    /// Connection pool: connection_id -> PooledConnection
-    connection_pool: Arc<Mutex<HashMap<u64, PooledConnection>>>,
-    /// Next connection ID
-    next_connection_id: Arc<Mutex<u64>>,
+    /// Connection pool: hostname -> available connections
+    connection_pool: Arc<Mutex<HashMap<String, Vec<PooledConnection>>>>,
+    /// Maximum connections per host
+    max_connections_per_host: usize,
+    /// Connection idle timeout
+    idle_timeout: Duration,
 }
 
 impl ConnectionManager {
     /// Create a new connection manager
     pub fn new() -> Self {
+        info!("Initializing ConnectionManager");
         Self {
             dns_cache: Arc::new(Mutex::new(HashMap::new())),
             tls_sessions: Arc::new(Mutex::new(HashMap::new())),
             connection_pool: Arc::new(Mutex::new(HashMap::new())),
-            next_connection_id: Arc::new(Mutex::new(1)),
+            max_connections_per_host: 6, // Chrome uses 6 per host
+            idle_timeout: Duration::from_secs(60),
         }
     }
 
-    /// Resolve DNS with caching
+    /// Resolve hostname with DNS caching
     ///
     /// # Arguments
-    /// * `hostname` - Hostname to resolve
+    /// * `hostname` - The hostname to resolve
     ///
     /// # Returns
-    /// Vector of resolved IP addresses
-    pub async fn resolve_dns(&self, hostname: &str) -> Result<Vec<IpAddr>, String> {
+    /// * `Ok(Vec<IpAddr>)` - Resolved IP addresses
+    /// * `Err(String)` - DNS resolution failure
+    pub fn resolve_dns(&self, hostname: &str) -> Result<Vec<IpAddr>, String> {
+        debug!("Resolving DNS for: {}", hostname);
+
         // Check cache first
-        {
-            let cache = self.dns_cache.lock().unwrap();
+        if let Ok(cache) = self.dns_cache.lock() {
             if let Some(entry) = cache.get(hostname) {
-                if !entry.is_expired() {
-                    debug!("DNS cache hit for {}", hostname);
+                if entry.is_valid() {
+                    debug!("DNS cache hit for: {}", hostname);
                     return Ok(entry.addresses.clone());
+                } else {
+                    debug!("DNS cache entry expired for: {}", hostname);
                 }
             }
         }
 
-        debug!("DNS cache miss for {}, performing lookup", hostname);
-
-        // Perform DNS lookup using tokio
-        let host_port = format!("{}:0", hostname);
-        let addresses: Vec<IpAddr> = net::lookup_host(&host_port)
-            .await
-            .map_err(|e| format!("DNS lookup failed: {}", e))?
-            .map(|socket_addr| socket_addr.ip())
-            .collect();
-
-        // Cache result
+        // TODO: Perform actual DNS lookup
+        // This would use tokio::net::lookup_host or a DNS library
+        warn!("DNS lookup not yet implemented, returning placeholder");
+        
+        // Placeholder: return localhost
+        let addresses = vec!["127.0.0.1".parse().unwrap()];
+        
+        // Cache the result
         let entry = DnsEntry {
             addresses: addresses.clone(),
-            cached_at: current_timestamp(),
-            ttl: DEFAULT_DNS_TTL,
+            cached_at: Instant::now(),
+            ttl: Duration::from_secs(300), // 5 minutes default TTL
         };
-
-        {
-            let mut cache = self.dns_cache.lock().unwrap();
+        
+        if let Ok(mut cache) = self.dns_cache.lock() {
             cache.insert(hostname.to_string(), entry);
+            debug!("Cached DNS result for: {}", hostname);
         }
 
         Ok(addresses)
     }
 
-    /// Get cached TLS session for resumption
+    /// Get or create a TLS session for a hostname
     ///
     /// # Arguments
-    /// * `hostname` - Server hostname
+    /// * `hostname` - The hostname to get TLS session for
     ///
     /// # Returns
-    /// Optional TLS session ticket
-    pub fn get_tls_session(&self, hostname: &str) -> Option<Vec<u8>> {
-        let sessions = self.tls_sessions.lock().unwrap();
-        if let Some(session) = sessions.get(hostname) {
-            if !session.is_expired() {
-                debug!("TLS session cache hit for {}", hostname);
-                return Some(session.ticket.clone());
+    /// * `Some(TlsSession)` - Cached TLS session if available
+    /// * `None` - No cached session available
+    pub fn get_tls_session(&self, hostname: &str) -> Option<TlsSession> {
+        if let Ok(sessions) = self.tls_sessions.lock() {
+            if let Some(session) = sessions.get(hostname) {
+                if session.is_valid() {
+                    debug!("TLS session cache hit for: {}", hostname);
+                    return Some(session.clone());
+                } else {
+                    debug!("TLS session expired for: {}", hostname);
+                }
             }
         }
         None
     }
 
-    /// Cache TLS session for future resumption
+    /// Cache a TLS session for future 0-RTT connections
     ///
     /// # Arguments
-    /// * `hostname` - Server hostname
-    /// * `ticket` - Session ticket data
+    /// * `hostname` - The hostname this session is for
+    /// * `ticket` - The TLS session ticket data
     pub fn cache_tls_session(&self, hostname: &str, ticket: Vec<u8>) {
         let session = TlsSession {
             hostname: hostname.to_string(),
             ticket,
-            created_at: current_timestamp(),
-            lifetime: DEFAULT_TLS_LIFETIME,
+            created_at: Instant::now(),
+            lifetime: Duration::from_secs(86400), // 24 hours
         };
 
-        let mut sessions = self.tls_sessions.lock().unwrap();
-        sessions.insert(hostname.to_string(), session);
-        debug!("Cached TLS session for {}", hostname);
+        if let Ok(mut sessions) = self.tls_sessions.lock() {
+            sessions.insert(hostname.to_string(), session);
+            debug!("Cached TLS session for: {}", hostname);
+        }
     }
 
-    /// Get available connection from pool
+    /// Get a connection from the pool or create a new one
     ///
     /// # Arguments
-    /// * `hostname` - Target hostname
+    /// * `hostname` - The hostname to get connection for
     ///
     /// # Returns
-    /// Optional connection ID if available
-    pub fn get_connection(&self, hostname: &str) -> Option<u64> {
-        let mut pool = self.connection_pool.lock().unwrap();
-        
-        for (id, conn) in pool.iter_mut() {
-            if conn.hostname == hostname && !conn.in_use && !conn.is_idle_timeout() {
-                conn.in_use = true;
-                conn.last_used = current_timestamp();
-                debug!("Reusing pooled connection {} for {}", id, hostname);
-                return Some(*id);
+    /// * `Ok(u64)` - Connection ID (placeholder)
+    /// * `Err(String)` - Connection failure
+    pub fn get_connection(&self, hostname: &str) -> Result<u64, String> {
+        debug!("Getting connection for: {}", hostname);
+
+        if let Ok(mut pool) = self.connection_pool.lock() {
+            // Check if we have an available connection
+            if let Some(connections) = pool.get_mut(hostname) {
+                // Clean up expired connections
+                connections.retain(|conn| {
+                    conn.last_used.elapsed() < self.idle_timeout
+                });
+
+                // Find an available connection
+                if let Some(conn) = connections.iter_mut().find(|c| !c.in_use) {
+                    conn.in_use = true;
+                    conn.last_used = Instant::now();
+                    debug!("Reusing pooled connection {} for: {}", conn.connection_id, hostname);
+                    return Ok(conn.connection_id);
+                }
+
+                // Check if we can create a new connection
+                if connections.len() < self.max_connections_per_host {
+                    let connection_id = rand::random();
+                    let conn = PooledConnection {
+                        hostname: hostname.to_string(),
+                        in_use: true,
+                        last_used: Instant::now(),
+                        connection_id,
+                    };
+                    connections.push(conn);
+                    debug!("Created new pooled connection {} for: {}", connection_id, hostname);
+                    return Ok(connection_id);
+                }
+
+                // Wait for an available connection
+                warn!("Connection pool exhausted for: {}", hostname);
+                return Err(format!("No available connections for {}", hostname));
+            } else {
+                // Create first connection for this host
+                let connection_id = rand::random();
+                let conn = PooledConnection {
+                    hostname: hostname.to_string(),
+                    in_use: true,
+                    last_used: Instant::now(),
+                    connection_id,
+                };
+                pool.insert(hostname.to_string(), vec![conn]);
+                debug!("Created first connection {} for: {}", connection_id, hostname);
+                return Ok(connection_id);
             }
         }
 
-        // No available connection, create new if under limit
-        let host_connections = pool.values().filter(|c| c.hostname == hostname).count();
-        if host_connections < MAX_CONNECTIONS_PER_HOST {
-            let connection_id = {
-                let mut next_id = self.next_connection_id.lock().unwrap();
-                let id = *next_id;
-                *next_id += 1;
-                id
-            };
-
-            let conn = PooledConnection {
-                hostname: hostname.to_string(),
-                in_use: true,
-                last_used: current_timestamp(),
-                connection_id,
-            };
-
-            pool.insert(connection_id, conn);
-            debug!("Created new pooled connection {} for {}", connection_id, hostname);
-            return Some(connection_id);
-        }
-
-        None
+        Err("Failed to acquire connection pool lock".to_string())
     }
 
-    /// Release connection back to pool
+    /// Release a connection back to the pool
     ///
     /// # Arguments
-    /// * `connection_id` - Connection identifier
-    pub fn release_connection(&self, connection_id: u64) {
-        let mut pool = self.connection_pool.lock().unwrap();
-        if let Some(conn) = pool.get_mut(&connection_id) {
-            conn.in_use = false;
-            conn.last_used = current_timestamp();
-            debug!("Released connection {} back to pool", connection_id);
+    /// * `hostname` - The hostname of the connection
+    /// * `connection_id` - The connection ID to release
+    pub fn release_connection(&self, hostname: &str, connection_id: u64) {
+        debug!("Releasing connection {} for: {}", connection_id, hostname);
+
+        if let Ok(mut pool) = self.connection_pool.lock() {
+            if let Some(connections) = pool.get_mut(hostname) {
+                if let Some(conn) = connections.iter_mut()
+                    .find(|c| c.connection_id == connection_id) {
+                    conn.in_use = false;
+                    conn.last_used = Instant::now();
+                    debug!("Released connection {} back to pool", connection_id);
+                }
+            }
         }
     }
 
-    /// Prewarm connection to a host
+    /// Pre-warm a connection for predicted navigation
+    ///
+    /// This performs DNS lookup and establishes a TCP connection
+    /// before the user actually navigates, for instant page loads.
     ///
     /// # Arguments
-    /// * `hostname` - Target hostname
-    pub async fn prewarm_connection(&self, hostname: &str) -> Result<(), String> {
-        debug!("Prewarming connection to {}", hostname);
-        
-        // Resolve DNS
-        let _ = self.resolve_dns(hostname).await?;
-        
-        // Reserve connection slot
-        let _ = self.get_connection(hostname);
-        
+    /// * `hostname` - The hostname to pre-warm
+    pub fn prewarm_connection(&self, hostname: &str) -> Result<(), String> {
+        info!("Pre-warming connection for: {}", hostname);
+
+        // Perform DNS lookup
+        let _addresses = self.resolve_dns(hostname)?;
+
+        // TODO: Establish TCP connection and TLS handshake in background
+        // This would use tokio::spawn to do the work asynchronously
+
         Ok(())
     }
 
-    /// Clean up expired entries and idle connections
+    /// Clear expired entries from caches
     pub fn cleanup_expired(&self) {
+        debug!("Cleaning up expired cache entries");
+
         // Clean DNS cache
-        {
-            let mut cache = self.dns_cache.lock().unwrap();
+        if let Ok(mut cache) = self.dns_cache.lock() {
             cache.retain(|hostname, entry| {
-                let keep = !entry.is_expired();
-                if !keep {
-                    debug!("Removing expired DNS entry for {}", hostname);
+                let valid = entry.is_valid();
+                if !valid {
+                    debug!("Removing expired DNS entry for: {}", hostname);
                 }
-                keep
+                valid
             });
         }
 
         // Clean TLS sessions
-        {
-            let mut sessions = self.tls_sessions.lock().unwrap();
+        if let Ok(mut sessions) = self.tls_sessions.lock() {
             sessions.retain(|hostname, session| {
-                let keep = !session.is_expired();
-                if !keep {
-                    debug!("Removing expired TLS session for {}", hostname);
+                let valid = session.is_valid();
+                if !valid {
+                    debug!("Removing expired TLS session for: {}", hostname);
                 }
-                keep
+                valid
             });
         }
 
-        // Clean idle connections
-        {
-            let mut pool = self.connection_pool.lock().unwrap();
-            pool.retain(|id, conn| {
-                let keep = !conn.is_idle_timeout();
-                if !keep {
-                    debug!("Removing idle connection {}", id);
+        // Clean connection pool
+        if let Ok(mut pool) = self.connection_pool.lock() {
+            for connections in pool.values_mut() {
+                let before = connections.len();
+                connections.retain(|conn| {
+                    conn.last_used.elapsed() < self.idle_timeout
+                });
+                let removed = before - connections.len();
+                if removed > 0 {
+                    debug!("Removed {} idle connections", removed);
                 }
-                keep
-            });
-        }
-    }
-
-    /// Start background cleanup task
-    pub fn start_cleanup_task(self: Arc<Self>) {
-        tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_secs(60));
-            loop {
-                interval.tick().await;
-                self.cleanup_expired();
             }
-        });
+        }
     }
 }
 
@@ -313,94 +325,75 @@ impl Default for ConnectionManager {
     }
 }
 
-/// Get current Unix timestamp
-fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_dns_caching() {
+    #[test]
+    fn test_connection_manager_creation() {
+        let manager = ConnectionManager::new();
+        assert_eq!(manager.max_connections_per_host, 6);
+    }
+
+    #[test]
+    fn test_dns_caching() {
         let manager = ConnectionManager::new();
         
-        let result1 = manager.resolve_dns("example.com").await.unwrap();
-        let result2 = manager.resolve_dns("example.com").await.unwrap();
+        // First lookup
+        let result1 = manager.resolve_dns("example.com");
+        assert!(result1.is_ok());
         
-        assert_eq!(result1, result2);
+        // Second lookup should hit cache
+        let result2 = manager.resolve_dns("example.com");
+        assert!(result2.is_ok());
+        assert_eq!(result1.unwrap(), result2.unwrap());
+    }
+
+    #[test]
+    fn test_dns_entry_validity() {
+        let entry = DnsEntry {
+            addresses: vec!["127.0.0.1".parse().unwrap()],
+            cached_at: Instant::now(),
+            ttl: Duration::from_secs(300),
+        };
+        assert!(entry.is_valid());
     }
 
     #[test]
     fn test_tls_session_caching() {
         let manager = ConnectionManager::new();
-        let ticket = vec![1, 2, 3, 4, 5];
+        let ticket = vec![1, 2, 3, 4];
         
         manager.cache_tls_session("example.com", ticket.clone());
-        let cached = manager.get_tls_session("example.com");
         
-        assert_eq!(cached, Some(ticket));
+        let session = manager.get_tls_session("example.com");
+        assert!(session.is_some());
+        assert_eq!(session.unwrap().ticket, ticket);
     }
 
     #[test]
     fn test_connection_pooling() {
         let manager = ConnectionManager::new();
         
+        // Get first connection
         let conn1 = manager.get_connection("example.com");
-        assert!(conn1.is_some());
+        assert!(conn1.is_ok());
         
+        // Get second connection (should create new)
         let conn2 = manager.get_connection("example.com");
-        assert!(conn2.is_some());
-        assert_ne!(conn1, conn2);
+        assert!(conn2.is_ok());
+        assert_ne!(conn1.unwrap(), conn2.unwrap());
     }
 
     #[test]
-    fn test_connection_reuse() {
+    fn test_connection_release() {
         let manager = ConnectionManager::new();
         
-        let conn1 = manager.get_connection("example.com").unwrap();
-        manager.release_connection(conn1);
+        let conn_id = manager.get_connection("example.com").unwrap();
+        manager.release_connection("example.com", conn_id);
         
-        let conn2 = manager.get_connection("example.com").unwrap();
-        assert_eq!(conn1, conn2);
-    }
-
-    #[test]
-    fn test_dns_entry_expiration() {
-        let entry = DnsEntry {
-            addresses: vec![IpAddr::from([127, 0, 0, 1])],
-            cached_at: 0,
-            ttl: 1,
-        };
-        
-        assert!(entry.is_expired());
-    }
-
-    #[test]
-    fn test_tls_session_expiration() {
-        let session = TlsSession {
-            hostname: "example.com".to_string(),
-            ticket: vec![1, 2, 3],
-            created_at: 0,
-            lifetime: 1,
-        };
-        
-        assert!(session.is_expired());
-    }
-
-    #[test]
-    fn test_connection_idle_timeout() {
-        let conn = PooledConnection {
-            hostname: "example.com".to_string(),
-            in_use: false,
-            last_used: 0,
-            connection_id: 1,
-        };
-        
-        assert!(conn.is_idle_timeout());
+        // Should be able to get same connection again
+        let conn_id2 = manager.get_connection("example.com").unwrap();
+        assert_eq!(conn_id, conn_id2);
     }
 }

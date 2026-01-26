@@ -27,20 +27,5 @@ pub mod engine_bridge;
 pub mod optimizations;
 pub mod servo_embedder;
 pub mod v8_runtime;
-pub mod net;
-
-// Platform abstraction layer
-pub mod platform;
-
-// Legacy Fuchsia window (kept for compatibility)
-#[cfg(feature = "fuchsia")]
 pub mod zircon_window;
-
-// Re-exports for convenience
-pub use engine_bridge::EngineBridge;
-pub use optimizations::{FramePacer, OptimizationSettings};
-pub use servo_embedder::{EmbedderState, InputEvent, ServoEmbedder};
-pub use v8_runtime::V8Runtime;
-
-#[cfg(feature = "desktop")]
-pub use platform::NativeWindow;
+pub mod net;
