@@ -3,6 +3,7 @@ module main
 import vweb
 import json
 import time
+import os
 
 // Cupboard - Universal memory storage for Soliloquy
 // Stores user memories, pickups, clipboard history, and universal context
@@ -32,6 +33,7 @@ struct CupboardContext {
 mut:
 	memories    map[string]Memory
 	embeddings  map[string][]f32
+	user_memories map[string][]string
 	initialized bool
 }
 
@@ -41,12 +43,19 @@ pub fn (mut app App) init_cupboard() {
 	app.cupboard.initialized = true
 	app.cupboard.memories = map[string]Memory{}
 	app.cupboard.embeddings = map[string][]f32{}
+	app.cupboard.user_memories = map[string][]string{}
 	
 	$if fuchsia {
 		// Initialize Zircon storage channel for persistence
 		if storage_channel := app.get_zircon_channel('storage') {
 			println('📦 Cupboard using Zircon persistent storage')
 			app.load_persisted_memories()
+			// Hydrate index from loaded memories
+			for _, mem in app.cupboard.memories {
+				if mem.id !in app.cupboard.user_memories[mem.user_id] {
+					app.cupboard.user_memories[mem.user_id] << mem.id
+				}
+			}
 		} else {
 			println('📦 Cupboard using in-memory storage (Zircon storage unavailable)')
 		}
@@ -60,7 +69,6 @@ fn (mut app App) load_persisted_memories() {
 	$if fuchsia {
 		// Request stored memories from Zircon storage service
 		// This reads from the component's /data directory
-		import os
 		
 		storage_path := '/data/cupboard/memories.json'
 		if os.exists(storage_path) {
@@ -83,6 +91,9 @@ fn (mut app App) cupboard_store(memory Memory) !string {
 	mem.updated_at = time.now().unix()
 	
 	app.cupboard.memories[mem.id] = mem
+	if mem.id !in app.cupboard.user_memories[mem.user_id] {
+		app.cupboard.user_memories[mem.user_id] << mem.id
+	}
 	
 	$if fuchsia {
 		// Persist to Zircon storage asynchronously
@@ -96,9 +107,6 @@ fn (mut app App) cupboard_store(memory Memory) !string {
 // Persist a memory to Zircon storage
 fn (app App) persist_memory(mem Memory) {
 	$if fuchsia {
-		import os
-		import json
-		
 		// Ensure storage directory exists
 		storage_dir := '/data/cupboard'
 		if !os.is_dir(storage_dir) {
@@ -120,12 +128,26 @@ fn (mut app App) cupboard_retrieve(user_id string, query string, limit int) ![]M
 	
 	mut results := []Memory{}
 	
-	// Simple keyword search for now (TODO: implement vector similarity search)
-	for _, mem in app.cupboard.memories {
-		if mem.user_id == user_id && mem.content.contains(query) {
-			results << mem
-			if results.len >= limit {
-				break
+	// Optimized search using user_memories index
+	if user_id in app.cupboard.user_memories {
+		memory_ids := app.cupboard.user_memories[user_id]
+		for id in memory_ids {
+			mem := app.cupboard.memories[id] or { continue }
+			if mem.content.contains(query) {
+				results << mem
+				if results.len >= limit {
+					break
+				}
+			}
+		}
+	} else {
+		// Fallback (e.g. if index is empty/corrupted, though in this impl it shouldn't be)
+		for _, mem in app.cupboard.memories {
+			if mem.user_id == user_id && mem.content.contains(query) {
+				results << mem
+				if results.len >= limit {
+					break
+				}
 			}
 		}
 	}
@@ -139,6 +161,20 @@ fn (mut app App) cupboard_delete(memory_id string) !bool {
 		return error('Cupboard not initialized')
 	}
 	
+	// Update index
+	if mem := app.cupboard.memories[memory_id] {
+		if mem.user_id in app.cupboard.user_memories {
+			mut ids := app.cupboard.user_memories[mem.user_id]
+			for i, id in ids {
+				if id == memory_id {
+					ids.delete(i)
+					break
+				}
+			}
+			app.cupboard.user_memories[mem.user_id] = ids
+		}
+	}
+
 	app.cupboard.memories.delete(memory_id)
 	
 	$if fuchsia {
@@ -152,9 +188,6 @@ fn (mut app App) cupboard_delete(memory_id string) !bool {
 // Persist deletion to Zircon storage
 fn (app App) persist_deletion(memory_id string) {
 	$if fuchsia {
-		import os
-		import time
-		
 		storage_path := '/data/cupboard/deletions.log'
 		entry := '${time.now().unix()}:${memory_id}\n'
 		
