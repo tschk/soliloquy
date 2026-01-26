@@ -2,7 +2,7 @@
 name = "soliloquy-shell"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 
 [lib]
 name = "soliloquy_shell"
@@ -49,7 +49,7 @@ raw-window-handle = { version = "0.6", optional = true }
 gpui = { git = "https://github.com/zed-industries/zed", features = ["test-support"], optional = true }
 
 # FIDL dependencies
-fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl" }
+fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl", optional = true }
 fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async", optional = true }
 fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-component", optional = true }
 fuchsia-syslog = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-syslog", optional = true }
@@ -101,7 +101,6 @@ desktop = [
     "winit",
     "wgpu",
     "raw-window-handle",
-    "tokio",
     "gpui",
 ]
 fuchsia = [

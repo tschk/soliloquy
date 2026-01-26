@@ -8,7 +8,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use log::{debug, warn};
-use tokio::time;
+use tokio::{net, time};
 
 /// Default DNS cache TTL (5 minutes)
 const DEFAULT_DNS_TTL: u64 = 300;
@@ -124,16 +124,13 @@ impl ConnectionManager {
 
         debug!("DNS cache miss for {}, performing lookup", hostname);
 
-        // TODO: Implement actual DNS lookup with tokio
-        // Placeholder implementation - in production would use tokio::net::lookup_host
-        let addresses = match hostname {
-            "localhost" => vec![IpAddr::from([127, 0, 0, 1])],
-            "example.com" => vec![IpAddr::from([93, 184, 216, 34])],
-            _ => {
-                // Simulate DNS lookup
-                vec![IpAddr::from([93, 184, 216, 34])]
-            }
-        };
+        // Perform DNS lookup using tokio
+        let host_port = format!("{}:0", hostname);
+        let addresses: Vec<IpAddr> = net::lookup_host(&host_port)
+            .await
+            .map_err(|e| format!("DNS lookup failed: {}", e))?
+            .map(|socket_addr| socket_addr.ip())
+            .collect();
 
         // Cache result
         let entry = DnsEntry {

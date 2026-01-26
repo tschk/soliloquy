@@ -302,16 +302,20 @@ impl SpeculationEngine {
 
     /// Evaluate if URL should be speculated
     fn evaluate_speculation(&mut self, url: &str) {
-        let matching_rules = self.rules.matching_rules(url);
-        if matching_rules.is_empty() {
+        let actions: Vec<_> = self.rules.matching_rules(url)
+            .into_iter()
+            .map(|r| (r.action.clone(), r.min_probability))
+            .collect();
+
+        if actions.is_empty() {
             return;
         }
 
         let probability = self.hover_tracker.get_probability(url);
 
-        for rule in matching_rules {
-            if probability >= rule.min_probability {
-                match rule.action {
+        for (action, min_probability) in actions {
+            if probability >= min_probability {
+                match action {
                     SpeculationAction::Prefetch => {
                         self.trigger_prefetch(url);
                     }
