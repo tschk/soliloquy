@@ -1,0 +1,27 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "aic8800",
+    srcs = [
+        "aic8800.cc",
+    ],
+    hdrs = [
+        "aic8800.h",
+    ],
+    deps = [
+        "//drivers/common/soliloquy_hal",
+        "@fuchsia_sdk//pkg/ddktl",
+        "@fuchsia_sdk//pkg/ddk",
+        "@fuchsia_sdk//pkg/zx",
+        "@fuchsia_sdk//pkg/fbl",
+        "@fuchsia_sdk//fidl/fuchsia.hardware.sdio:fuchsia.hardware.sdio_banjo_cpp",
+        "@fuchsia_sdk//fidl/fuchsia.hardware.wlanphyimpl:fuchsia.hardware.wlanphyimpl_banjo_cpp",
+    ],
+    copts = [
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+    ],
+    includes = ["."],
+)

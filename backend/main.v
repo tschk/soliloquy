@@ -1,7 +1,9 @@
 module main
 
 import vweb
-import os
+$if fuchsia ? {
+	import os
+}
 
 const (
 	port = 3030
@@ -57,6 +59,7 @@ fn main() {
 			initialized: false
 			memories: map[string]Memory{}
 			embeddings: map[string][]f32{}
+			user_memory_counts: map[string]int{}
 		}
 		device_registry: DeviceRegistry{
 			devices: map[string]DeviceInfo{}

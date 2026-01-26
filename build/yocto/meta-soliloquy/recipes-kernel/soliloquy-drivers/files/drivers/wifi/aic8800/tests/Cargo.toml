@@ -1,0 +1,13 @@
+[package]
+name = "aic8800_tests"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "aic8800_tests"
+path = "lib.rs"
+
+[dependencies]
+aic8800_mock = { path = "../mock" }
+log = "0.4"
+env_logger = "0.10"

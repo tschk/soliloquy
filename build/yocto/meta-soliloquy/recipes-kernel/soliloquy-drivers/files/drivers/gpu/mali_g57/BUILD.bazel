@@ -1,0 +1,18 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "mali_g57",
+    srcs = [
+        "mali_g57.cc",
+    ],
+    hdrs = [
+        "mali_g57.h",
+        "registers.h",
+    ],
+    deps = [
+        "@fuchsia_sdk//pkg/ddk",
+        "@fuchsia_sdk//pkg/ddktl",
+        "@fuchsia_sdk//pkg/zx",
+        "@fuchsia_sdk//pkg/mmio",
+    ],
+)

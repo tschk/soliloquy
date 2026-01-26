@@ -1,0 +1,31 @@
+import("//build/config/fuchsia/rules.gni")
+
+source_set("soliloquy_hal") {
+  sources = [
+    "clock_reset.cc",
+    "clock_reset.h",
+    "firmware.cc",
+    "firmware.h",
+    "mmio.cc",
+    "mmio.h",
+    "sdio.cc",
+    "sdio.h",
+  ]
+  
+  public_deps = [
+    "//src/lib/ddk",
+    "//src/lib/ddktl",
+    "//sdk/banjo/fuchsia.hardware.sdio",
+    "//zircon/system/ulib/zx",
+    "//zircon/system/ulib/mmio",
+  ]
+  
+  deps = [
+    "//src/devices/lib/driver",
+  ]
+  
+  # V translation available for reference (not linked yet)
+  data_deps = [
+    "//third_party/zircon_v:zircon_v_hal",
+  ]
+}

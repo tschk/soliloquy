@@ -12,7 +12,10 @@ import os
 // - hal/ - Hardware abstraction layer
 
 // Import Zircon V bindings
-import ipc
+import ipc { ZxStatus, Channel, create_channel_pair, endpoint_0, endpoint_1 }
+$if fuchsia ? {
+	import os
+}
 
 // Zircon channel for IPC
 struct ZirconChannel {

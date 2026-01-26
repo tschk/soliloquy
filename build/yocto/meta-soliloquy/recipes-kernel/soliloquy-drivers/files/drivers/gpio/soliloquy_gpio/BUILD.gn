@@ -1,0 +1,29 @@
+import("//build/config/fuchsia/rules.gni")
+import("//build/driver_package.gni")
+
+driver_module("soliloquy_gpio_driver") {
+  output_name = "soliloquy-gpio"
+  sources = [
+    "gpio.cc",
+    "gpio.h",
+  ]
+  deps = [
+    "//drivers/common/soliloquy_hal",
+    "//src/devices/lib/driver",
+    "//src/lib/ddk",
+    "//src/lib/ddktl",
+    "//zircon/system/ulib/fbl",
+    "//zircon/system/ulib/zx",
+    "//zircon/system/ulib/mmio",
+    "//sdk/banjo/fuchsia.hardware.gpio",
+  ]
+}
+
+driver_package("soliloquy_gpio") {
+  deps = [ ":soliloquy_gpio_driver" ]
+  drivers = [
+    {
+      name = "soliloquy-gpio.so"
+    },
+  ]
+}

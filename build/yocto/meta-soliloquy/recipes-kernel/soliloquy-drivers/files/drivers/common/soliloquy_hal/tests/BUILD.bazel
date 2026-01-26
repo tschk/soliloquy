@@ -1,0 +1,26 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+cc_test(
+    name = "soliloquy_hal_mmio_tests",
+    srcs = ["mmio_tests.cc"],
+    deps = [
+        "//drivers/common/soliloquy_hal",
+        "@fuchsia_sdk//pkg/fake-mmio-reg",
+        "@fuchsia_sdk//pkg/mmio",
+        "@fuchsia_sdk//pkg/zx",
+        "@fuchsia_sdk//pkg/zxtest",
+    ],
+)
+
+cc_test(
+    name = "sdio_helper_test",
+    srcs = ["sdio_helper_test.cc"],
+    deps = [
+        "//drivers/common/soliloquy_hal",
+        "@fuchsia_sdk//pkg/banjo_sdio_mock",
+        "@fuchsia_sdk//pkg/zx",
+        "@fuchsia_sdk//pkg/zxtest",
+    ],
+)

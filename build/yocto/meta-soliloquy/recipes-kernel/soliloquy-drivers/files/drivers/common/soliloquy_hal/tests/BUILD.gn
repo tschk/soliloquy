@@ -1,0 +1,33 @@
+import("//build/test.gni")
+
+test("soliloquy_hal_mmio_tests") {
+  output_name = "soliloquy_hal_mmio_tests"
+  sources = [ "mmio_tests.cc" ]
+  
+  deps = [
+    "//drivers/common/soliloquy_hal",
+    "//src/devices/testing/fake-mmio-reg",
+    "//zircon/system/ulib/zxtest",
+    "//zircon/system/ulib/zx",
+  ]
+}
+
+test("sdio_helper_test") {
+  output_name = "sdio_helper_test"
+  sources = [ "sdio_helper_test.cc" ]
+  
+  deps = [
+    "//drivers/common/soliloquy_hal",
+    "//sdk/banjo/fuchsia.hardware.sdio:fuchsia.hardware.sdio_banjo_cpp_mock",
+    "//zircon/system/ulib/zxtest",
+    "//zircon/system/ulib/zx",
+  ]
+}
+
+group("tests") {
+  testonly = true
+  deps = [
+    ":soliloquy_hal_mmio_tests",
+    ":sdio_helper_test",
+  ]
+}

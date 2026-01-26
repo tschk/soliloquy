@@ -1,0 +1,25 @@
+[package]
+name = "aic8800"
+version = "0.1.0"
+edition = "2021"
+description = "AIC8800 WiFi driver for Fuchsia/Zircon"
+license = "MIT OR Apache-2.0"
+authors = ["Soliloquy Project"]
+repository = "https://github.com/atechnology-company/soliloquy"
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+log = "0.4"
+
+[dev-dependencies]
+
+[features]
+default = []
+fuchsia = []
+test_support = []
+
+[[test]]
+name = "integration_tests"
+path = "tests/integration.rs"

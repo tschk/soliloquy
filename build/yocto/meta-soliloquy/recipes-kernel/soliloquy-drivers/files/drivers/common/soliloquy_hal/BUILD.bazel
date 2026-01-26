@@ -1,0 +1,27 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "soliloquy_hal",
+    srcs = [
+        "clock_reset.cc",
+        "firmware.cc",
+        "mmio.cc",
+        "sdio.cc",
+    ],
+    hdrs = [
+        "clock_reset.h",
+        "firmware.h",
+        "mmio.h",
+        "sdio.h",
+    ],
+    deps = [
+        "@fuchsia_sdk//pkg/ddk",
+        "@fuchsia_sdk//pkg/ddktl",
+        "@fuchsia_sdk//pkg/zx",
+        "@fuchsia_sdk//pkg/mmio",
+    ],
+    # V translation available for reference (not linked yet)
+    data = [
+        "//third_party/zircon_v:zircon_v_hal",
+    ],
+)

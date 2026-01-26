@@ -1,0 +1,28 @@
+import("//build/config/fuchsia/rules.gni")
+import("//build/driver_package.gni")
+
+driver_module("mali_g57_driver") {
+  output_name = "mali_g57"
+  sources = [
+    "mali_g57.cc",
+    "mali_g57.h",
+    "registers.h",
+  ]
+  deps = [
+    "//src/devices/lib/driver",
+    "//src/lib/ddk",
+    "//src/lib/ddktl",
+    "//zircon/system/ulib/fbl",
+    "//zircon/system/ulib/zx",
+    "//zircon/system/ulib/mmio",
+  ]
+}
+
+driver_package("mali_g57") {
+  deps = [ ":mali_g57_driver" ]
+  drivers = [
+    {
+      name = "mali_g57.so"
+    },
+  ]
+}

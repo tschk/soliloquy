@@ -1,0 +1,5 @@
+using fuchsia.sdio;
+
+fuchsia.BIND_PROTOCOL == fuchsia.sdio.BIND_PROTOCOL.DEVICE;
+fuchsia.BIND_SDIO_VID == 0xA5C8;
+fuchsia.BIND_SDIO_PID == 0x8800;

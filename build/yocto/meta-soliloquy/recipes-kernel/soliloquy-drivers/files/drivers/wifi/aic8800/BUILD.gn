@@ -1,0 +1,29 @@
+import("//build/config/fuchsia/rules.gni")
+import("//build/driver_package.gni")
+
+driver_module("aic8800_driver") {
+  output_name = "aic8800"
+  sources = [
+    "aic8800.cc",
+    "aic8800.h",
+  ]
+  deps = [
+    "//drivers/common/soliloquy_hal",
+    "//src/devices/lib/driver",
+    "//src/lib/ddk",
+    "//src/lib/ddktl",
+    "//zircon/system/ulib/fbl",
+    "//zircon/system/ulib/zx",
+    "//sdk/banjo/fuchsia.hardware.sdio",
+    "//sdk/banjo/fuchsia.hardware.wlanphyimpl",
+  ]
+}
+
+driver_package("aic8800") {
+  deps = [ ":aic8800_driver" ]
+  drivers = [
+    {
+      name = "aic8800.so"
+    },
+  ]
+}

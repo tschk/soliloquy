@@ -1,0 +1,42 @@
+# Copyright 2024 Soliloquy Authors
+# SPDX-License-Identifier: Apache-2.0
+
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "soliloquy_drivers",
+    srcs = [
+        "lib.rs",
+        "traits.rs",
+        "gpio.rs",
+        "clock.rs",
+        "mmc.rs",
+        "uart.rs",
+    ],
+    crate_name = "soliloquy_drivers",
+    edition = "2021",
+    crate_features = [],
+)
+
+rust_library(
+    name = "soliloquy_drivers_allwinner",
+    srcs = [
+        "lib.rs",
+        "traits.rs",
+        "gpio.rs",
+        "clock.rs",
+        "mmc.rs",
+        "uart.rs",
+    ],
+    crate_name = "soliloquy_drivers",
+    edition = "2021",
+    crate_features = ["allwinner"],
+)
+
+rust_test(
+    name = "soliloquy_drivers_test",
+    crate = ":soliloquy_drivers",
+    size = "small",
+)

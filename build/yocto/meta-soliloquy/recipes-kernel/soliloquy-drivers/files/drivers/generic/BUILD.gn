@@ -1,0 +1,33 @@
+# Copyright 2024 Soliloquy Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Generic Drivers - Platform-agnostic hardware drivers
+
+# Device Tree compilation rule
+action("compile_a527_dtb") {
+  script = "//build:compile_dts.py"
+  sources = [ "//boards/arm64/soliloquy/dts:allwinner-a527.dts" ]
+  outputs = [ "$root_out_dir/allwinner-a527.dtb" ]
+  args = [
+    rebase_path(sources[0], root_build_dir),
+    rebase_path(outputs[0], root_build_dir),
+  ]
+}
+
+# Generic driver sources (for reference builds)
+source_set("generic_driver_sources") {
+  sources = [
+    "traits.rs",
+    "gpio.rs",
+    "clock.rs",
+    "mmc.rs",
+    "uart.rs",
+    "lib.rs",
+  ]
+}
+
+group("generic_drivers") {
+  deps = [
+    ":generic_driver_sources",
+  ]
+}
