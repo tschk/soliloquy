@@ -2,37 +2,9 @@
 name = "soliloquy-shell"
 version.workspace = true
 edition.workspace = true
-license-file.workspace = true
-
-[lib]
-name = "soliloquy_shell"
-path = "lib.rs"
-
-[[bin]]
-name = "soliloquy_shell"
-path = "main.rs"
-
-[[bin]]
-name = "soliloquy_desktop"
-path = "main_desktop.rs"
-required-features = ["desktop"]
-
-[[bin]]
-name = "soliloquy_shell_simple"
-path = "main_simple.rs"
-
-[[bin]]
-name = "soliloquy_test"
-path = "main_test.rs"
-
-[[bin]]
-name = "v8_test"
-path = "v8_test.rs"
+license.workspace = true
 
 [dependencies]
-# Optimization crate from PR 22
-soliloquy_browser_optimizations = { path = "../../src" }
-
 # Workspace dependencies
 log.workspace = true
 futures.workspace = true
@@ -42,40 +14,18 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 async-trait.workspace = true
 
-# Desktop dependencies (Linux/macOS) - Kept from HEAD
-winit = { version = "0.30", optional = true }
-wgpu = { version = "26", optional = true }
-raw-window-handle = { version = "0.6", optional = true }
-gpui = { git = "https://github.com/zed-industries/zed", features = ["test-support"], optional = true }
-
 # FIDL dependencies
-fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl", optional = true }
-fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async", optional = true }
-fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-component", optional = true }
-fuchsia-syslog = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-syslog", optional = true }
-fuchsia-zircon = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-zircon", optional = true }
+fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl" }
+fuchsia-async = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-async" }
+fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-component" }
+fuchsia-syslog = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-syslog" }
+fuchsia-zircon = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-zircon" }
 
-# Browser optimizations
-soliloquy_browser_optimizations = { path = "../../src" }
-
-# Networking and HTTP/3 QUIC
-quinn = "0.11"           # QUIC transport
-rustls = "0.23"          # TLS for QUIC
-tokio = { version = "1.40", features = ["full"] }
-hyper = "1.0"            # HTTP client
-h3 = "0.0.4"             # HTTP/3 protocol
-sha2 = "0.10"            # For cache keys
-lru = "0.12"             # LRU cache
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-rand = "0.8"             # For generating IDs
-
-# FIDL dependencies - local generated bindings
+# Generated FIDL bindings
 fuchsia_ui_composition = { path = "../../gen/fidl/fuchsia_ui_composition" }
 fuchsia_ui_views = { path = "../../gen/fidl/fuchsia_ui_views" }
 fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app" }
 fuchsia_input = { path = "../../gen/fidl/fuchsia_input" }
-fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl" }
 
 # Networking dependencies
 quinn = "0.11"
@@ -102,34 +52,22 @@ chrono = "0.4"
 # Glob pattern matching
 glob = "0.3"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-# Linux-specific dependencies
-x11rb = { version = "0.13", optional = true }
-wayland-client = { version = "0.31", optional = true }
-
 [dev-dependencies]
 tokio-test.workspace = true
 env_logger.workspace = true
 
 [features]
-default = ["desktop"]
-desktop = [
-    "winit",
-    "wgpu",
-    "raw-window-handle",
-    "gpui",
-]
-fuchsia = [
-    "fuchsia-async",
-    "fuchsia-component",
-    "fuchsia-syslog",
-    "fuchsia-zircon",
-    "fuchsia_ui_composition",
-    "fuchsia_ui_views",
-    "fuchsia_ui_app",
-    "fuchsia_input",
-    "fidl",
-]
-gpui = ["dep:gpui"]
-x11 = ["x11rb"]
-wayland = ["wayland-client"]
+default = []
+fuchsia = []
+
+[lib]
+name = "soliloquy_shell"
+path = "lib.rs"
+
+[[bin]]
+name = "soliloquy_shell"
+path = "main.rs"
+
+[[bin]]
+name = "soliloquy_shell_simple"
+path = "main_simple.rs"
