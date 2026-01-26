@@ -12,6 +12,7 @@ import vweb
 
 // Import Zircon V bindings
 import ipc { ZxStatus, Channel, create_channel_pair, endpoint_0, endpoint_1 }
+import os
 
 // Zircon channel for IPC
 struct ZirconChannel {
@@ -68,8 +69,6 @@ fn (mut app App) init_zircon_channels() {
 // Create a channel to a Zircon service
 fn create_service_channel(service_name string) ?ZirconChannel {
 	$if fuchsia {
-		import os
-		
 		service_path := '/svc/${service_name}'
 		
 		if !os.exists(service_path) {
