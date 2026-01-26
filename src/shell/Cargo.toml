@@ -55,11 +55,15 @@ fuchsia-component = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-compone
 fuchsia-syslog = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-syslog", optional = true }
 fuchsia-zircon = { path = "../../third_party/fuchsia-sdk-rust/fuchsia-zircon", optional = true }
 
-# Generated FIDL bindings
-fuchsia_ui_composition = { path = "../../gen/fidl/fuchsia_ui_composition", optional = true }
-fuchsia_ui_views = { path = "../../gen/fidl/fuchsia_ui_views", optional = true }
-fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app", optional = true }
-fuchsia_input = { path = "../../gen/fidl/fuchsia_input", optional = true }
+# Browser optimizations
+soliloquy_browser_optimizations = { path = "../../src" }
+
+# FIDL dependencies - local generated bindings
+fuchsia_ui_composition = { path = "../../gen/fidl/fuchsia_ui_composition" }
+fuchsia_ui_views = { path = "../../gen/fidl/fuchsia_ui_views" }
+fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app" }
+fuchsia_input = { path = "../../gen/fidl/fuchsia_input" }
+fidl = { path = "../../third_party/fuchsia-sdk-rust/fidl" }
 
 # Networking dependencies
 quinn = "0.11"
