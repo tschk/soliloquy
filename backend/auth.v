@@ -3,6 +3,7 @@ module main
 import vweb
 import json
 import net.http
+import net.urllib
 import time
 
 struct GoogleTokenResponse {
@@ -35,7 +36,7 @@ pub fn (mut app App) google_auth() vweb.Result {
 @['/api/auth/google/callback'; get]
 pub fn (mut app App) google_callback() vweb.Result {
 	code := app.query['code'] or {
-		return app.server_error('Missing authorization code')
+		return app.server_error_msg('Missing authorization code')
 	}
 	
 	// Exchange code for token
@@ -43,12 +44,12 @@ pub fn (mut app App) google_callback() vweb.Result {
 	
 	token_resp := http.post_json('https://oauth2.googleapis.com/token', token_data) or {
 		eprintln('Token exchange failed: ${err}')
-		return app.server_error('Token exchange failed')
+		return app.server_error_msg('Token exchange failed')
 	}
 	
 	token_result := json.decode(GoogleTokenResponse, token_resp.body) or {
 		eprintln('Failed to parse token response: ${err}')
-		return app.server_error('Invalid token response')
+		return app.server_error_msg('Invalid token response')
 	}
 	
 	// Get user info
@@ -60,16 +61,16 @@ pub fn (mut app App) google_callback() vweb.Result {
 		})
 	) or {
 		eprintln('User info request failed: ${err}')
-		return app.server_error('User info failed')
+		return app.server_error_msg('User info failed')
 	}
 	
 	user_info := json.decode(GoogleUserInfo, user_resp.body) or {
 		eprintln('Failed to parse user info: ${err}')
-		return app.server_error('Invalid user info')
+		return app.server_error_msg('Invalid user info')
 	}
 	
 	// Generate session token
-	session_token := time.now().unix.str() + user_info.id
+	session_token := time.now().unix().str() + user_info.id
 	
 	app.sessions[session_token] = Session{
 		user_id: user_info.id
@@ -86,7 +87,7 @@ pub fn (mut app App) google_callback() vweb.Result {
 		value: session_token
 		path: '/'
 		http_only: true
-		same_site: .lax
+		same_site: .same_site_lax_mode
 		max_age: 604800
 	})
 	
@@ -129,7 +130,7 @@ pub fn (mut app App) logout() vweb.Result {
 		value: ''
 		path: '/'
 		http_only: true
-		same_site: .lax
+		same_site: .same_site_lax_mode
 		max_age: 0
 	})
 	

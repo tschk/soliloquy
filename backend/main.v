@@ -104,9 +104,15 @@ fn main() {
 	vweb.run(app, port)
 }
 
+// Helper for returning server errors with a message
+pub fn (mut app App) server_error_msg(msg string) vweb.Result {
+	app.set_status(500, 'Internal Server Error')
+	return app.text(msg)
+}
+
 // Signal to launcher that desktop mode is ready
 fn signal_desktop_ready() {
-	$if fuchsia {
+	$if fuchsia ? {
 		// Write signal file that launcher watches
 		os.write_file('/tmp/soliloquy_desktop_ready', 'ready') or {}
 	}

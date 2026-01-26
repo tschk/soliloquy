@@ -54,13 +54,13 @@ fn (mut app App) register_device(device_id string, device_name string) {
 		DeviceInfo{
 			id: device_id
 			name: device_name
-			last_seen: time.now().unix
+			last_seen: time.now().unix()
 			sync_count: 0
 			memory_count: 0
 		}
 	}
 	
-	device.last_seen = time.now().unix
+	device.last_seen = time.now().unix()
 	device.sync_count++
 	
 	app.device_registry.devices[device_id] = device
@@ -80,7 +80,7 @@ pub fn (mut app App) sync_push() vweb.Result {
 	}
 	
 	payload := json.decode(SyncRequest, app.req.data) or {
-		return app.server_error('Invalid sync request')
+		return app.server_error_msg('Invalid sync request')
 	}
 	
 	// Register device
@@ -134,7 +134,7 @@ pub fn (mut app App) sync_push() vweb.Result {
 	
 	// Update device memory count
 	mut device := app.device_registry.devices[payload.device_id] or {
-		return app.server_error('Device not found')
+		return app.server_error_msg('Device not found')
 	}
 	device.memory_count += synced
 	app.device_registry.devices[payload.device_id] = device
@@ -144,7 +144,7 @@ pub fn (mut app App) sync_push() vweb.Result {
 	response := SyncResponse{
 		synced_count: synced
 		new_items: []
-		timestamp: time.now().unix
+		timestamp: time.now().unix()
 	}
 	
 	return app.json(response)
@@ -164,7 +164,7 @@ pub fn (mut app App) sync_pull() vweb.Result {
 	}
 	
 	payload := json.decode(SyncRequest, app.req.data) or {
-		return app.server_error('Invalid sync request')
+		return app.server_error_msg('Invalid sync request')
 	}
 	
 	// Register device
@@ -173,8 +173,17 @@ pub fn (mut app App) sync_pull() vweb.Result {
 	// Get memories created after the client's last sync
 	mut new_items := []SyncItem{}
 	
-	for _, memory in app.cupboard.memories {
-		if memory.user_id == session.user_id && memory.created_at > payload.timestamp {
+	// Optimized retrieval: use user_memories index
+	if user_mems := app.cupboard.user_memories[session.user_id] {
+		// Iterate backwards from newest to oldest
+		for i := user_mems.len - 1; i >= 0; i-- {
+			id := user_mems[i]
+			memory := app.cupboard.memories[id] or { continue }
+
+			if memory.created_at <= payload.timestamp {
+				break
+			}
+
 			new_items << SyncItem{
 				id: memory.id
 				item_type: 'memory'
@@ -190,7 +199,7 @@ pub fn (mut app App) sync_pull() vweb.Result {
 	response := SyncResponse{
 		synced_count: 0
 		new_items: new_items
-		timestamp: time.now().unix
+		timestamp: time.now().unix()
 	}
 	
 	return app.json(response)
@@ -229,6 +238,6 @@ pub fn (mut app App) sync_status() vweb.Result {
 		'mode': mode
 		'devices_connected': device_count.str()
 		'cupboard_memories': app.cupboard.memories.len.str()
-		'timestamp': time.now().unix.str()
+		'timestamp': time.now().unix().str()
 	})
 }

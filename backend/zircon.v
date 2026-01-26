@@ -1,6 +1,7 @@
 module main
 
 import vweb
+import os
 
 // Zircon IPC bridge for native Fuchsia services
 // Provides access to Zircon system services when running on Fuchsia/Soliloquy
@@ -11,13 +12,12 @@ import vweb
 // - hal/ - Hardware abstraction layer
 
 // Import Zircon V bindings
-import ipc { ZxStatus, Channel, create_channel_pair, endpoint_0, endpoint_1 }
-import os
+import ipc
 
 // Zircon channel for IPC
 struct ZirconChannel {
 mut:
-	channel   Channel
+	channel   ipc.Channel
 	connected bool
 	name      string
 }
@@ -31,7 +31,7 @@ mut:
 
 // Initialize Zircon IPC bridge
 pub fn (mut app App) init_zircon() {
-	$if fuchsia {
+	$if fuchsia ? {
 		println('🔌 Initializing Zircon IPC bridge')
 		app.zircon.enabled = true
 		app.zircon.channels = map[string]ZirconChannel{}
@@ -45,7 +45,7 @@ pub fn (mut app App) init_zircon() {
 
 // Initialize connections to core Zircon services
 fn (mut app App) init_zircon_channels() {
-	$if fuchsia {
+	$if fuchsia ? {
 		// Create channel for storage service (Cupboard persistence)
 		if storage_channel := create_service_channel('fuchsia.io.Directory') {
 			app.zircon.channels['storage'] = storage_channel
@@ -68,7 +68,7 @@ fn (mut app App) init_zircon_channels() {
 
 // Create a channel to a Zircon service
 fn create_service_channel(service_name string) ?ZirconChannel {
-	$if fuchsia {
+	$if fuchsia ? {
 		service_path := '/svc/${service_name}'
 		
 		if !os.exists(service_path) {
@@ -76,7 +76,7 @@ fn create_service_channel(service_name string) ?ZirconChannel {
 		}
 		
 		// Create channel pair
-		pair := create_channel_pair(0x2000)
+		pair := ipc.create_channel_pair(0x2000)
 		
 		return ZirconChannel{
 			channel: pair.channel
@@ -95,31 +95,33 @@ pub fn (app &App) get_zircon_channel(name string) ?&ZirconChannel {
 	}
 	
 	if name in app.zircon.channels {
-		return &app.zircon.channels[name]
+		unsafe {
+			return &app.zircon.channels[name]
+		}
 	}
 	
 	return none
 }
 
 // Send a message via Zircon channel
-pub fn (mut app App) zircon_send(channel_name string, data []u8) ZxStatus {
+pub fn (mut app App) zircon_send(channel_name string, data []u8) ipc.ZxStatus {
 	if !app.zircon.enabled {
-		return .err_not_supported
+		return ipc.ZxStatus.err_not_supported
 	}
 	
 	mut channel := app.zircon.channels[channel_name] or {
-		return .err_not_found
+		return ipc.ZxStatus.err_not_found
 	}
 	
 	if !channel.connected {
-		return .err_peer_closed
+		return ipc.ZxStatus.err_peer_closed
 	}
 	
-	return channel.channel.write(endpoint_0, data, [])
+	return channel.channel.write(ipc.endpoint_0, data, [])
 }
 
 // Receive a message from Zircon channel
-pub fn (mut app App) zircon_receive(channel_name string) ?([]u8, ZxStatus) {
+pub fn (mut app App) zircon_receive(channel_name string) ?([]u8, ipc.ZxStatus) {
 	if !app.zircon.enabled {
 		return none
 	}
@@ -132,7 +134,7 @@ pub fn (mut app App) zircon_receive(channel_name string) ?([]u8, ZxStatus) {
 		return none
 	}
 	
-	msg, status := channel.channel.read(endpoint_1, false) or {
+	msg, status := channel.channel.read(ipc.endpoint_1, false) or {
 		return none
 	}
 	
@@ -147,7 +149,7 @@ pub fn (mut app App) close_zircon() {
 	
 	for name, mut channel in app.zircon.channels {
 		if channel.connected {
-			channel.channel.close_endpoint(endpoint_0)
+			channel.channel.close_endpoint(ipc.endpoint_0)
 			channel.connected = false
 			println('  Closed channel: ${name}')
 		}
@@ -169,7 +171,7 @@ pub fn (mut app App) zircon_status() vweb.Result {
 	
 	return app.json({
 		'enabled': app.zircon.enabled.str()
-		'platform': $if fuchsia { 'fuchsia' } $else { 'host' }
+		'platform': $if fuchsia ? { 'fuchsia' } $else { 'host' }
 		'channels': channel_list.join(',')
 		'channel_count': app.zircon.channels.len.str()
 	})
