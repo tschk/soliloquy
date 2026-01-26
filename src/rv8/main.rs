@@ -8,6 +8,7 @@ use roverate::networking;
 use std::env;
 
 use roverate::renderer;
+use roverate::core::{Browser, BrowserConfig};
 // storage and ipc are not used directly vs via other modules, but if needed:
 // use roverate::ipc;
 
@@ -52,11 +53,33 @@ fn main() {
 // mod ui;
 
 /// Run the main browser process (UI, coordination)
-fn run_browser_process(_initial_url: &str) {
+fn run_browser_process(initial_url: &str) {
     info!("Starting browser process...");
 
-    // TODO: Spawn backend logic in background thread if needed
-    // let rt = tokio::runtime::Builder::new_multi_thread() ...
+    let url = initial_url.to_string();
+    // Spawn backend logic in background thread
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
+
+        rt.block_on(async {
+            info!("Backend initialized");
+            let config = BrowserConfig::headless();
+            match Browser::new(config).await {
+                Ok(mut browser) => {
+                    if let Err(e) = browser.new_tab(&url).await {
+                        error!("Failed to open new tab: {}", e);
+                    }
+                    browser.run().await;
+                }
+                Err(e) => {
+                    error!("Failed to create browser: {}", e);
+                }
+            }
+        });
+    });
 
     // GPUI integration disabled due to dependency conflict (core-graphics)
     // ui::run_app(gpui::App::new());
