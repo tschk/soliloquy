@@ -3,6 +3,13 @@
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
+#include <lib/ddk/binding_driver.h> // Required for ZIRCON_DRIVER macro
+#include <lib/ddk/binding_priv.h>   // Required for ZIRCON_DRIVER_PRIV
+
+#ifndef ZIRCON_DRIVER
+#define ZIRCON_DRIVER(Driver, Ops, VendorName, Version) \
+  ZIRCON_DRIVER_PRIV(Driver, Ops, VendorName, Version)
+#endif
 #include <lib/ddk/platform-defs.h>
 #include <lib/zx/clock.h>
 #include <lib/zx/time.h>
@@ -281,14 +288,14 @@ zx_status_t Aic8800::ConfigurePatchTables() {
   }
   
   size_t patch_count = sizeof(kPatchTable8800D80) / sizeof(PatchEntry);
-  status = write_u32(patch_str_base + kPatchOfstPairCount, patch_count);
+  status = write_u32(patch_str_base + kPatchOfstPairCount, static_cast<uint32_t>(patch_count));
   if (status != ZX_OK) {
     zxlogf(ERROR, "aic8800: Failed to write patch pair count");
     return status;
   }
   
   for (size_t i = 0; i < patch_count; i++) {
-    uint32_t entry_addr = kPatchStartAddr + (i * 8);
+    uint32_t entry_addr = kPatchStartAddr + (static_cast<uint32_t>(i) * 8);
     status = write_u32(entry_addr, kPatchTable8800D80[i].offset + config_base);
     if (status != ZX_OK) {
       zxlogf(ERROR, "aic8800: Failed to write patch entry %zu offset", i);
@@ -383,127 +390,14 @@ zx_status_t Aic8800::InitHw() {
   return ZX_OK;
 }
 
-zx_status_t Aic8800::WlanphyImplQuery(wlanphy_info_t *out_info) {
-  if (!initialized_) {
-    zxlogf(ERROR, "aic8800: Device not initialized");
-    return ZX_ERR_BAD_STATE;
-  }
-  
-  if (!out_info) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  
-  memset(out_info, 0, sizeof(*out_info));
-  
-  out_info->supported_phys = WLAN_INFO_PHY_TYPE_DSSS | WLAN_INFO_PHY_TYPE_CCK |
-                              WLAN_INFO_PHY_TYPE_OFDM | WLAN_INFO_PHY_TYPE_HT;
-  
-  out_info->driver_features = 0;
-  
-  out_info->mac_modes = WLAN_INFO_MAC_MODE_STA | WLAN_INFO_MAC_MODE_AP;
-  
-  out_info->caps = WLAN_INFO_HARDWARE_CAPABILITY_SHORT_PREAMBLE |
-                   WLAN_INFO_HARDWARE_CAPABILITY_SHORT_SLOT_TIME;
-  
-  out_info->bands_count = 1;
-  
-  auto &band = out_info->bands[0];
-  band.band = WLAN_INFO_BAND_2GHZ;
-  
-  band.ht_supported = true;
-  band.ht_caps.ht_capability_info = 0x016E;
-  band.ht_caps.ampdu_params = 0x17;
-  
-  static const uint8_t kSupportedMcs[] = {
-      0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  };
-  memcpy(band.ht_caps.supported_mcs_set, kSupportedMcs, sizeof(kSupportedMcs));
-  
-  band.vht_supported = false;
-  
-  static const uint8_t kChannels2g[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
-  band.supported_channels.base_freq = 2407;
-  band.supported_channels.channels_count = sizeof(kChannels2g);
-  memcpy(band.supported_channels.channels, kChannels2g, sizeof(kChannels2g));
-  
-  zxlogf(INFO, "aic8800: WlanphyQuery - PHY: 0x%x, MAC modes: 0x%x, Bands: %u",
-         out_info->supported_phys, out_info->mac_modes, out_info->bands_count);
-  
-  return ZX_OK;
-}
+} // namespace aic8800
 
-zx_status_t
-Aic8800::WlanphyImplCreateIface(const wlanphy_create_iface_req_t *req,
-                                uint16_t *out_iface_id) {
-  if (!initialized_) {
-    return ZX_ERR_BAD_STATE;
-  }
-  
-  if (!req || !out_iface_id) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  
-  zxlogf(INFO, "aic8800: CreateIface requested - role: %u", req->role);
-  
-  return ZX_ERR_NOT_SUPPORTED;
-}
-
-zx_status_t Aic8800::WlanphyImplDestroyIface(uint16_t iface_id) {
-  if (!initialized_) {
-    return ZX_ERR_BAD_STATE;
-  }
-  
-  zxlogf(INFO, "aic8800: DestroyIface requested - ID: %u", iface_id);
-  
-  return ZX_ERR_NOT_SUPPORTED;
-}
-
-zx_status_t Aic8800::WlanphyImplSetCountry(const wlanphy_country_t *country) {
-  if (!initialized_) {
-    return ZX_ERR_BAD_STATE;
-  }
-  
-  if (!country) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  
-  zxlogf(INFO, "aic8800: SetCountry requested - code: %.2s", country->alpha2);
-  
-  return ZX_ERR_NOT_SUPPORTED;
-}
-
-zx_status_t Aic8800::WlanphyImplClearCountry() {
-  if (!initialized_) {
-    return ZX_ERR_BAD_STATE;
-  }
-  
-  zxlogf(INFO, "aic8800: ClearCountry requested");
-  
-  return ZX_ERR_NOT_SUPPORTED;
-}
-
-zx_status_t Aic8800::WlanphyImplGetCountry(wlanphy_country_t *out_country) {
-  if (!initialized_) {
-    return ZX_ERR_BAD_STATE;
-  }
-  
-  if (!out_country) {
-    return ZX_ERR_INVALID_ARGS;
-  }
-  
-  zxlogf(INFO, "aic8800: GetCountry requested");
-  
-  return ZX_ERR_NOT_SUPPORTED;
-}
-
-static constexpr zx_driver_ops_t aic8800_driver_ops = []() {
+static constexpr zx_driver_ops_t aic8800_wlan_ops = []() {
   zx_driver_ops_t ops = {};
   ops.version = DRIVER_OPS_VERSION;
-  ops.bind = Aic8800::Bind;
+  ops.bind = aic8800::Aic8800::Bind;
   return ops;
 }();
 
-} // namespace aic8800
-
-ZIRCON_DRIVER(aic8800, aic8800::aic8800_driver_ops, "zircon", "0.1");
+// Use a distinct name "aic8800_wlan" and global ops struct to avoid namespace conflicts
+ZIRCON_DRIVER(aic8800_wlan, aic8800_wlan_ops, "zircon", "0.1");

@@ -32,7 +32,7 @@
 //! └─────────────────────────────────────────────────────────────┘
 //! ```
 
-use log::{debug, error, info, warn};
+use log::{debug, info};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 

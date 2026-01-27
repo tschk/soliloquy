@@ -1,6 +1,7 @@
 #ifndef DRIVERS_COMMON_SOLILOQUY_HAL_FIRMWARE_H_
 #define DRIVERS_COMMON_SOLILOQUY_HAL_FIRMWARE_H_
 
+#include <lib/ddk/driver.h>
 #include <lib/zx/vmo.h>
 #include <zircon/types.h>
 

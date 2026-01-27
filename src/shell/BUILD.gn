@@ -4,24 +4,19 @@ import("//build/rust/rustc_binary.gni")
 rustc_binary("bin") {
   name = "soliloquy_shell"
   edition = "2021"
+  source_root = "main.rs"
   sources = [
     "main.rs",
-    "zircon_window.rs",
+    "browser_optimizations.rs",
+    "engine_bridge.rs",
+    "optimizations.rs",
+    "platform.rs",
     "servo_embedder.rs",
     "v8_runtime.rs",
+    "zircon_window.rs",
   ]
   deps = [
-    "//src/lib/fuchsia-async",
-    "//src/lib/fuchsia-component",
-    "//src/lib/syslog/rust:syslog",
-    "//third_party/rust_crates:futures",
     "//third_party/rust_crates:log",
-    "//third_party/rust_crates:rusty_v8",
-    "//gen/fidl/fuchsia_ui_composition",
-    "//gen/fidl/fuchsia_ui_views",
-    "//gen/fidl/fuchsia_ui_app",
-    "//gen/fidl/fuchsia_input",
-    "//vendor/servo", 
   ]
 }
 
@@ -47,7 +42,6 @@ rustc_test("shell_unit_tests") {
     "//src/lib/fuchsia-async",
     "//third_party/rust_crates:futures",
     "//third_party/rust_crates:log",
-    "//third_party/rust_crates:rusty_v8",
   ]
 }
 
@@ -63,7 +57,6 @@ rustc_test("shell_integration_tests") {
     "//src/lib/fuchsia-async",
     "//third_party/rust_crates:futures",
     "//third_party/rust_crates:log",
-    "//third_party/rust_crates:rusty_v8",
   ]
 }
 

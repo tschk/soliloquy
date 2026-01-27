@@ -1,29 +1,39 @@
-import("//build/config/fuchsia/rules.gni")
-import("//build/driver_package.gni")
+import("//build/bind/bind.gni")
+import("//build/components.gni")
+import("//build/drivers.gni")
 
-driver_module("aic8800_driver") {
+driver_bind_rules("aic8800_bind") {
+  rules = "meta/aic8800.bind"
+  bind_output = "aic8800.bindbc"
+  deps = [ "//src/devices/bind/fuchsia.sdio" ]
+}
+
+fuchsia_cc_driver("aic8800_driver") {
+  legacy = true
   output_name = "aic8800"
   sources = [
     "aic8800.cc",
     "aic8800.h",
   ]
   deps = [
-    "//drivers/common/soliloquy_hal",
+    ":aic8800_bind",
+    "//vendor/soliloquy/drivers/common/soliloquy_hal",
     "//src/devices/lib/driver",
     "//src/lib/ddk",
     "//src/lib/ddktl",
     "//zircon/system/ulib/fbl",
     "//zircon/system/ulib/zx",
-    "//sdk/banjo/fuchsia.hardware.sdio",
-    "//sdk/banjo/fuchsia.hardware.wlanphyimpl",
+    # "//sdk/banjo/fuchsia.hardware.sdio",
+    # "//sdk/banjo/fuchsia.hardware.wlanphyimpl", # Missing in this SDK version
   ]
 }
 
-driver_package("aic8800") {
+fuchsia_driver_component("aic8800_component") {
+  component_name = "aic8800"
   deps = [ ":aic8800_driver" ]
-  drivers = [
-    {
-      name = "aic8800.so"
-    },
-  ]
+  manifest = "meta/aic8800.cml"
+}
+
+fuchsia_driver_package("aic8800") {
+  driver_components = [ ":aic8800_component" ]
 }

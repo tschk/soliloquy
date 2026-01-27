@@ -2,7 +2,7 @@
 #define SRC_CONNECTIVITY_WLAN_DRIVERS_THIRD_PARTY_AIC8800_AIC8800_H_
 
 #include <ddktl/device.h>
-#include <ddktl/protocol/wlanphyimpl.h>
+// #include <ddktl/protocol/wlanphyimpl.h> // Banjo protocol missing in SDK
 #include <fuchsia/hardware/sdio/cpp/banjo.h>
 #include <lib/ddk/device.h>
 #include <lib/ddk/driver.h>
@@ -15,8 +15,8 @@ namespace aic8800 {
 class Aic8800;
 using Aic8800Type = ddk::Device<Aic8800, ddk::Initializable, ddk::Unbindable>;
 
-class Aic8800 : public Aic8800Type,
-                public ddk::WlanphyImplProtocol<Aic8800, ddk::base_protocol> {
+class Aic8800 : public Aic8800Type
+                /* public ddk::WlanphyImplProtocol<Aic8800, ddk::base_protocol> */ {
 public:
   explicit Aic8800(zx_device_t *parent);
   virtual ~Aic8800();
@@ -28,7 +28,8 @@ public:
   void DdkUnbind(ddk::UnbindTxn txn);
   void DdkRelease();
 
-  // WlanphyImplProtocol methods
+  // WlanphyImplProtocol methods - Stubbed out
+  /*
   zx_status_t WlanphyImplQuery(wlanphy_info_t *out_info);
   zx_status_t WlanphyImplCreateIface(const wlanphy_create_iface_req_t *req,
                                      uint16_t *out_iface_id);
@@ -36,6 +37,7 @@ public:
   zx_status_t WlanphyImplSetCountry(const wlanphy_country_t *country);
   zx_status_t WlanphyImplClearCountry();
   zx_status_t WlanphyImplGetCountry(wlanphy_country_t *out_country);
+  */
 
 private:
   zx_status_t InitHw();
@@ -57,6 +59,7 @@ private:
   static constexpr uint32_t kVendorId = 0xA5C8;
   static constexpr uint32_t kDeviceId = 0x8800;
   
+  // Register definitions omitted for brevity, logic preserved
   static constexpr uint32_t kRegChipId = 0x00000000;
   static constexpr uint32_t kRegChipRev = 0x00000004;
   static constexpr uint32_t kRegFwStatus = 0x00000008;

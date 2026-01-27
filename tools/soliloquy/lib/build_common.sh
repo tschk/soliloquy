@@ -5,7 +5,9 @@ set -e
 
 # Common paths and configuration
 PROJECT_ROOT=$(pwd)
-FUCHSIA_DIR="$PROJECT_ROOT/fuchsia/fuchsia"
+# The Fuchsia checkout is triple-nested: fuchsia/fuchsia/fuchsia
+# The innermost directory contains .jiri_root with fx and jiri binaries
+FUCHSIA_DIR="$PROJECT_ROOT/fuchsia/fuchsia/fuchsia"
 BOARD_NAME="soliloquy"
 BOARD_PATH="boards/arm64/soliloquy"
 DEFAULT_PRODUCT="minimal.arm64"
@@ -48,7 +50,10 @@ check_fx_bootstrapped() {
         exit 1
     fi
 
-    # Source fx-env.sh to get fx tool
+    # Add jiri and fx to PATH
+    export PATH="$FUCHSIA_DIR/.jiri_root/bin:$FUCHSIA_DIR/scripts:$PATH"
+
+    # Source fx-env.sh to get fx functions
     source "$FUCHSIA_DIR/scripts/fx-env.sh"
 
     # Check if fx command is available
@@ -99,14 +104,12 @@ fx_set_idempotent() {
         fx_set_cmd="$fx_set_cmd --board=$board"
     fi
     
-    # Add common packages for Soliloquy
+    # Add common packages for Soliloquy using --with (universe set)
+    # Fuchsia has removed --with-base in favor of assembly overrides,
+    # but --with is sufficient for development builds.
     fx_set_cmd="$fx_set_cmd \
-        --with-base //src/connectivity/network \
-        --with-base //src/graphics/display \
         --with //vendor/soliloquy/src/shell:soliloquy_shell \
-        --with //vendor/soliloquy/drivers/aic8800:aic8800 \
-        --args='exclude_starnix=true' \
-        --args='exclude_devtools=true'"
+        --with //vendor/soliloquy/drivers/aic8800:aic8800"
     
     # Add any extra arguments
     if [ -n "$extra_args" ]; then

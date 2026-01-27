@@ -1,4 +1,4 @@
-import("//build/config/fuchsia/rules.gni")
+
 
 source_set("soliloquy_hal") {
   sources = [
@@ -15,17 +15,15 @@ source_set("soliloquy_hal") {
   public_deps = [
     "//src/lib/ddk",
     "//src/lib/ddktl",
-    "//sdk/banjo/fuchsia.hardware.sdio",
+    "//sdk/banjo/fuchsia.hardware.sdio:fuchsia.hardware.sdio_banjo_cpp",
     "//zircon/system/ulib/zx",
-    "//zircon/system/ulib/mmio",
+    "//zircon/system/ulib/hwreg",
+    "//sdk/lib/driver/mmio/cpp",
   ]
   
   deps = [
     "//src/devices/lib/driver",
   ]
   
-  # V translation available for reference (not linked yet)
-  data_deps = [
-    "//third_party/zircon_v:zircon_v_hal",
-  ]
+
 }

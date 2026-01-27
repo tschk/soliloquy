@@ -1,14 +1,14 @@
 #ifndef DRIVERS_COMMON_SOLILOQUY_HAL_MMIO_H_
 #define DRIVERS_COMMON_SOLILOQUY_HAL_MMIO_H_
 
-#include <lib/mmio/mmio.h>
+#include <lib/driver/mmio/cpp/mmio.h>
 #include <zircon/types.h>
 
 namespace soliloquy_hal {
 
 class MmioHelper {
 public:
-  explicit MmioHelper(ddk::MmioBuffer *mmio) : mmio_(mmio) {}
+  explicit MmioHelper(fdf::MmioBuffer *mmio) : mmio_(mmio) {}
 
   uint32_t Read32(uint32_t offset);
   void Write32(uint32_t offset, uint32_t value);
@@ -25,7 +25,7 @@ public:
                     zx::duration timeout);
 
 private:
-  ddk::MmioBuffer *mmio_;
+  fdf::MmioBuffer *mmio_;
 };
 
 } // namespace soliloquy_hal

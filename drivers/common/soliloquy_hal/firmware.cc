@@ -2,6 +2,7 @@
 
 #include <lib/ddk/debug.h>
 #include <lib/ddk/device.h>
+#include <lib/zx/vmar.h>
 #include <zircon/status.h>
 
 namespace soliloquy_hal {
@@ -32,8 +33,8 @@ zx_status_t FirmwareLoader::MapFirmware(const zx::vmo &vmo, size_t size,
   }
 
   zx_vaddr_t mapped_addr;
-  zx_status_t status = zx_vmar_map(zx_vmar_root_self(), ZX_VM_PERM_READ, 0,
-                                   vmo.get(), 0, size, &mapped_addr);
+  zx_status_t status = zx::vmar::root_self()->map(ZX_VM_PERM_READ, 0,
+                                   vmo, 0, size, &mapped_addr);
   if (status != ZX_OK) {
     zxlogf(ERROR, "soliloquy_hal: Failed to map firmware VMO: %s",
            zx_status_get_string(status));

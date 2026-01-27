@@ -11,6 +11,7 @@
 #[cfg(feature = "fuchsia")]
 mod zircon_window;
 
+mod browser_optimizations;
 mod engine_bridge;
 mod optimizations;
 mod platform;
@@ -20,8 +21,8 @@ mod v8_runtime;
 #[cfg(test)]
 mod integration_tests;
 
-use log::{debug, error, info};
-use servo_embedder::{InputEvent, ServoEmbedder};
+use log::info;
+use servo_embedder::ServoEmbedder;
 
 // Fuchsia-specific imports
 #[cfg(feature = "fuchsia")]

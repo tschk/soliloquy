@@ -4,12 +4,12 @@
 //! implementing the necessary traits for windowing, events, and graphics.
 //! It also integrates V8 for JavaScript execution and tab memory optimization.
 
-use log::{info, error, debug, warn};
+use log::{info, debug, warn, error};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 use crate::v8_runtime::V8Runtime;
-use soliloquy_browser_optimizations::{TabResidencyManager, GcScheduler, MemoryPressureMonitor};
+use crate::browser_optimizations::{TabResidencyManager, GcScheduler, MemoryPressureMonitor};
 
 /// Main embedder context that bridges Servo browser engine with Zircon/Fuchsia.
 ///

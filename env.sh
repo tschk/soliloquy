@@ -54,3 +54,4 @@ echo "  fx          - Fuchsia build tool"
 echo "  build.sh    - Build Soliloquy"
 echo "  setup.sh    - Run full setup"
 echo ""
+export PATH=$PATH:/mnt/soliloquy
