@@ -38,9 +38,9 @@ mut:
 	embeddings         map[string][]f32
 	user_memory_counts map[string]int
 	user_memories      map[string][]string
+	inverted_index     map[string]map[string][]string
 	initialized        bool
 	write_queue        chan Memory
-	user_memories      map[string][]string
 }
 
 pub fn (mut app App) init_cupboard() {
@@ -52,6 +52,7 @@ pub fn (mut app App) init_cupboard() {
 	app.cupboard.user_memory_counts = map[string]int{}
 	app.cupboard.user_memories = map[string][]string{}
 	app.cupboard.write_queue = chan Memory{cap: 100}
+	app.cupboard.inverted_index = map[string]map[string][]string{}
 
 	$if fuchsia ? {
 		go app.memory_worker()
@@ -62,6 +63,9 @@ pub fn (mut app App) init_cupboard() {
 			// Hydrate index from loaded memories
 			for _, mem in app.cupboard.memories {
 				app.cupboard.user_memories[mem.user_id] << mem.id
+
+				// Hydrate inverted index
+				app.index_memory(mem)
 			}
 		} else {
 			println('📦 Cupboard using in-memory storage (Zircon storage unavailable)')
@@ -118,11 +122,18 @@ fn (mut app App) cupboard_store(memory Memory) !string {
 	mem.created_at = time.now().unix()
 	mem.updated_at = time.now().unix()
 
-	if mem.id !in app.cupboard.memories {
+	// Handle index update if overwriting existing memory
+	if old_mem := app.cupboard.memories[mem.id] {
+		app.unindex_memory(old_mem)
+	} else {
 		app.cupboard.user_memory_counts[mem.user_id]++
 	}
+
 	app.cupboard.memories[mem.id] = mem
 	app.cupboard.user_memories[mem.user_id] << mem.id
+
+	// Update inverted index
+	app.index_memory(mem)
 
 	$if fuchsia ? {
 		// Persist to Zircon storage asynchronously
@@ -198,27 +209,55 @@ fn (mut app App) cupboard_retrieve(user_id string, query string, limit int) ![]M
 	}
 
 	mut results := []Memory{}
+	
+	// Identify candidate memories using inverted index or fallback
+	mut candidate_ids := []string{}
+	query_tokens := tokenize(query)
 
-	// Optimized search using user_memories index
-	if user_id in app.cupboard.user_memories {
-		memory_ids := app.cupboard.user_memories[user_id]
-		for id in memory_ids {
-			mem := app.cupboard.memories[id] or { continue }
-			if mem.content.contains(query) {
-				results << mem
-				if results.len >= limit {
-					break
+	if query_tokens.len > 0 && user_id in app.cupboard.inverted_index {
+		mut first := true
+
+		for token in query_tokens {
+			if token in app.cupboard.inverted_index[user_id] {
+				ids := app.cupboard.inverted_index[user_id][token]
+				if first {
+					candidate_ids = ids.clone()
+					first = false
+				} else {
+					// Intersect with existing candidates
+					mut candidates_map := map[string]bool{}
+					for cid in candidate_ids { candidates_map[cid] = true }
+
+					mut new_candidates := []string{}
+					for id in ids {
+						if id in candidates_map {
+							new_candidates << id
+						}
+					}
+					candidate_ids = new_candidates.clone()
 				}
+			} else {
+				// Token not found, so no intersection
+				candidate_ids = []string{}
+				break
+			}
+
+			if candidate_ids.len == 0 {
+				break
 			}
 		}
-	} else {
-		// Fallback (e.g. if index is empty/corrupted, though in this impl it shouldn't be)
-		for _, mem in app.cupboard.memories {
-			if mem.user_id == user_id && mem.content.contains(query) {
-				results << mem
-				if results.len >= limit {
-					break
-				}
+	} else if user_id in app.cupboard.user_memories {
+		// Fallback to scanning all user memories (e.g. no tokens in query)
+		candidate_ids = app.cupboard.user_memories[user_id].clone()
+	}
+
+	// Verify candidates contain the exact query string
+	for id in candidate_ids {
+		mem := app.cupboard.memories[id] or { continue }
+		if mem.content.contains(query) {
+			results << mem
+			if results.len >= limit {
+				break
 			}
 		}
 	}
@@ -234,6 +273,9 @@ fn (mut app App) cupboard_delete(memory_id string) !bool {
 
 	if mem := app.cupboard.memories[memory_id] {
 		app.cupboard.user_memory_counts[mem.user_id]--
+
+		// Remove from inverted index
+		app.unindex_memory(mem)
 	}
 
 	app.cupboard.memories.delete(memory_id)
@@ -384,4 +426,60 @@ pub fn (mut app App) cupboard_stats() vweb.Result {
 		'user_memories':  user_memories.str()
 		'initialized':    app.cupboard.initialized.str()
 	})
+}
+
+// Helper: Tokenize text for indexing
+fn tokenize(text string) []string {
+	mut tokens := []string{}
+	mut current_token := []u8{}
+
+	lower_text := text.to_lower()
+
+	for i in 0 .. lower_text.len {
+		ch := lower_text[i]
+		if (ch >= `a` && ch <= `z`) || (ch >= `0` && ch <= `9`) {
+			current_token << ch
+		} else {
+			if current_token.len > 0 {
+				tokens << current_token.bytestr()
+				current_token = []u8{}
+			}
+		}
+	}
+	// Last token
+	if current_token.len > 0 {
+		tokens << current_token.bytestr()
+	}
+
+	return tokens
+}
+
+// Helper: Index a memory
+fn (mut app App) index_memory(mem Memory) {
+	tokens := tokenize(mem.content)
+	if mem.user_id !in app.cupboard.inverted_index {
+		app.cupboard.inverted_index[mem.user_id] = map[string][]string{}
+	}
+	for token in tokens {
+		app.cupboard.inverted_index[mem.user_id][token] << mem.id
+	}
+}
+
+// Helper: Remove memory from index
+fn (mut app App) unindex_memory(mem Memory) {
+	if mem.user_id in app.cupboard.inverted_index {
+		tokens := tokenize(mem.content)
+		for token in tokens {
+			if token in app.cupboard.inverted_index[mem.user_id] {
+				mut ids := app.cupboard.inverted_index[mem.user_id][token]
+				for i, id in ids {
+					if id == mem.id {
+						ids.delete(i)
+						break
+					}
+				}
+				app.cupboard.inverted_index[mem.user_id][token] = ids
+			}
+		}
+	}
 }
