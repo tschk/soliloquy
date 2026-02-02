@@ -3,10 +3,13 @@
 //! Offloads box model calculations to compute shaders for parallel processing.
 
 use log::{debug, info, warn};
+use bytemuck::{Pod, Zeroable};
+use crate::gpu::wgpu_integration::WgpuContext;
+use wgpu::util::DeviceExt;
 
 /// Layout node for GPU computation
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct LayoutNode {
     pub parent_idx: u32,
     pub child_count: u32,
@@ -63,7 +66,7 @@ pub mod style_flags {
 
 /// Layout computation parameters
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct LayoutParams {
     pub viewport_width: f32,
     pub viewport_height: f32,
@@ -84,6 +87,10 @@ pub struct GpuLayoutCompute {
     viewport_height: f32,
     /// Whether GPU compute is available
     gpu_available: bool,
+
+    // WGPU context
+    wgpu_ctx: Option<WgpuContext>,
+    pipeline: Option<wgpu::ComputePipeline>,
 }
 
 impl GpuLayoutCompute {
@@ -91,10 +98,29 @@ impl GpuLayoutCompute {
     pub fn new(viewport_width: f32, viewport_height: f32) -> Self {
         info!("Initializing GPU layout compute ({}x{})", viewport_width, viewport_height);
         
+        // Try to initialize WGPU
+        let wgpu_ctx = pollster::block_on(WgpuContext::new()).ok();
+        let mut pipeline = None;
+        let mut gpu_available = false;
+
+        if let Some(ref ctx) = wgpu_ctx {
+             if let Ok(p) = ctx.create_layout_pipeline() {
+                 pipeline = Some(p);
+                 gpu_available = true;
+                 debug!("WGPU compute pipeline initialized");
+             } else {
+                 warn!("Failed to create layout pipeline");
+             }
+        } else {
+            warn!("Failed to initialize WGPU context");
+        }
+
         GpuLayoutCompute {
             viewport_width,
             viewport_height,
-            gpu_available: false, // TODO: Check WGPU availability
+            gpu_available,
+            wgpu_ctx,
+            pipeline,
         }
     }
 
@@ -105,15 +131,99 @@ impl GpuLayoutCompute {
             return self.cpu_layout_fallback(nodes);
         }
 
+        let ctx = self.wgpu_ctx.as_ref().ok_or("WGPU context missing")?;
+        let pipeline = self.pipeline.as_ref().ok_or("Pipeline missing")?;
+
         debug!("Computing layout for {} nodes on GPU", nodes.len());
 
-        // TODO: Integrate with actual WGPU
-        // 1. Create/update GPU buffer with nodes
-        // 2. Dispatch compute shader
-        // 3. Read back results
-        
-        // For now, use CPU fallback
-        self.cpu_layout_fallback(nodes)
+        let node_count = nodes.len() as u32;
+        let params = LayoutParams {
+            viewport_width: self.viewport_width,
+            viewport_height: self.viewport_height,
+            node_count,
+            pass_index: 0,
+        };
+
+        // Create buffers
+        let nodes_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Nodes Buffer"),
+            contents: bytemuck::cast_slice(nodes),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let params_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Params Buffer"),
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Create bind group
+        // We rely on implicit bind group layout from pipeline
+        let bind_group_layout = pipeline.get_bind_group_layout(0);
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Layout Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: nodes_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        // Encode commands
+        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Layout Compute Encoder"),
+        });
+
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Layout Compute Pass"),
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            // Dispatch: workgroup size is 64
+            let workgroup_count = (node_count + 63) / 64;
+            cpass.dispatch_workgroups(workgroup_count, 1, 1);
+        }
+
+        // Read back
+        let buffer_size = (nodes.len() * std::mem::size_of::<LayoutNode>()) as u64;
+        let staging_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Staging Buffer"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        encoder.copy_buffer_to_buffer(&nodes_buffer, 0, &staging_buffer, 0, buffer_size);
+
+        ctx.queue.submit(Some(encoder.finish()));
+
+        // Map and read
+        let buffer_slice = staging_buffer.slice(..);
+        let (sender, receiver) = futures::channel::oneshot::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v: Result<(), wgpu::BufferAsyncError>| {
+            sender.send(v).ok();
+        });
+
+        ctx.device.poll(wgpu::Maintain::Wait);
+
+        if let Ok(Ok(())) = pollster::block_on(receiver) {
+            let data = buffer_slice.get_mapped_range();
+            let result: &[LayoutNode] = bytemuck::cast_slice(&data);
+            nodes.copy_from_slice(result);
+            drop(data);
+            staging_buffer.unmap();
+            Ok(())
+        } else {
+            Err("Failed to read back from GPU".to_string())
+        }
     }
 
     /// CPU fallback layout computation
