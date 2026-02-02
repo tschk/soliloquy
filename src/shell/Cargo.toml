@@ -28,7 +28,6 @@ fuchsia_ui_app = { path = "../../gen/fidl/fuchsia_ui_app" }
 fuchsia_input = { path = "../../gen/fidl/fuchsia_input" }
 
 # Networking dependencies
-quinn = "0.11"
 rustls = "0.23"
 rustls-native-certs = "0.8"
 hyper = { version = "1.4", features = ["client", "http1", "http2"] }

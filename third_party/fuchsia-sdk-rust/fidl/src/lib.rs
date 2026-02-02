@@ -5,7 +5,7 @@
 
 pub use std::os::raw::c_void;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Handle;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

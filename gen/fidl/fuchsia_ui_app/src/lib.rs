@@ -30,7 +30,11 @@ pub mod fidl_fuchsia_ui_app {
     }
 
     pub type ViewProviderProxy = fidl::endpoints::Proxy<ViewProviderMarker>;
-    pub type ViewProviderRequestStream = fidl::endpoints::RequestStream<ViewProviderMarker>;
+
+    #[derive(Debug)]
+    pub struct ViewProviderRequestStream {
+        _inner: fidl::endpoints::RequestStream<ViewProviderMarker>,
+    }
 
     pub enum ViewProviderRequest {
         CreateView {
