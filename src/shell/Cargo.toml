@@ -33,6 +33,7 @@ rustls-native-certs = "0.8"
 hyper = { version = "1.4", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "http1", "http2"] }
 http-body-util = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate"] }
 
 # Crypto and hashing
 sha2 = "0.10"

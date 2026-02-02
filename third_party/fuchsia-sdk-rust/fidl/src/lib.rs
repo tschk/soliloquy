@@ -14,6 +14,9 @@ pub struct EventPair;
 pub mod endpoints {
     use super::*;
     use std::marker::PhantomData;
+    use futures::stream::Stream;
+    use std::pin::Pin;
+    use futures::task::{Context, Poll};
 
     pub trait ProtocolMarker: Sized {
         type Proxy;
@@ -45,6 +48,7 @@ pub mod endpoints {
             f.debug_struct("RequestStream").finish()
         }
     }
+
 
     pub struct ClientEnd<T: ProtocolMarker> {
         _marker: PhantomData<T>,

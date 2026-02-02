@@ -1,0 +1,22 @@
+import("soliloquy_packages.gni")
+
+group("products") {
+  testonly = true
+  deps = [
+    ":soliloquy_base",
+    ":soliloquy_universe",
+  ]
+}
+
+group("soliloquy_base") {
+  testonly = false
+  deps = []
+  foreach(pkg, soliloquy_base_packages) {
+    deps += [ pkg.package_target ]
+  }
+}
+
+group("soliloquy_universe") {
+  testonly = false
+  deps = soliloquy_universe_packages
+}
