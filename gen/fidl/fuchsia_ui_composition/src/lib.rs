@@ -610,7 +610,7 @@ pub mod fidl_fuchsia_ui_composition {
 
 // Zircon types placeholder (for non-Fuchsia builds)
 pub mod zx {
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Event;
 
     impl Event {
@@ -619,7 +619,7 @@ pub mod zx {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct EventPair;
 
     impl EventPair {
