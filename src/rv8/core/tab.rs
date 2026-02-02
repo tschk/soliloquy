@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::NavigationController;
-use crate::ipc::RendererChannel;
+use crate::ipc::RendererClient;
 use crate::networking::NetworkManager;
 use crate::renderer::RenderFrame;
 
@@ -48,8 +48,8 @@ pub struct Tab {
     /// Navigation history
     navigation: NavigationController,
 
-    /// IPC channel to renderer process
-    renderer_channel: RendererChannel,
+    /// IPC client for renderer process
+    renderer_client: RendererClient,
 
     /// Network manager reference
     network: Arc<NetworkManager>,
@@ -72,7 +72,7 @@ impl Tab {
     pub async fn new(
         id: TabId,
         url: String,
-        renderer_channel: RendererChannel,
+        renderer_client: RendererClient,
         network: Arc<NetworkManager>,
     ) -> Result<Self, String> {
         info!("Creating tab {} with URL: {}", id.0, url);
@@ -84,7 +84,7 @@ impl Tab {
             favicon_url: None,
             state: TabState::New,
             navigation: NavigationController::new(url),
-            renderer_channel,
+            renderer_client,
             network,
             render_frame: None,
             loading_progress: 0,
@@ -110,7 +110,7 @@ impl Tab {
         self.navigation.push(parsed.to_string());
 
         // Send navigation request to renderer
-        self.renderer_channel.send_navigate(&self.url)?;
+        self.renderer_client.send_navigate(&self.url)?;
 
         Ok(())
     }
@@ -120,7 +120,7 @@ impl Tab {
         if let Some(url) = self.navigation.go_back() {
             self.url = url.clone();
             self.state = TabState::Loading;
-            self.renderer_channel.send_navigate(&url)?;
+            self.renderer_client.send_navigate(&url)?;
         }
         Ok(())
     }
@@ -130,7 +130,7 @@ impl Tab {
         if let Some(url) = self.navigation.go_forward() {
             self.url = url.clone();
             self.state = TabState::Loading;
-            self.renderer_channel.send_navigate(&url)?;
+            self.renderer_client.send_navigate(&url)?;
         }
         Ok(())
     }
@@ -139,12 +139,12 @@ impl Tab {
     pub async fn reload(&mut self) -> Result<(), String> {
         self.state = TabState::Loading;
         self.loading_progress = 0;
-        self.renderer_channel.send_reload()
+        self.renderer_client.send_reload()
     }
 
     /// Stop loading
     pub async fn stop(&mut self) -> Result<(), String> {
-        self.renderer_channel.send_stop()?;
+        self.renderer_client.send_stop()?;
         self.state = TabState::Loaded;
         Ok(())
     }
@@ -152,7 +152,7 @@ impl Tab {
     /// Close the tab
     pub async fn close(&self) {
         info!("Closing tab {}", self.id.0);
-        let _ = self.renderer_channel.send_close();
+        let _ = self.renderer_client.send_close();
     }
 
     /// Get the latest render frame

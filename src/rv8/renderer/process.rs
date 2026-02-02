@@ -63,6 +63,9 @@ impl RendererProcess {
     /// Handle incoming message
     async fn handle_message(&mut self, msg: RendererMessage) {
         match msg {
+            RendererMessage::Initialize { .. } => {
+                info!("Received late Initialize message, ignoring");
+            }
             RendererMessage::Navigate { url } => {
                 self.navigate(&url).await;
             }
