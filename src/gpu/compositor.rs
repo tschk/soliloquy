@@ -233,7 +233,7 @@ impl DisplayListCache {
         }
 
         // Update cache
-        self.cached_list = self.current_list.clone();
+        std::mem::swap(&mut self.cached_list, &mut self.current_list);
 
         debug!("Display list diff: {} entries changed", changed_indices.len());
         changed_indices
