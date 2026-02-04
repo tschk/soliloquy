@@ -30,6 +30,8 @@ sled = "0.34"
 # GPU rendering
 wgpu = "22.0"
 pollster = "0.3"
+bytemuck = { version = "1.14", features = ["derive"] }
+futures = "0.3"
 
 # Fuchsia kernel integration (optional, for real Zircon APIs)
 fuchsia-zircon = { path = "../third_party/fuchsia-sdk-rust/fuchsia-zircon", optional = true }
