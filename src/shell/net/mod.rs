@@ -8,14 +8,14 @@
 //! - V8 code caching for faster script execution
 
 pub mod connection_manager;
-pub mod quic;
+// pub mod quic;
 pub mod resource_loader;
 pub mod speculation;
 pub mod code_cache;
 
 // Re-export main types for convenience
 pub use connection_manager::ConnectionManager;
-pub use quic::{QuicTransport, QuicConfig};
+// pub use quic::{QuicTransport, QuicConfig};
 pub use resource_loader::{ResourceLoader, ResourceResponse};
 pub use speculation::{SpeculationEngine, SpeculationRules};
 pub use code_cache::CodeCache;

@@ -30,10 +30,29 @@ pub mod fidl_fuchsia_ui_app {
     }
 
     pub type ViewProviderProxy = fidl::endpoints::Proxy<ViewProviderMarker>;
-
-    #[derive(Debug)]
     pub struct ViewProviderRequestStream {
-        _inner: fidl::endpoints::RequestStream<ViewProviderMarker>,
+        _marker: std::marker::PhantomData<ViewProviderMarker>,
+    }
+
+    impl fidl::RequestStream for ViewProviderRequestStream {
+        type Protocol = ViewProviderMarker;
+        type ControlHandle = ViewProviderControlHandle;
+
+        fn from_channel(_channel: fidl::AsyncChannel) -> Self {
+             Self { _marker: std::marker::PhantomData }
+        }
+
+        fn control_handle(&self) -> Self::ControlHandle {
+            ViewProviderControlHandle { _inner: std::sync::Arc::new(fidl::ServeInner) }
+        }
+
+        fn into_inner(self) -> (std::sync::Arc<fidl::ServeInner>, bool) {
+            (std::sync::Arc::new(fidl::ServeInner), false)
+        }
+
+        fn from_inner(_inner: std::sync::Arc<fidl::ServeInner>, _is_terminated: bool) -> Self {
+             Self { _marker: std::marker::PhantomData }
+        }
     }
 
     pub enum ViewProviderRequest {

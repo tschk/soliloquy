@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use log::{debug, warn, error};
 use url::Url;
+use reqwest::{Client, Method};
 
 /// HTTP methods
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,15 +133,23 @@ pub struct ResourceLoader {
     max_redirects: usize,
     /// Accept-Encoding header value
     accept_encoding: String,
+    /// HTTP client
+    client: Client,
 }
 
 impl ResourceLoader {
     /// Create a new resource loader
     pub fn new() -> Self {
+        let client = Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("Failed to create HTTP client");
+
         Self {
             user_agent: "Soliloquy/0.1.0 (Fuchsia; Servo)".to_string(),
             max_redirects: 10,
             accept_encoding: "gzip, deflate, br".to_string(),
+            client,
         }
     }
 
@@ -224,25 +233,61 @@ impl ResourceLoader {
         url: &str,
         request: &ResourceRequest,
     ) -> Result<ResourceResponse, String> {
-        // TODO: Implement actual HTTP requests using hyper
-        // Placeholder implementation
-        
+        let req_method = match request.method {
+            HttpMethod::GET => Method::GET,
+            HttpMethod::POST => Method::POST,
+            HttpMethod::PUT => Method::PUT,
+            HttpMethod::DELETE => Method::DELETE,
+            HttpMethod::HEAD => Method::HEAD,
+            HttpMethod::OPTIONS => Method::OPTIONS,
+            HttpMethod::PATCH => Method::PATCH,
+        };
+
         debug!("Performing {} request to {}", request.method.as_str(), url);
 
-        // Simulate network delay
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        let mut req_builder = self.client.request(req_method, url);
 
-        // Return mock response
-        let mut headers = HashMap::new();
-        headers.insert("content-type".to_string(), "text/html".to_string());
-        headers.insert("content-length".to_string(), "27".to_string());
+        // Add headers
+        for (key, value) in &request.headers {
+            req_builder = req_builder.header(key, value);
+        }
+
+        // Add body if present
+        if let Some(body) = &request.body {
+            req_builder = req_builder.body(body.clone());
+        }
+
+        // Add timeout
+        req_builder = req_builder.timeout(request.timeout);
+
+        let start_time = SystemTime::now();
+
+        // Send request
+        let response = req_builder.send().await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        let status_code = response.status().as_u16();
+        let final_url = response.url().to_string();
+
+        let headers: HashMap<String, String> = response.headers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+            .collect();
+
+        let body_bytes = response.bytes().await
+            .map_err(|e| format!("Failed to read response body: {}", e))?
+            .to_vec();
+
+        let duration = SystemTime::now()
+            .duration_since(start_time)
+            .unwrap_or(Duration::from_secs(0));
 
         Ok(ResourceResponse {
-            status_code: 200,
+            status_code,
             headers,
-            body: b"<html><body>Test</body></html>".to_vec(),
-            final_url: url.to_string(),
-            duration: Duration::from_millis(10),
+            body: body_bytes,
+            final_url,
+            duration,
         })
     }
 

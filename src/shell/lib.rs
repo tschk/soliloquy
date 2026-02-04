@@ -21,6 +21,6 @@ pub use servo_embedder::ServoEmbedder;
 pub use v8_runtime::V8Runtime;
 pub use zircon_window::ZirconWindow;
 pub use net::{
-    CodeCache, ConnectionManager, QuicConfig, QuicTransport, ResourceLoader, ResourceResponse,
+    CodeCache, ConnectionManager, ResourceLoader, ResourceResponse,
     SpeculationEngine, SpeculationRules,
 };
