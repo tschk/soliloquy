@@ -15,6 +15,12 @@ use tokio::sync::Mutex;
 use crate::js::JsEngine;
 use crate::renderer::RenderFrame;
 
+pub mod dom;
+pub mod parser;
+pub mod web_apis;
+
+use self::dom::DomTree;
+
 /// Servo embedding configuration
 #[derive(Debug, Clone)]
 pub struct ServoConfig {
@@ -54,6 +60,8 @@ pub struct ServoEmbedder {
     config: ServoConfig,
     /// V8 JavaScript engine
     js_engine: Arc<Mutex<JsEngine>>,
+    /// DOM Tree
+    dom_tree: Arc<Mutex<DomTree>>,
     /// Current document URL
     current_url: String,
     /// Document title
@@ -77,6 +85,7 @@ impl ServoEmbedder {
         Ok(ServoEmbedder {
             config,
             js_engine: Arc::new(Mutex::new(js_engine)),
+            dom_tree: Arc::new(Mutex::new(DomTree::new())),
             current_url: String::new(),
             title: String::new(),
             loading: false,
@@ -92,8 +101,41 @@ impl ServoEmbedder {
         self.loading = true;
         self.load_progress = 0;
 
-        // TODO: Actually fetch and parse HTML via Servo
-        // For now, simulate loading
+        // Fetch HTML
+        info!("Fetching URL: {}", url);
+        match reqwest::get(url).await {
+            Ok(response) => {
+                if !response.status().is_success() {
+                     error!("Failed to fetch URL {}: Status {}", url, response.status());
+                     self.loading = false;
+                     return Err(format!("HTTP error: {}", response.status()));
+                }
+
+                match response.text().await {
+                    Ok(html) => {
+                        info!("Parsing HTML...");
+                        self.load_progress = 50;
+
+                        let mut dom = self.dom_tree.lock().await;
+                        // Reset DOM tree
+                        *dom = DomTree::new();
+
+                        parser::parse_html(&html, &mut *dom);
+                        info!("HTML parsing complete");
+                    }
+                    Err(e) => {
+                        error!("Failed to read response text: {}", e);
+                        self.loading = false;
+                        return Err(format!("Failed to read response: {}", e));
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to fetch URL {}: {}", url, e);
+                self.loading = false;
+                return Err(format!("Network error: {}", e));
+            }
+        }
 
         // Execute any inline scripts via V8
         // self.execute_document_scripts().await?;
