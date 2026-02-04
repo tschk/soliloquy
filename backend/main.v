@@ -60,6 +60,7 @@ fn main() {
 			memories: map[string]Memory{}
 			embeddings: map[string][]f32{}
 			user_memory_counts: map[string]int{}
+			user_memories: map[string][]string{}
 		}
 		device_registry: DeviceRegistry{
 			devices: map[string]DeviceInfo{}

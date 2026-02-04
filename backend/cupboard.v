@@ -36,6 +36,7 @@ mut:
 	memories           map[string]Memory
 	embeddings         map[string][]f32
 	user_memory_counts map[string]int
+	user_memories      map[string][]string
 	initialized        bool
 }
 
@@ -46,6 +47,7 @@ pub fn (mut app App) init_cupboard() {
 	app.cupboard.memories = map[string]Memory{}
 	app.cupboard.embeddings = map[string][]f32{}
 	app.cupboard.user_memory_counts = map[string]int{}
+	app.cupboard.user_memories = map[string][]string{}
 	
 	$if fuchsia ? {
 		// Initialize Zircon storage channel for persistence
@@ -54,9 +56,7 @@ pub fn (mut app App) init_cupboard() {
 			app.load_persisted_memories()
 			// Hydrate index from loaded memories
 			for _, mem in app.cupboard.memories {
-				if mem.id !in app.cupboard.user_memories[mem.user_id] {
-					app.cupboard.user_memories[mem.user_id] << mem.id
-				}
+				app.cupboard.user_memories[mem.user_id] << mem.id
 			}
 		} else {
 			println('📦 Cupboard using in-memory storage (Zircon storage unavailable)')
