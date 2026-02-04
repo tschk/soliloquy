@@ -8,6 +8,7 @@
 //! - Resource loading and caching
 
 // Core modules
+pub mod browser_optimizations;
 pub mod engine_bridge;
 pub mod optimizations;
 pub mod servo_embedder;

@@ -8,7 +8,7 @@ pub use std::os::raw::c_void;
 #[derive(Debug)]
 pub struct Handle;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventPair;
 
 pub mod endpoints {
@@ -21,7 +21,9 @@ pub mod endpoints {
         const DEBUG_NAME: &'static str;
     }
 
-    pub trait DiscoverableProtocolMarker: ProtocolMarker {}
+    pub trait DiscoverableProtocolMarker: ProtocolMarker {
+        const PROTOCOL_NAME: &'static str;
+    }
     pub trait ServiceMarker {}
 
     pub struct Proxy<T: ProtocolMarker> {
@@ -107,6 +109,7 @@ impl std::error::Error for Error {}
 
 pub struct AsyncChannel;
 
+#[derive(Debug)]
 pub struct ServeInner;
 
 pub trait RequestStream: Sized {

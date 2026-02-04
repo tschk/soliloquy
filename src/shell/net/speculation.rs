@@ -302,7 +302,11 @@ impl SpeculationEngine {
 
     /// Evaluate if URL should be speculated
     fn evaluate_speculation(&mut self, url: &str) {
-        let matching_rules = self.rules.matching_rules(url);
+        let matching_rules: Vec<SpeculationRule> = self.rules.matching_rules(url)
+            .into_iter()
+            .cloned()
+            .collect();
+
         if matching_rules.is_empty() {
             return;
         }

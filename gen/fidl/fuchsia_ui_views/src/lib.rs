@@ -370,22 +370,28 @@ impl ViewTree {
 
     /// Request focus for a view
     pub fn request_focus(&mut self, view_id: ViewId) -> bool {
-        if let Some(view) = self.views.get_mut(&view_id) {
-            if view.is_focusable() && view.state == ViewState::Attached {
-                // Unfocus previously focused view
-                for v in self.views.values_mut() {
-                    if v.focus_state == FocusState::Focused {
-                        v.focus_state = FocusState::Unfocused;
-                    }
+        let should_focus = if let Some(view) = self.views.get(&view_id) {
+            view.is_focusable() && view.state == ViewState::Attached
+        } else {
+            false
+        };
+
+        if should_focus {
+            // Unfocus previously focused view
+            for v in self.views.values_mut() {
+                if v.focus_state == FocusState::Focused {
+                    v.focus_state = FocusState::Unfocused;
                 }
-                
-                // Focus this view
-                view.focus_state = FocusState::Focused;
-                
-                // Rebuild focus chain
-                self.rebuild_focus_chain(view_id);
-                return true;
             }
+
+            // Focus this view
+            if let Some(view) = self.views.get_mut(&view_id) {
+                view.focus_state = FocusState::Focused;
+            }
+
+            // Rebuild focus chain
+            self.rebuild_focus_chain(view_id);
+            return true;
         }
         false
     }

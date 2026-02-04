@@ -43,16 +43,16 @@ pub mod fidl_fuchsia_ui_app {
         },
     }
 
-    impl futures::stream::Stream for ViewProviderRequestStream {
-        type Item = Result<ViewProviderRequest, fidl::Error>;
+    // impl futures::stream::Stream for ViewProviderRequestStream {
+    //     type Item = Result<ViewProviderRequest, fidl::Error>;
         
-        fn poll_next(
-            self: std::pin::Pin<&mut Self>,
-            _cx: &mut std::task::Context<'_>,
-        ) -> std::task::Poll<Option<Self::Item>> {
-            std::task::Poll::Pending
-        }
-    }
+    //     fn poll_next(
+    //         self: std::pin::Pin<&mut Self>,
+    //         _cx: &mut std::task::Context<'_>,
+    //     ) -> std::task::Poll<Option<Self::Item>> {
+    //         std::task::Poll::Pending
+    //     }
+    // }
 
     #[derive(Debug, Clone)]
     pub struct ViewProviderControlHandle {
