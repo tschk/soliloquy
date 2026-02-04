@@ -3,7 +3,8 @@
 //! This module provides IPC mechanisms for communication between
 //! browser, renderer, GPU, and network processes.
 
-use ipc_channel::ipc::{self, IpcOneShotServer, IpcReceiver, IpcSender};
+use ipc_channel::ipc;
+pub use ipc_channel::ipc::{IpcOneShotServer, IpcReceiver, IpcSender};
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,15 +14,12 @@ pub mod messages;
 // Re-exports
 pub use messages::*;
 
-/// Channel sender for IPC messages
-pub type IpcSender<T> = mpsc::UnboundedSender<T>;
-
-/// Channel receiver for IPC messages  
-pub type IpcReceiver<T> = mpsc::UnboundedReceiver<T>;
-
 /// Create a new IPC channel pair
-pub fn channel<T>() -> (IpcSender<T>, IpcReceiver<T>) {
-    mpsc::unbounded_channel()
+pub fn channel<T>() -> Result<(IpcSender<T>, IpcReceiver<T>), String>
+where
+    T: Serialize + for<'de> Deserialize<'de>,
+{
+    ipc::channel().map_err(|e| e.to_string())
 }
 
 /// IPC endpoint identifier
@@ -203,6 +201,44 @@ impl RendererChannel {
     }
 }
 
+/// Client for communicating with a renderer process (from Browser)
+pub struct RendererClient {
+    pub tab_id: u64,
+    pub tx: IpcSender<RendererMessage>,
+}
+
+impl RendererClient {
+    pub fn new(tab_id: u64, tx: IpcSender<RendererMessage>) -> Self {
+        RendererClient { tab_id, tx }
+    }
+
+    pub fn send_navigate(&self, url: &str) -> Result<(), String> {
+        self.tx
+            .send(RendererMessage::Navigate {
+                url: url.to_string(),
+            })
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn send_reload(&self) -> Result<(), String> {
+        self.tx
+            .send(RendererMessage::Reload)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn send_stop(&self) -> Result<(), String> {
+        self.tx
+            .send(RendererMessage::Stop)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn send_close(&self) -> Result<(), String> {
+        self.tx
+            .send(RendererMessage::Shutdown)
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// IPC Server for managing channels to child processes
 pub struct IpcServer {
     channels: std::sync::Mutex<std::collections::HashMap<String, IpcSender<BrowserMessage>>>,
@@ -215,19 +251,31 @@ impl IpcServer {
         }
     }
 
-    pub async fn create_channel(&self, channel_id: &str) -> Result<RendererChannel, String> {
-        let (tx, _rx) = channel::<BrowserMessage>();
+    /// Create a bootstrap server for a new process
+    pub fn create_bootstrap_server() -> Result<(String, IpcOneShotServer<IpcSender<RendererMessage>>), String> {
+        let (server, name) = IpcOneShotServer::new()
+            .map_err(|e| format!("Failed to create bootstrap server: {}", e))?;
+        Ok((name, server))
+    }
+
+    /// Create a channel for in-process or manual connection
+    /// Returns the renderer channel wrapper and the receiver for the browser
+    pub fn create_channel(&self, channel_id: &str) -> Result<(RendererChannel, IpcReceiver<BrowserMessage>), String> {
+        let (tx, rx) = ipc::channel().map_err(|e| e.to_string())?;
+
         {
             let mut channels = self.channels.lock().unwrap();
             channels.insert(channel_id.to_string(), tx.clone());
         }
+
         // Extract tab_id from channel name
         let tab_id = channel_id
             .split('-')
             .last()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
-        Ok(RendererChannel::new(tab_id, tx))
+
+        Ok((RendererChannel::new(tab_id, tx), rx))
     }
 
     pub async fn close_channel(&self, channel_id: &str) {

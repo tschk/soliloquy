@@ -9,8 +9,7 @@ use std::env;
 
 use roverate::renderer;
 use roverate::core::{Browser, BrowserConfig};
-// storage and ipc are not used directly vs via other modules, but if needed:
-// use roverate::ipc;
+use roverate::ipc::{self, IpcSender, RendererMessage};
 
 fn main() {
     // Initialize logging with tracing
@@ -109,10 +108,41 @@ fn run_renderer_process(args: &[String]) {
         .expect("Failed to create Tokio runtime");
 
     rt.block_on(async {
-        // TODO: Implement real IPC connection using ipc-channel
-        // For now, we use dummy channels to satisfy the build
-        let (to_browser_tx, _to_browser_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (_from_browser_tx, from_browser_rx) = tokio::sync::mpsc::unbounded_channel();
+        // Connect to bootstrap
+        let bootstrap_tx = IpcSender::<IpcSender<RendererMessage>>::connect(channel_id.to_string())
+            .expect("Failed to connect to bootstrap");
+
+        // Create channel for me (Renderer -> Browser messages will use the browser_tx we receive later)
+        // Wait, we need to create a channel for Receiving messages FROM Browser (RendererMessage).
+        // And we send the Sender (to us) TO the browser.
+        let (tx_to_me, rx_from_browser) =
+            ipc::channel::<RendererMessage>().expect("Failed to create renderer channel");
+
+        // Send my sender to browser so it can talk to me
+        bootstrap_tx
+            .send(tx_to_me)
+            .expect("Failed to send sender to browser");
+
+        // Wait for init message which contains the sender to browser
+        let msg = rx_from_browser.recv().expect("Failed to receive init");
+
+        let browser_tx = match msg {
+            RendererMessage::Initialize { browser_tx } => browser_tx,
+            _ => panic!("Unexpected first message: {:?}", msg),
+        };
+
+        // Bridge rx_from_browser (blocking IPC) to mpsc for tokio (async)
+        let (mpsc_tx, mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        // Spawn bridge thread
+        std::thread::spawn(move || {
+            // Loop for the rest of messages
+            while let Ok(msg) = rx_from_browser.recv() {
+                if mpsc_tx.send(msg).is_err() {
+                    break;
+                }
+            }
+        });
 
         let config = roverate::servo_embed::ServoConfig {
             user_agent: "RV8/0.1.0".to_string(),
@@ -121,11 +151,11 @@ fn run_renderer_process(args: &[String]) {
 
         use std::process;
         let mut renderer =
-            renderer::RendererProcess::new(process::id() as u64, to_browser_tx, config)
+            renderer::RendererProcess::new(process::id() as u64, browser_tx, config)
                 .await
                 .expect("Failed to create renderer process");
 
-        renderer.run(from_browser_rx).await;
+        renderer.run(mpsc_rx).await;
     });
 }
 
