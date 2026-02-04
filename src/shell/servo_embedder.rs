@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use crate::v8_runtime::V8Runtime;
 use crate::browser_optimizations::{TabResidencyManager, GcScheduler, MemoryPressureMonitor};
+use fuchsia_ui_composition::{Flatland, PresentArgs};
 
 /// Main embedder context that bridges Servo browser engine with Zircon/Fuchsia.
 ///
@@ -91,6 +92,8 @@ pub struct FlatlandSession {
     pub width: u32,
     /// Viewport height in physical pixels.
     pub height: u32,
+    /// The Flatland compositor instance.
+    pub flatland: Flatland,
 }
 
 /// View reference tokens for Scenic view tree integration.
@@ -215,12 +218,22 @@ impl ServoEmbedder {
     /// Production version will connect to `fuchsia.ui.composition.Flatland` FIDL protocol
     /// and create a scene graph with image pipes for Servo's render output.
     fn init_flatland(&self) -> Result<FlatlandSession, String> {
-        debug!("Initializing Flatland session (placeholder)");
+        debug!("Initializing Flatland session");
+
+        let mut flatland = Flatland::new("servo-embedder");
+
+        // Setup initial scene graph
+        let root = flatland.create_transform()
+            .map_err(|e| format!("Failed to create root transform: {}", e))?;
+
+        flatland.set_root_transform(root)
+            .map_err(|e| format!("Failed to set root transform: {}", e))?;
         
         Ok(FlatlandSession {
             session_id: 1,
             width: 1920,
             height: 1080,
+            flatland,
         })
     }
     
@@ -392,11 +405,25 @@ impl ServoEmbedder {
     pub fn present(&mut self) -> Result<(), String> {
         debug!("Presenting frame");
         
-        // TODO: Submit Flatland frame
         if let Some(ref session_arc) = self.flatland_session {
-            if let Ok(session) = session_arc.lock() {
+            if let Ok(mut session) = session_arc.lock() {
                 debug!("Presenting to Flatland session {}", session.session_id);
-                // flatland::present(session);
+
+                let args = PresentArgs {
+                    requested_presentation_time: 0,
+                    acquire_fences: Vec::new(),
+                    release_fences: Vec::new(),
+                    unsquashable: false,
+                };
+
+                match session.flatland.present(args) {
+                    Ok(info) => {
+                        debug!("Frame presented at time {}", info.presentation_time);
+                    }
+                    Err(e) => {
+                        return Err(format!("Failed to present frame: {}", e));
+                    }
+                }
             }
         }
         
@@ -817,5 +844,11 @@ mod tests {
         assert!(validate_url("https://a.b").is_ok());
         assert!(validate_url("https://example.com:8080").is_ok());
         assert!(validate_url("https://example.com/path?query=value#fragment").is_ok());
+    }
+
+    #[test]
+    fn test_flatland_present() {
+        let mut embedder = ServoEmbedder::new().expect("Should initialize");
+        assert!(embedder.present().is_ok());
     }
 }

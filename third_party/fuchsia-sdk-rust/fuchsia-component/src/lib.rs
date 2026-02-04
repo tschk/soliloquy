@@ -4,7 +4,7 @@ pub mod client {
     use fidl::endpoints::{DiscoverableProtocolMarker, Proxy};
     
     pub fn connect_to_protocol<P: DiscoverableProtocolMarker>() -> Result<P::Proxy, Error> {
-        unimplemented!("connect_to_protocol placeholder - will connect to protocol: {}", P::PROTOCOL_NAME)
+        unimplemented!("connect_to_protocol placeholder - will connect to protocol: {}", P::DEBUG_NAME)
     }
     
     #[derive(Debug)]
