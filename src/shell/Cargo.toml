@@ -9,6 +9,7 @@ license-file.workspace = true
 log.workspace = true
 futures.workspace = true
 rusty_v8.workspace = true
+rover-desktop = { git = "file:///Users/undivisible/Documents/graft/rover-desktop" }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
