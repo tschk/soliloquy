@@ -1,0 +1,4 @@
+SOLD_BIND="127.0.0.1:8080"
+SOLD_UI_DIR="/usr/local/share/soliloquy/ui"
+RUST_LOG="sold=debug,axum=info,tower_http=info"
+RUST_BACKTRACE="1"

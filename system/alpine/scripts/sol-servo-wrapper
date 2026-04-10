@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+START_URL="${SOL_START_URL:-http://127.0.0.1:8080/}"
+
+echo "[sol-servo] starting Servo at ${START_URL}" >&2
+
+if ! command -v servo >/dev/null 2>&1; then
+  echo "servo binary not found in PATH; dropping to shell" >&2
+  exec /bin/ash -l
+fi
+
+servo \
+  --new-instance \
+  "${START_URL}"
+status=$?
+echo "[sol-servo] servo exited with status ${status}" >&2
+exit "${status}"

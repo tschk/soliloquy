@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export WLR_BACKENDS="${WLR_BACKENDS:-drm,libinput}"
+export WLR_RENDERER="${WLR_RENDERER:-gles2}"
+export SOL_TOKEN="${SOL_TOKEN:-dev-token-change-me}"
+
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
+
+echo "[sol-session] XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >&2
+echo "[sol-session] WLR_BACKENDS=${WLR_BACKENDS}" >&2
+echo "[sol-session] WLR_RENDERER=${WLR_RENDERER}" >&2
+echo "[sol-session] launching cage -> sol-servo-wrapper" >&2
+
+cage -- /usr/local/bin/sol-servo-wrapper
+status=$?
+echo "[sol-session] cage exited with status ${status}" >&2
+exit "${status}"
