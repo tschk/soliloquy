@@ -3,6 +3,7 @@ export type SystemAction =
 	| 'auth.reset'
 	| 'commands.open'
 	| 'files.open'
+	| 'terminal.open'
 	| 'sessions.resume'
 	| 'tabs.restore'
 	| 'navigate.url';
@@ -60,6 +61,11 @@ const actionHandlers: Record<SystemAction, () => Promise<void> | void> = {
 	},
 	'files.open': () => {
 		console.info('[system-action] File explorer launch');
+	},
+	'terminal.open': () => {
+		if (typeof window !== 'undefined') {
+			window.dispatchEvent(new CustomEvent('soliloquy:terminal:toggle'));
+		}
 	},
 	'sessions.resume': () => {
 		console.info('[system-action] Resuming chat session');
@@ -124,6 +130,12 @@ export const defaultCommandSuggestions: CommandSuggestion[] = [
 		description: 'Navigate system files starting at /home/max',
 		shortcut: '⌘ ⌥ F',
 		action: 'files.open'
+	},
+	{
+		title: 'Open Terminal',
+		description: 'Launch the sold-backed terminal session',
+		shortcut: '⌘ ⌥ T',
+		action: 'terminal.open'
 	},
 	{
 		title: 'Restore Tabs',

@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+
+name="soliloquy desktop session"
+description="Launch wlroots desktop session with Servo"
+command="/usr/local/bin/sol-session-start"
+command_background="yes"
+pidfile="/run/sol-session.pid"
+
+depend() {
+    need localmount
+    need seatd
+    need sold
+}

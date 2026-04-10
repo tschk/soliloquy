@@ -1,0 +1,10 @@
+#!/sbin/openrc-run
+
+description="Soliloquy desktop and terminal bridge"
+command="/usr/local/bin/sold"
+command_background="yes"
+pidfile="/run/sold.pid"
+
+depend() {
+    need localmount
+}

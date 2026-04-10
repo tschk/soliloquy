@@ -11,14 +11,14 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 │  │  Svelte 5 UI (ui/desktop)                             │  │
 │  │  - SearchBar: Unified command/search/browser bar      │  │
 │  │  - SearchCarousel: Perplexity-style result cards      │  │
-│  │  - Google OAuth integration                           │  │
+│  │  - Local desktop shell + terminal                     │  │
 │  └─────────────────┬─────────────────────────────────────┘  │
 │                    │                                          │
 │  ┌─────────────────▼─────────────────────────────────────┐  │
 │  │  V Backend (backend/)                                  │  │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │  │
-│  │  │  auth.v  │ │ search.v │ │cupboard.v│ │zircon.v │  │  │
-│  │  │ (Google) │ │(Unified) │ │(Memories)│ │  (IPC)  │  │  │
+│  │  │ search.v │ │cupboard.v│ │zircon.v │ │ sold     │  │  │
+│  │  │ (Unified)│ │(Memories)│ │  (IPC)  │ │(bridge)  │  │  │
 │  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬────┘  │  │
 │  │       │            │            │            │         │  │
 │  │       └────────────┴────────────┴────────────┘         │  │
@@ -54,7 +54,7 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
   - Smooth animations and hover effects
   - Click to navigate or execute
 
-- **Authentication**: Google OAuth flow (shared with Plates)
+- **Authentication**: none for the desktop shell; `sold` handles the local terminal token
 
 ### Backend Layer (`backend/`)
 
@@ -64,11 +64,6 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 - Entry point and vweb app setup
 - Initializes Cupboard and Zircon subsystems
 - Health check endpoint
-
-#### `auth.v`
-- Google OAuth flow (same as Plates Tableware)
-- Cookie-based session management
-- User authentication endpoints
 
 #### `search.v`
 - Unified search interface
@@ -97,7 +92,6 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 
 #### `config.v`
 - Environment-based configuration
-- Google OAuth credentials
 - Tableware endpoint
 - Session secrets
 
@@ -152,9 +146,8 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 
 ## Security
 
-- **Authentication**: Google OAuth with same credentials as Plates
-- **Sessions**: HTTP-only cookies with 7-day expiration
-- **CORS**: Restricted to `localhost:5173` (dev) and production origins
+- **Authentication**: none in the desktop shell; terminal/API calls use a local bearer token
+- **CORS**: restricted to the local desktop/runtime origins
 - **Zircon**: Channel-based IPC with handle validation
 
 ## Performance

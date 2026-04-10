@@ -1,0 +1,18 @@
+[package]
+name = "sold"
+version = "0.1.0"
+edition = "2021"
+license-file.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+axum.workspace = true
+uuid.workspace = true
+portable-pty.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+tower-http.workspace = true

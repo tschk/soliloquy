@@ -1,0 +1,8 @@
+alpine-baselayout
+busybox
+openrc
+seatd
+cage
+mesa-egl
+mesa-gbm
+font-noto

@@ -51,7 +51,7 @@ boards/arm64/
 - Backend-only mode
 - API server at port 3030
 - Networking enabled
-- Ideal for kiosk/embedded use
+- Ideal for embedded use
 
 ### soliloquy_qemu (Testing)
 - QEMU ARM64 virt machine

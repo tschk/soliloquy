@@ -13,8 +13,23 @@ if [ ! -d "$UI_DIR" ]; then
     exit 1
 fi
 
-if ! command -v pnpm &> /dev/null; then
-    echo "Error: pnpm not found. Enable it with: corepack enable pnpm"
+PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
+
+if command -v pnpm &> /dev/null; then
+    PNPM="pnpm"
+elif [ -x "${PNPM_HOME}/pnpm" ]; then
+    export PATH="${PNPM_HOME}:${PATH}"
+    PNPM="pnpm"
+elif command -v corepack &> /dev/null; then
+    PNPM="corepack pnpm"
+elif command -v curl &> /dev/null; then
+    echo "[*] Installing pnpm with the official installer..."
+    export PNPM_HOME
+    curl -fsSL https://get.pnpm.io/install.sh | sh -
+    export PATH="${PNPM_HOME}:${PATH}"
+    PNPM="pnpm"
+else
+    echo "Error: pnpm not found and no installer path is available."
     exit 1
 fi
 
@@ -22,11 +37,11 @@ cd "$UI_DIR"
 
 if [ ! -d "node_modules" ]; then
     echo "[*] Installing dependencies with pnpm (Svelte v5 bundle)..."
-    pnpm install
+    ${PNPM} install
 fi
 
 echo "[*] Building static bundle for Servo/V8 runtime..."
-pnpm build
+${PNPM} build
 
 echo "[*] Build complete. Artifacts are in: build/"
 echo "    Serve with: pnpm dlx serve build -l 4173"

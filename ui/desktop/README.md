@@ -1,20 +1,21 @@
 # Soliloquy Servo Desktop UI
 
-A Svelte v5 application that prototypes the Servo + V8 desktop surface for Soliloquy. The goal is to mirror the real runtime: Servo provides compositing, V8 executes apps, and this repo supplies the desktop shell authored in Svelte.
+A Svelte v5 application that prototypes the Servo desktop surface for Soliloquy. The goal is to mirror the real runtime: Servo provides compositing, `sold` serves the local bundle, and this repo supplies the desktop shell authored in Svelte.
 
 ## Overview
 
 - **Frontend:** Svelte 5 + Tailwind v4 + shadcn/ui components
-- **Runtime contract:** Servo browser engine hosting a V8 runtime
+- **Runtime contract:** Servo browser engine hosting the local desktop bundle and `sold`
 - **Component Library:** shadcn-svelte for Button, Input, Label + reusable bits-ui primitives
 - **Status:** Web build that Servo/V8 embed as the literal desktop surface (no more Tauri)
 
 ## Features
 
-- **Ambient Greeting Surface:** Hero onboarding panel with live time/date, glassmorphic glow, and password prompt.
+- **Ambient Greeting Surface:** Hero desktop panel with live time/date and glassmorphic glow.
 - **Task Canvas:** Secondary glass panel showcasing "what can we get started" copy, quick filters, and featured pickups.
-- **Command Palette:** Global command bar pinned bottom-right with ⌘/Ctrl + \ hotkey plus fuzzy suggestions (disabled on auth/onboarding flows).
-- **Tableware Bridge:** Live pickup banner fetches data from the sibling [`../plates/tableware`](../../plates/tableware) MCP service.
+- **Command Palette:** Global command bar pinned bottom-right with ⌘/Ctrl + \ hotkey plus fuzzy suggestions.
+- **Terminal Pane:** Browser terminal backed by the PTY bridge in `sold`.
+- **Tableware Bridge:** Optional pickup/banner data from the sibling [`../plates/tableware`](../../plates/tableware) MCP service.
 - **Responsive Layout:** Tailwind v4 + shadcn/ui components with custom Instrument Sans typography.
 
 ## Development
@@ -24,19 +25,18 @@ A Svelte v5 application that prototypes the Servo + V8 desktop surface for Solil
 - Node.js 18+ (Corepack recommended)
 - pnpm 10+ (`corepack enable pnpm`)
 - Tailwind CSS v4 (installed via `@tailwindcss/vite`)
-- V language (https://vlang.io) for the backend
-- Plates Tableware running on `http://localhost:8000`
+- optional V language backend (https://vlang.io) for richer search results
 
 ### Quick Start
 
-1. **Start the Soliloquy backend (V):**
+1. **Start the optional Soliloquy backend (V):**
 
 ```bash
 cd backend
 v run main.v
 ```
 
-The backend listens on `http://localhost:3030` and handles Google OAuth + Tableware proxying.
+The backend listens on `http://localhost:3030` and can enrich search results, but the desktop boots without it.
 
 2. **Start the UI dev server:**
 
@@ -53,18 +53,18 @@ pnpm dev
 ### Scripts
 
 - `pnpm dev` – start the Svelte dev server (used by Servo during development)
-- `pnpm build` – build the static bundle that Servo/V8 host
+- `pnpm build` – build the static bundle that Servo hosts
 - `pnpm preview` – preview the production bundle locally
 - `pnpm check` – run `svelte-check` + type analysis
 - `pnpm check:watch` – watch mode for the same checks
 
 ### Tableware Endpoint
 
-Set `VITE_TABLEWARE_BASE_URL` if your Tableware service is not running on `http://localhost:8000`. During onboarding you can also override the endpoint interactively; both paths call into the sibling `../plates/tableware` service.
+Set `VITE_TABLEWARE_BASE_URL` if your optional search service is not running on `http://localhost:3030`. The desktop will fall back to local web search cards if the backend is unavailable.
 
 ### Build Output
 
-`pnpm build` emits a static bundle in `build/`. Servo only needs the generated `index.html` + assets; point the runtime to that directory or use `./tools/soliloquy/build_ui.sh`.
+`pnpm build` emits a static bundle in `build/`. `sold` serves that directory from `/usr/local/share/soliloquy/ui` at runtime.
 
 ## Architecture
 
@@ -72,8 +72,8 @@ Set `VITE_TABLEWARE_BASE_URL` if your Tableware service is not running on `http:
 src/
 ├── routes/
 │   ├── +layout.svelte      # Ambient surfaces + command button
-│   ├── +page.svelte        # Authentication surface
-│   └── dashboard/+page.svelte # Home canvas
+│   ├── +page.svelte        # Desktop surface
+│   └── dashboard/+page.svelte # Desktop surface alias
 ├── lib/
 │   ├── components/
 │   │   └── CommandPalette.svelte
@@ -93,8 +93,8 @@ src/
 
 ### Routes
 
-- `/` – Greeting + authentication page
-- `/dashboard` – Workspace canvas with filters and featured cards
+- `/` – Desktop shell and command bar
+- `/dashboard` – Desktop shell alias
 
 ### State Management
 
@@ -111,8 +111,8 @@ src/
 ## Integration Path
 
 1. **Prototype (current):** Pure web bundle served by Vite during development
-2. **Servo Embed:** Servo loads `build/index.html` as the desktop scene and proxies bridge events to V8
-3. **Zircon Wiring:** Bridge hooks connect to FIDL services for process launch, storage, and input routing
+2. **Servo Embed:** Servo loads the `sold`-served desktop scene
+3. **Bridge:** `sold` exposes status, power, and PTY APIs for the desktop shell
 
 ## Contributing
 

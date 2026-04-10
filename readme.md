@@ -1,50 +1,43 @@
-# Soliloquy
+# Soliloquy v0
 
-A minimal, web-native operating system built on the Zircon microkernel with Servo as the desktop environment.
+Soliloquy v0 is a **browser-first Linux distribution format** on Alpine Linux:
 
-## Overview
+- Alpine base (musl + minimal userland)
+- wlroots compositor (`cage`)
+- Servo as the fullscreen shell
+- No login manager; boot directly to web UI
+- Servo fork built in-tree and launched fullscreen at boot
+- Local `sold` bridge serves the desktop bundle and terminal PTY
 
-Soliloquy is an experimental OS that brings web technologies to the system level. It uses:
-- **Zircon** - Microkernel from Fuchsia
-- **Servo + V8** - Desktop environment (when display available)
-- **Svelte 5 UI** - Modern reactive frontend -> migrating to [Equilibrium (repo private for now)](https://github.com/atechnology-company/equilibrium)
-- **WGPU** - Graphics via Vulkan + Magma
+This reset replaces the previous multi-target architecture with a focused, shippable v0.
 
-## Contributing
+## Project layout
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+```text
+system/
+  alpine/
+    openrc/              # OpenRC service units (session launcher)
+    scripts/             # Session/startup/image scripts for cage + servo
+```
 
-### Quick Contribution Guide
+## Quick start (dev host)
 
-1. Fork and clone
-2. Create feature branch
-3. Make changes with tests
-4. Run `bazel test //...`
-5. Submit PR
+Build+boot through the Alpine/QEMU flow in `system/alpine`.
 
-## Documentation
+## Alpine tree-in-repo
 
-📚 **[Complete Documentation Index](docs/INDEX.md)** - All documentation organized by topic
+Alpine image/bootstrap assets now live under `system/alpine`:
 
-### Quick Links
-- **[Getting Started Tutorial](docs/tutorials/getting_started.md)** - Complete setup guide for new developers
-- **[Developer Guide](docs/guides/dev_guide.md)** - Development workflow and best practices
-- **[Tools Reference](docs/guides/tools_reference.md)** - Complete tool documentation
-- **[Build System Guide](docs/build.md)** - Building the project (GN, Bazel, Cargo)
-- **[Architecture](docs/architecture/architecture.md)** - System design and components
-- **[Testing Guide](docs/testing/testing.md)** - How to write and run tests
-- **[C-to-V Translation](docs/translations/c2v_translations.md)** - Zircon subsystem translations
-- **[Contributing](docs/contributing.md)** - Contribution guidelines
+- `scripts/setup-host.sh` - installs host deps and sets up Wax from GitHub
+  - on macOS, it also installs Servo's GStreamer/framework dependencies when missing
+- `scripts/build-rootfs.sh` - builds or reuses a minimal Alpine rootfs artifact
+- `scripts/ensure-servo-fork.sh` - ensures your in-tree Servo fork exists and is built
+- `scripts/configure-rootfs.sh` - applies Soliloquy overlay + OpenRC services
+- `scripts/stage-soliloquy-artifacts.sh` - stages Servo, sold, and the desktop bundle into rootfs
+- `scripts/qemu-v0.sh` - full build-and-run QEMU flow
 
-## Acknowledgments
+## Boot target design
 
-- Fuchsia Project and Google - Zircon microkernel
-- Servo Project - Browser engine
-- V8 Project - JavaScript runtime
-- Radxa - Hardware platform (really just the sbc i have)
-
----
-
-**Note:** This is an experimental OS project. Not intended for production use.
-
-a creation by [atechnology company](https://atechnology.company/) - part of the plates ecosystem
+1. OpenRC starts `seatd`.
+2. OpenRC starts `sol-session`.
+3. `sol-session` launches `cage` and runs Servo fullscreen.

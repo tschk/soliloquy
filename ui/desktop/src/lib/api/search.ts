@@ -47,7 +47,24 @@ export async function performSearch(
 		return data as SearchResponse;
 	} catch (error) {
 		console.error('[search] Search request error:', error);
-		return null;
+		const fallbackUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+		return {
+			query,
+			cards: [
+				{
+					id: `fallback-${Date.now()}`,
+					title: query,
+					snippet: 'Open the query in DuckDuckGo',
+					url: fallbackUrl,
+					source: 'local fallback',
+					image_url: '',
+					card_type: 'browser',
+					metadata: { query }
+				}
+			],
+			suggestions: [],
+			took_ms: 0
+		};
 	}
 }
 
@@ -75,6 +92,6 @@ export async function getSearchSuggestions(
 		return data.suggestions || [];
 	} catch (error) {
 		console.error('[search] Suggestions request error:', error);
-		return [];
+		return query ? [query] : [];
 	}
 }

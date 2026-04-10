@@ -5,7 +5,7 @@ import { page } from '$app/stores';
 import CommandPalette from '$lib/components/CommandPalette.svelte';
 import { defaultCommandSuggestions, runSystemAction, type CommandSuggestion } from '$lib/system/actions';
 
-const COMMAND_DISABLED_ROOTS = ['/', '/onboarding'];
+const COMMAND_DISABLED_ROOTS = ['/onboarding'];
 let commandPaletteOpen = false;
 let suggestions: CommandSuggestion[] = defaultCommandSuggestions;
 
