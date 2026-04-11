@@ -69,7 +69,6 @@ if command -v rc-update >/dev/null 2>&1; then
   done
   rc-update add local default >/dev/null 2>&1 || true
   rc-update add seatd default >/dev/null 2>&1 || true
-  rc-update add sol-session default >/dev/null 2>&1 || true
 fi
 EOF
 
@@ -78,7 +77,7 @@ chmod +x "${ROOTFS}/etc/local.d/soliloquy-firstboot.start"
 # Make default runlevel explicit and minimal.
 mkdir -p "${ROOTFS}/etc/runlevels/default"
 find "${ROOTFS}/etc/runlevels/default" -mindepth 1 -maxdepth 1 -exec rm -f {} +
-for svc in local seatd sold sol-session; do
+for svc in local seatd sold; do
   if [ -f "${ROOTFS}/etc/init.d/${svc}" ]; then
     ln -sf "/etc/init.d/${svc}" "${ROOTFS}/etc/runlevels/default/${svc}"
   fi

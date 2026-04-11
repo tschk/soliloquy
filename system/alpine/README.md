@@ -13,8 +13,8 @@ This directory carries the Alpine-specific boot/runtime layout for the Soliloquy
 
 1. OpenRC starts core services (`seatd`).
 2. OpenRC starts `sold` to serve the local browser UI and PTY bridge.
-3. `sol-session` starts the browser session.
-4. `cage` launches Servo fullscreen.
+3. `init` respawns `sol-session-start` on `tty1` (no login prompt).
+4. `cage` launches Servo fullscreen on the visible VT.
 5. Servo opens the local Soliloquy browser surface.
 
 The root filesystem is treated as immutable at runtime; browser profile, cache, downloads, logs, and terminal state are the writable areas.
