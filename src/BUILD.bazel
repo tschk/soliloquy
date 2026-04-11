@@ -9,7 +9,6 @@ rust_library(
     srcs = glob([
         "*.rs",
         "memory/*.rs",
-        "zircon/*.rs",
         "gpu/*.rs",
         "cache/*.rs",
         "v8_integration/*.rs",
