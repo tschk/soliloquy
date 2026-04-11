@@ -10,7 +10,7 @@ if ! command -v servo >/dev/null 2>&1; then
   exit 1
 fi
 
-servo --new-instance "${START_URL}"
+servo "${START_URL}"
 status=$?
 echo "[sol-servo] servo exited with status ${status}" >&2
 exit "${status}"
