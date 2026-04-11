@@ -38,7 +38,8 @@ Quick reference guide for common commands and manifest patterns.
 ┌─────────────────────────────────────────┐
 │         User Applications               │
 │  ┌──────────┬──────────┬──────────┐    │
-│  │  Servo   │  Shell   │  Apps    │    │
+│  │ Browser  │  Shell   │ Browser  │    │
+│  │ Surface  │  APIs    │ Apps     │    │
 │  └────┬─────┴──────────┴────┬─────┘    │
 │       │ WebRender/WGPU      │          │
 └───────┼─────────────────────┼───────────┘
@@ -131,7 +132,7 @@ Soliloquy brings web technologies to system level:
 ## Subsystems
 
 ### Shell (`src/shell/`)
-Command shell and desktop environment integrating Servo.
+Browser runtime and host bridge integrating Servo.
 
 ### Hardware Abstraction (`third_party/zircon_v/hal/`)
 V translation of Zircon HAL providing hardware access primitives.
@@ -149,7 +150,7 @@ Hardware drivers:
 - Display (Mali GPU)
 
 ### UI Framework (`ui/`)
-UI components and Flatland integration for compositing.
+UI components and Flatland integration for the single browser surface.
 
 ## Build System
 

@@ -1,21 +1,23 @@
 # Alpine tree (in-repo)
 
-This directory carries the Alpine-specific boot/runtime layout for Soliloquy v0:
+This directory carries the Alpine-specific boot/runtime layout for the Soliloquy browser appliance:
 
 - `packages-v0.txt` - minimal runtime package manifest
 - `packages-v0-dev.txt` - optional dev extras (terminal-oriented)
 - `rootfs-overlay/` - files copied directly into Alpine rootfs
-- `openrc/` - OpenRC service units for the desktop session
+- `openrc/` - OpenRC service units for the browser session
 - `scripts/` - helper scripts for rootfs assembly and image prep
 - `docker/` - rootfs builder implementation for reproducible output
 
 ## Expected v0 boot
 
 1. OpenRC starts core services (`seatd`).
-2. OpenRC starts `sold` to serve the local desktop bundle and PTY bridge.
-3. `sol-session` starts the desktop session.
+2. OpenRC starts `sold` to serve the local browser UI and PTY bridge.
+3. `sol-session` starts the browser session.
 4. `cage` launches Servo fullscreen.
-5. Servo opens the local Soliloquy desktop surface.
+5. Servo opens the local Soliloquy browser surface.
+
+The root filesystem is treated as immutable at runtime; browser profile, cache, downloads, logs, and terminal state are the writable areas.
 
 The first-boot hook prunes nonessential default services (logging daemons, avahi, cron, bluetooth, etc.) to keep startup and memory overhead low.
 

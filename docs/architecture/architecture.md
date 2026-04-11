@@ -2,7 +2,7 @@
 
 ## Overview
 
-Soliloquy is a minimal, web-native operating system built on the Zircon microkernel with Servo as the desktop environment.
+Soliloquy is a minimal, web-native operating system built on the Zircon microkernel with Servo as a browser-only appliance surface.
 
 ## System Architecture
 
@@ -65,7 +65,7 @@ Soliloquy is a minimal, web-native operating system built on the Zircon microker
 ### 1. Soliloquy Shell
 **Location:** `src/shell/`
 **Language:** Rust
-**Purpose:** Main user interface and application runtime
+**Purpose:** Main browser runtime and application host
 
 **Key Files:**
 - `main.rs` - Entry point and initialization
@@ -77,8 +77,8 @@ Soliloquy is a minimal, web-native operating system built on the Zircon microker
 - Initialize Servo browser engine
 - Manage V8 JavaScript runtime
 - Handle user input (keyboard, mouse, touch)
-- Render UI via Flatland compositor
-- Coordinate between web content and system
+- Render the single browser surface via Flatland compositor
+- Coordinate between web content and system APIs
 
 ### 2. Servo Browser Engine
 **Location:** `vendor/servo/`

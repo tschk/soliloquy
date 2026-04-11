@@ -1,6 +1,6 @@
 //! Servo embedder for Soliloquy
 //! 
-//! This module provides the integration layer between Servo and Zircon,
+//! This module provides the integration layer between Servo and the local shell,
 //! implementing the necessary traits for windowing, events, and graphics.
 //! It also integrates V8 for JavaScript execution and tab memory optimization.
 
@@ -10,30 +10,25 @@ use std::collections::HashMap;
 
 use crate::v8_runtime::V8Runtime;
 use crate::browser_optimizations::{TabResidencyManager, GcScheduler, MemoryPressureMonitor};
-use fuchsia_ui_composition::{Flatland, PresentArgs};
-
-/// Main embedder context that bridges Servo browser engine with Zircon/Fuchsia.
+/// Main embedder context that bridges Servo browser engine with the shell runtime.
 ///
 /// `ServoEmbedder` manages the lifecycle of a web browser instance running on Soliloquy.
 /// It coordinates between:
-/// - Flatland compositor for GPU-accelerated graphics presentation
+/// - Local presentation bookkeeping for rendered frames
 /// - V8 JavaScript runtime for script execution
 /// - Servo's rendering engine for web content
-/// - Zircon input event system
+/// - Desktop input event handling
 /// - Tab memory optimization for efficient multi-tab handling
 ///
 /// The embedder follows a state machine pattern (see [`EmbedderState`]) to ensure proper
 /// initialization order and safe resource management.
 pub struct ServoEmbedder {
-    /// Flatland session for GPU-accelerated graphics compositing.
-    /// Currently a placeholder; will connect to `fuchsia.ui.composition.Flatland` FIDL service.
-    flatland_session: Option<Arc<Mutex<FlatlandSession>>>,
-    /// View reference tokens for window management in Scenic scene graph.
-    view_ref: Option<ViewRef>,
+    /// Placeholder display session for desktop rendering integration.
+    display_session: Option<Arc<Mutex<DisplaySession>>>,
     /// Thread-safe queue for buffering input events before dispatch to Servo.
     event_queue: Arc<Mutex<Vec<InputEvent>>>,
     /// V8 JavaScript runtime instance for executing web page scripts.
-    /// Initialized early and used throughout the embedder lifetime.
+    /// Initialized lazily on first use so startup stays cheap.
     v8_runtime: Option<V8Runtime>,
     /// Servo webview handle (placeholder for actual Servo browser instance).
     webview: Option<Arc<Mutex<ServoWebview>>>,
@@ -65,7 +60,7 @@ pub struct ServoEmbedder {
 pub enum EmbedderState {
     /// Initial state before any initialization.
     Uninitialized,
-    /// Actively initializing V8, Flatland, and other subsystems.
+    /// Actively initializing V8, display state, and other subsystems.
     Initializing,
     /// All systems ready, waiting for content load.
     Ready,
@@ -77,38 +72,14 @@ pub enum EmbedderState {
     Error(String),
 }
 
-/// Placeholder for Fuchsia Flatland compositor session.
-///
-/// In production, this will wrap `fuchsia.ui.composition.FlatlandProxy` for:
-/// - Creating scene graph transforms and content nodes
-/// - Submitting frame buffers for GPU composition
-/// - Managing image/buffer lifetimes
-///
-/// Currently tracks session metadata for development/testing.
-pub struct FlatlandSession {
+/// Placeholder for desktop presentation state.
+pub struct DisplaySession {
     /// Session identifier for debugging and logging.
     pub session_id: u32,
     /// Viewport width in physical pixels.
     pub width: u32,
     /// Viewport height in physical pixels.
     pub height: u32,
-    /// The Flatland compositor instance.
-    pub flatland: Flatland,
-}
-
-/// View reference tokens for Scenic view tree integration.
-///
-/// Contains kernel object IDs (koids) for:
-/// - `ViewRef`: Read-only reference for event routing and focus
-/// - `ViewRefControl`: Write capability for view lifecycle management
-///
-/// These will be created via `fuchsia.ui.views` FIDL APIs.
-#[derive(Debug, Clone)]
-pub struct ViewRef {
-    /// Kernel object ID for the ViewRef eventpair.
-    pub view_ref_koid: u64,
-    /// Kernel object ID for the ViewRefControl eventpair.
-    pub view_ref_control_koid: u64,
 }
 
 /// Placeholder for Servo browser webview instance.
@@ -129,7 +100,7 @@ impl ServoEmbedder {
     ///
     /// Performs the following initialization steps:
     /// 1. Creates V8 runtime and executes a test script to verify functionality
-    /// 2. Initializes Flatland graphics session (currently placeholder)
+    /// 2. Initializes the display session (currently placeholder)
     /// 3. Creates view reference tokens for window management
     /// 4. Initializes tab memory optimization systems
     /// 5. Transitions state from `Uninitialized` → `Initializing` → `Ready`
@@ -144,11 +115,10 @@ impl ServoEmbedder {
     /// embedder.load_url("https://example.com")?;
     /// ```
     pub fn new() -> Result<Self, String> {
-        info!("Initializing Servo embedder with memory optimization");
+        info!("Initializing Servo embedder with lazy browser startup");
         
         let mut embedder = ServoEmbedder {
-            flatland_session: None,
-            view_ref: None,
+            display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
             v8_runtime: None,
             webview: None,
@@ -162,78 +132,66 @@ impl ServoEmbedder {
         
         embedder.state = EmbedderState::Initializing;
         
-        // Initialize memory monitoring
+        // Initialize memory monitoring.
+        // This is intentionally cheap compared to bringing up the browser runtime.
         {
             let monitor = embedder.memory_monitor.lock().unwrap();
             monitor.start_monitoring();
         }
         info!("Memory pressure monitoring started");
         
-        // Initialize V8 runtime
-        match V8Runtime::new() {
-            Ok(v8_runtime) => {
-                info!("V8 runtime initialized successfully");
-                embedder.v8_runtime = Some(v8_runtime);
-                
-                // Test V8 with a simple script
-                if let Some(ref mut runtime) = embedder.v8_runtime {
-                    match runtime.execute_script("'V8 is ready'") {
-                        Ok(result) => debug!("V8 test script result: {}", result),
-                        Err(e) => warn!("V8 test script failed: {}", e),
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Failed to initialize V8 runtime: {}", e);
-                return Err(format!("V8 initialization failed: {}", e));
-            }
-        }
-        
-        // Initialize Flatland session
-        match embedder.init_flatland() {
-            Ok(session) => {
-                info!("Flatland session initialized");
-                embedder.flatland_session = Some(Arc::new(Mutex::new(session)));
-            }
-            Err(e) => {
-                warn!("Failed to initialize Flatland session: {}", e);
-                // Continue without Flatland for now
-            }
-        }
-        
-        // Create view reference
-        embedder.view_ref = Some(ViewRef {
-            view_ref_koid: 12345, // TODO: Generate actual koid
-            view_ref_control_koid: 12346,
-        });
-        
         embedder.state = EmbedderState::Ready;
-        info!("Servo embedder initialized successfully with tab memory optimization");
+        info!("Servo embedder initialized successfully without eager runtime init");
         
         Ok(embedder)
     }
-    /// Initializes a Flatland compositor session for graphics output.
-    ///
-    /// **Placeholder Implementation:** Currently returns a mock session.
-    /// Production version will connect to `fuchsia.ui.composition.Flatland` FIDL protocol
-    /// and create a scene graph with image pipes for Servo's render output.
-    fn init_flatland(&self) -> Result<FlatlandSession, String> {
-        debug!("Initializing Flatland session");
 
-        let mut flatland = Flatland::new("servo-embedder");
+    /// Lazily initialize the V8 runtime the first time browser execution needs it.
+    fn ensure_v8_runtime(&mut self) -> Result<&mut V8Runtime, String> {
+        if self.v8_runtime.is_none() {
+            info!("Initializing V8 runtime on demand");
+            let mut runtime = V8Runtime::new()
+                .map_err(|e| format!("V8 initialization failed: {}", e))?;
 
-        // Setup initial scene graph
-        let root = flatland.create_transform()
-            .map_err(|e| format!("Failed to create root transform: {}", e))?;
+            // One tiny warmup script gives us a fast first real navigation without
+            // paying the cost during constructor startup.
+            match runtime.execute_script("'V8 is ready'") {
+                Ok(result) => debug!("V8 warmup result: {}", result),
+                Err(e) => warn!("V8 warmup script failed: {}", e),
+            }
 
-        flatland.set_root_transform(root)
-            .map_err(|e| format!("Failed to set root transform: {}", e))?;
+            self.v8_runtime = Some(runtime);
+        }
+
+        Ok(self
+            .v8_runtime
+            .as_mut()
+            .expect("V8 runtime must exist after initialization"))
+    }
+
+    /// Lazily create the display session used by presentation code.
+    fn ensure_display_session(&mut self) {
+        if self.display_session.is_none() {
+            match self.init_display_session() {
+                Ok(session) => {
+                    info!("Display session initialized on demand");
+                    self.display_session = Some(Arc::new(Mutex::new(session)));
+                }
+                Err(e) => {
+                    warn!("Failed to initialize display session: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Initializes a local display session for graphics output.
+    fn init_display_session(&self) -> Result<DisplaySession, String> {
+        debug!("Initializing display session");
         
-        Ok(FlatlandSession {
+        Ok(DisplaySession {
             session_id: 1,
             width: 1920,
             height: 1080,
-            flatland,
         })
     }
     
@@ -279,8 +237,10 @@ impl ServoEmbedder {
         };
         self.webview = Some(Arc::new(Mutex::new(webview)));
         
-        // Execute JavaScript to initialize the page
-        if let Some(ref mut runtime) = self.v8_runtime {
+        // Execute JavaScript to initialize the page.
+        // The runtime is brought up only when a real navigation happens.
+        {
+            let runtime = self.ensure_v8_runtime()?;
             let init_script = format!(
                 r#"
                 console.log('Loading URL: {}');
@@ -294,7 +254,7 @@ impl ServoEmbedder {
                 "#,
                 url, url
             );
-            
+
             match runtime.execute_script(&init_script) {
                 Ok(result) => {
                     debug!("Page initialization script result: {}", result);
@@ -328,8 +288,7 @@ impl ServoEmbedder {
     /// 2. Converted to JavaScript handlers (current implementation)
     /// 3. Dispatched to V8 runtime for web page interaction
     ///
-    /// **Placeholder:** Production version will convert Fuchsia input events
-    /// (from `fuchsia.ui.input3` or `fuchsia.ui.pointer`) to Servo's event format
+    /// **Placeholder:** Production version will convert platform input events to Servo's event format
     /// and call `servo::input::handle_event(event)`.
     ///
     /// # Arguments
@@ -348,7 +307,7 @@ impl ServoEmbedder {
             queue.push(event.clone());
         }
         
-        // TODO: Convert Fuchsia input events to Servo events
+        // TODO: Convert platform input events to Servo events
         // servo::input::handle_event(event);
         
         // Execute JavaScript for input handling if needed
@@ -384,46 +343,44 @@ impl ServoEmbedder {
                         debug!("Key handling script result: {}", result);
                     }
                 }
+                InputEvent::PointerMove { x, y } => {
+                    debug!("Pointer move at ({}, {})", x, y);
+                }
+                InputEvent::Scroll { delta_x, delta_y } => {
+                    debug!("Scroll delta ({}, {})", delta_x, delta_y);
+                }
+                InputEvent::Text { value } => {
+                    debug!("Text input: {}", value);
+                }
+                InputEvent::Lifecycle(event) => {
+                    debug!("Lifecycle event: {:?}", event);
+                }
             }
         }
     }
     
-    /// Submits the current frame to the Flatland compositor for display.
+    /// Submits the current frame to the display pipeline.
     ///
     /// This method is called on each frame of the render loop and:
-    /// 1. Retrieves the current Flatland session
-    /// 2. Submits buffered scene graph updates and image content
+    /// 1. Retrieves the current display session
+    /// 2. Updates display bookkeeping
     /// 3. Executes optional JavaScript frame callbacks via V8
     ///
-    /// **Placeholder:** Production version will call `flatland::present(session)`
-    /// to submit Servo's rendered frame buffer to the Fuchsia compositor. This involves
-    /// creating Flatland content nodes linked to Vulkan/Magma image pipes.
+    /// **Placeholder:** Production version will submit Servo's rendered frame buffer
+    /// to the active Linux/macOS presentation backend.
     ///
     /// # Returns
     /// - `Ok(())`: Frame submitted successfully
     /// - `Err(String)`: Presentation failure (rare; logged as warning)
     pub fn present(&mut self) -> Result<(), String> {
         debug!("Presenting frame");
+        self.ensure_display_session();
         
-        if let Some(ref session_arc) = self.flatland_session {
+        if let Some(ref session_arc) = self.display_session {
             if let Ok(mut session) = session_arc.lock() {
-                debug!("Presenting to Flatland session {}", session.session_id);
-
-                let args = PresentArgs {
-                    requested_presentation_time: 0,
-                    acquire_fences: Vec::new(),
-                    release_fences: Vec::new(),
-                    unsquashable: false,
-                };
-
-                match session.flatland.present(args) {
-                    Ok(info) => {
-                        debug!("Frame presented at time {}", info.presentation_time);
-                    }
-                    Err(e) => {
-                        return Err(format!("Failed to present frame: {}", e));
-                    }
-                }
+                session.width = session.width.max(1);
+                session.height = session.height.max(1);
+                debug!("Presenting to display session {}", session.session_id);
             }
         }
         
@@ -506,11 +463,8 @@ impl ServoEmbedder {
     /// embedder.execute_js("console.log('Hello from Soliloquy')")?;
     /// ```
     pub fn execute_js(&mut self, script: &str) -> Result<String, String> {
-        if let Some(ref mut runtime) = self.v8_runtime {
-            runtime.execute_script(script)
-        } else {
-            Err("V8 runtime not initialized".to_string())
-        }
+        let runtime = self.ensure_v8_runtime()?;
+        runtime.execute_script(script)
     }
     
     /// Register a new tab with the memory optimization system.
@@ -649,25 +603,7 @@ impl ServoEmbedder {
     }
 }
 
-/// Input event types for user interaction.
-///
-/// Represents simplified input events that will be mapped from Fuchsia's
-/// input protocols (`fuchsia.ui.input3` for keyboard, `fuchsia.ui.pointer` for touch/mouse).
-#[derive(Debug, Clone)]
-pub enum InputEvent {
-    /// Touch or mouse pointer event with viewport coordinates.
-    Touch { 
-        /// X coordinate in viewport pixels (0 = left edge).
-        x: f32, 
-        /// Y coordinate in viewport pixels (0 = top edge).
-        y: f32 
-    },
-    /// Keyboard event with key code.
-    Key { 
-        /// USB HID key code or custom key identifier.
-        code: u32 
-    },
-}
+pub use soliloquy_browser_optimizations::runtime::InputEvent;
 
 fn validate_url(url: &str) -> Result<(), String> {
     if url.is_empty() {
@@ -738,8 +674,7 @@ mod tests {
     #[test]
     fn test_embedder_load_when_uninitialized() {
         let mut embedder = ServoEmbedder {
-            flatland_session: None,
-            view_ref: None,
+            display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
             v8_runtime: None,
             webview: None,
@@ -759,8 +694,7 @@ mod tests {
     #[test]
     fn test_embedder_load_when_initializing() {
         let mut embedder = ServoEmbedder {
-            flatland_session: None,
-            view_ref: None,
+            display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
             v8_runtime: None,
             webview: None,
@@ -822,8 +756,7 @@ mod tests {
     #[test]
     fn test_embedder_error_state() {
         let embedder = ServoEmbedder {
-            flatland_session: None,
-            view_ref: None,
+            display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
             v8_runtime: None,
             webview: None,
@@ -847,7 +780,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flatland_present() {
+    fn test_display_present() {
         let mut embedder = ServoEmbedder::new().expect("Should initialize");
         assert!(embedder.present().is_ok());
     }

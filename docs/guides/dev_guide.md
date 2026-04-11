@@ -251,4 +251,4 @@ See [Testing Guide](docs/testing.md) for detailed documentation.
 ## 8. Key Constraints
 - **No POSIX**: Do not assume standard libc/POSIX availability in kernel/driver space.
 - **Async First**: Use Zircon's async loop and FIDL for IPC.
-- **Web Only**: No terminal apps, no X11/Wayland. The "display" is a full-screen browser.
+- **Web Only**: No standalone terminal app, no X11/Wayland. The "display" is a full-screen browser.

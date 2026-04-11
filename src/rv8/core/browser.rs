@@ -54,7 +54,7 @@ impl Browser {
         info!("Initializing RV8 browser...");
         
         // Initialize storage first (needed for cookies, cache)
-        let storage = StorageManager::new(&config.user_data_dir)
+        let storage = StorageManager::new(&config.data_dirs.profile_dir)
             .await
             .map_err(|e| format!("Failed to init storage: {}", e))?;
         let storage = Arc::new(storage);

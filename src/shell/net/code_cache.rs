@@ -243,6 +243,10 @@ impl CodeCache {
         let data = fs::read_to_string(&self.metadata_path)
             .map_err(|e| format!("Failed to read metadata: {}", e))?;
 
+        if data.trim().is_empty() {
+            return Ok(());
+        }
+
         let entries: Vec<CacheEntry> = serde_json::from_str(&data)
             .map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
@@ -287,18 +291,41 @@ fn current_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_secs()
+        .as_millis() as u64
 }
 
 /// Sanitize filename by replacing invalid characters
 fn sanitize_filename(url: &str) -> String {
-    url.chars()
-        .map(|c| match c {
-            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-            c => c,
-        })
-        .take(200) // Limit length
-        .collect()
+    let mut output = String::with_capacity(url.len().min(200));
+    let mut invalid_run = 0usize;
+
+    for c in url.chars() {
+        let is_invalid = matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|');
+        if is_invalid {
+            invalid_run += 1;
+            continue;
+        }
+
+        if invalid_run > 0 {
+            for _ in 0..invalid_run.min(3) {
+                output.push('_');
+            }
+            invalid_run = 0;
+        }
+
+        output.push(c);
+        if output.len() >= 200 {
+            break;
+        }
+    }
+
+    if invalid_run > 0 && output.len() < 200 {
+        for _ in 0..invalid_run.min(3) {
+            output.push('_');
+        }
+    }
+
+    output
 }
 
 #[cfg(test)]

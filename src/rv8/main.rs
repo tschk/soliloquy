@@ -65,7 +65,7 @@ fn run_browser_process(initial_url: &str) {
 
         rt.block_on(async {
             info!("Backend initialized");
-            let config = BrowserConfig::headless();
+            let config = BrowserConfig::appliance();
             match Browser::new(config).await {
                 Ok(mut browser) => {
                     if let Err(e) = browser.new_tab(&url).await {
@@ -82,7 +82,7 @@ fn run_browser_process(initial_url: &str) {
 
     // GPUI integration disabled due to dependency conflict (core-graphics)
     // ui::run_app(gpui::App::new());
-    info!("GPUI disabled. Browser process running in headless mode.");
+    info!("GPUI disabled. Browser process running in appliance mode.");
     std::thread::park();
 
     info!("Browser process terminated");

@@ -2,10 +2,10 @@
 
 ## Goal
 
-Deliver a minimal browser-first OS experience on Alpine Linux:
+Deliver a minimal browser-only immutable OS experience on Alpine Linux:
 
-- fullscreen Servo shell
-- wlroots-based compositor
+- fullscreen Servo browser surface
+- wlroots kiosk compositor
 - command bar-first UX
 - constrained Rust system bridge
 - optional terminal mode through `os://term`
@@ -17,6 +17,8 @@ Deliver a minimal browser-first OS experience on Alpine Linux:
 3. OpenRC starts `sol-session` (no login manager).
 4. `sol-session` runs `cage` and starts Servo fullscreen.
 5. Servo loads the local `ui/desktop` bundle as the primary UI.
+
+The host root filesystem is read-only at runtime; writable state is limited to browser profile, cache, downloads, logs, and terminal/session data.
 
 ## Security boundary
 

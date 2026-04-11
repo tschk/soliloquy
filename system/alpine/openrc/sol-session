@@ -1,7 +1,7 @@
 #!/sbin/openrc-run
 
-name="soliloquy desktop session"
-description="Launch wlroots desktop session with Servo"
+name="soliloquy browser session"
+description="Launch the immutable browser appliance with Servo"
 command="/usr/local/bin/sol-session-start"
 command_background="yes"
 pidfile="/run/sol-session.pid"

@@ -20,6 +20,21 @@ fi
 
 mkdir -p "${ROOTFS}/etc/init.d" "${ROOTFS}/usr/local/bin"
 mkdir -p "${ROOTFS}/etc/local.d"
+mkdir -p \
+  "${ROOTFS}/var/lib/soliloquy/browser/profile" \
+  "${ROOTFS}/var/lib/soliloquy/browser/cache" \
+  "${ROOTFS}/var/lib/soliloquy/browser/downloads" \
+  "${ROOTFS}/var/lib/soliloquy/browser/state" \
+  "${ROOTFS}/var/lib/soliloquy/browser/logs" \
+  "${ROOTFS}/var/lib/soliloquy/browser/terminal"
+
+chmod 700 \
+  "${ROOTFS}/var/lib/soliloquy/browser/profile" \
+  "${ROOTFS}/var/lib/soliloquy/browser/cache" \
+  "${ROOTFS}/var/lib/soliloquy/browser/downloads" \
+  "${ROOTFS}/var/lib/soliloquy/browser/state" \
+  "${ROOTFS}/var/lib/soliloquy/browser/logs" \
+  "${ROOTFS}/var/lib/soliloquy/browser/terminal"
 
 cp -R "${OVERLAY_DIR}/." "${ROOTFS}/"
 cp "${OPENRC_DIR}/sol-session" "${ROOTFS}/etc/init.d/sol-session"
@@ -48,7 +63,7 @@ cat > "${ROOTFS}/etc/local.d/soliloquy-firstboot.start" <<'EOF'
 set -eu
 
 if command -v rc-update >/dev/null 2>&1; then
-  # Keep the service graph minimal for desktop mode.
+  # Keep the service graph minimal for browser appliance mode.
   for svc in acpid avahi-daemon bluetooth cron cupsd hwdrivers localmount machine-id nftables networking syslog wpa_supplicant; do
     rc-update del "${svc}" default >/dev/null 2>&1 || true
   done
