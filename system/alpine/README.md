@@ -96,3 +96,10 @@ Manual steps:
 ./system/alpine/scripts/build-qemu-initramfs.sh build/alpine/rootfs build/alpine/qemu/rootfs.cpio.gz
 ./system/alpine/scripts/run-qemu.sh build/alpine/qemu
 ```
+
+`run-qemu.sh` defaults to `console=tty0 console=ttyS0 rdinit=/init`, so boot logs appear in both the QEMU window and terminal.
+You can override kernel args with:
+
+```sh
+KERNEL_CMDLINE='console=ttyS0 rdinit=/init loglevel=7' ./system/alpine/scripts/run-qemu.sh build/alpine/qemu
+```
