@@ -2,15 +2,29 @@
 set -eu
 
 START_URL="${SOL_START_URL:-http://127.0.0.1:8080/}"
+SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
+export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
 
-echo "[sol-servo] starting Servo at ${START_URL}" >&2
+log() {
+  line="[sol-servo] $1"
+  echo "${line}" >&2
+  if [ -c "${SERIAL_CONSOLE}" ]; then
+    echo "${line}" >"${SERIAL_CONSOLE}" 2>/dev/null || true
+  fi
+}
+
+log "starting Servo at ${START_URL}"
 
 if ! command -v servo >/dev/null 2>&1; then
-  echo "servo binary not found in PATH; cannot start browser appliance" >&2
+  log "servo binary not found in PATH; cannot start browser appliance"
   exit 1
 fi
 
-servo "${START_URL}"
+if [ -c "${SERIAL_CONSOLE}" ]; then
+  servo "${START_URL}" >>"${SERIAL_CONSOLE}" 2>&1
+else
+  servo "${START_URL}"
+fi
 status=$?
-echo "[sol-servo] servo exited with status ${status}" >&2
+log "servo exited with status ${status}"
 exit "${status}"

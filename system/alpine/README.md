@@ -103,3 +103,5 @@ You can override kernel args with:
 ```sh
 KERNEL_CMDLINE='console=ttyS0 rdinit=/init loglevel=7' ./system/alpine/scripts/run-qemu.sh build/alpine/qemu
 ```
+
+`sol-session-start` and `sol-servo-wrapper` mirror their logs (including Cage/Servo stderr/stdout) to `ttyS0`, so runtime failures are visible in the terminal even when the graphical VT is blank.

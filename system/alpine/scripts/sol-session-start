@@ -3,7 +3,8 @@ set -eu
 
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export WLR_BACKENDS="${WLR_BACKENDS:-drm,libinput}"
-export WLR_RENDERER="${WLR_RENDERER:-gles2}"
+export WLR_RENDERER="${WLR_RENDERER:-pixman}"
+export WLR_RENDERER_ALLOW_SOFTWARE="${WLR_RENDERER_ALLOW_SOFTWARE:-1}"
 export SOL_TOKEN="${SOL_TOKEN:-dev-token-change-me}"
 export SOLILOQUY_HOME="${SOLILOQUY_HOME:-/var/lib/soliloquy}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-${SOLILOQUY_HOME}/data}"
@@ -16,6 +17,7 @@ export SOLILOQUY_DOWNLOADS_DIR="${SOLILOQUY_DOWNLOADS_DIR:-${SOLILOQUY_HOME}/bro
 export SOLILOQUY_STATE_DIR="${SOLILOQUY_STATE_DIR:-${SOLILOQUY_HOME}/browser/state}"
 export SOLILOQUY_LOG_DIR="${SOLILOQUY_LOG_DIR:-${SOLILOQUY_HOME}/browser/logs}"
 export SOLILOQUY_TERMINAL_STATE_DIR="${SOLILOQUY_TERMINAL_STATE_DIR:-${SOLILOQUY_HOME}/browser/terminal}"
+SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 
 mkdir -p "${XDG_RUNTIME_DIR}"
 mkdir -p \
@@ -42,12 +44,24 @@ chmod 700 \
   "${SOLILOQUY_LOG_DIR}" \
   "${SOLILOQUY_TERMINAL_STATE_DIR}"
 
-echo "[sol-session] XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >&2
-echo "[sol-session] WLR_BACKENDS=${WLR_BACKENDS}" >&2
-echo "[sol-session] WLR_RENDERER=${WLR_RENDERER}" >&2
-echo "[sol-session] launching cage -> sol-servo-wrapper" >&2
+log() {
+  line="[sol-session] $1"
+  echo "${line}" >&2
+  if [ -c "${SERIAL_CONSOLE}" ]; then
+    echo "${line}" >"${SERIAL_CONSOLE}" 2>/dev/null || true
+  fi
+}
 
-cage -- /usr/local/bin/sol-servo-wrapper
+log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+log "WLR_BACKENDS=${WLR_BACKENDS}"
+log "WLR_RENDERER=${WLR_RENDERER}"
+log "launching cage -> sol-servo-wrapper"
+
+if [ -c "${SERIAL_CONSOLE}" ]; then
+  cage -- /usr/local/bin/sol-servo-wrapper >>"${SERIAL_CONSOLE}" 2>&1
+else
+  cage -- /usr/local/bin/sol-servo-wrapper
+fi
 status=$?
-echo "[sol-session] cage exited with status ${status}" >&2
+log "cage exited with status ${status}"
 exit "${status}"
