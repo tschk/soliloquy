@@ -65,6 +65,10 @@ This clones your fork into `third_party/servo` (if missing), builds it, and stag
 - `target/release/sold` -> `/usr/local/bin/sold`
 - `ui/desktop/build` -> `/usr/local/share/soliloquy/ui`
 
+Important: the staged `servo` and `sold` binaries must be Linux ELF binaries for the selected `QEMU_ARCH`.
+Building on macOS produces Mach-O binaries, which cannot run inside the Alpine Linux VM.
+The staging script now fails fast when binary formats do not match.
+
 Force a clean Servo rebuild during QEMU flow:
 
 ```sh

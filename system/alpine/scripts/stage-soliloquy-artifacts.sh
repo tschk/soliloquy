@@ -11,11 +11,45 @@ REPO_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)"
 SERVO_BIN="${SERVO_BIN:-${REPO_ROOT}/third_party/servo/target/release/servoshell}"
 SOLD_BIN="${SOLD_BIN:-${REPO_ROOT}/target/release/sold}"
 UI_BUILD_DIR="${UI_BUILD_DIR:-${REPO_ROOT}/ui/desktop/build}"
+TARGET_ARCH="${QEMU_ARCH:-x86_64}"
 
 if [ ! -d "${ROOTFS}" ]; then
   echo "rootfs directory not found: ${ROOTFS}" >&2
   exit 1
 fi
+
+require_linux_elf_binary() {
+  bin_path="$1"
+  file_info="$(file "${bin_path}")"
+  case "${TARGET_ARCH}" in
+    x86_64)
+      case "${file_info}" in
+        *"ELF 64-bit"*x86-64*) ;;
+        *)
+          echo "binary is not Linux x86_64 ELF: ${bin_path}" >&2
+          echo "detected: ${file_info}" >&2
+          echo "build Linux artifacts (not host Mach-O binaries) before staging" >&2
+          exit 1
+          ;;
+      esac
+      ;;
+    aarch64|arm64)
+      case "${file_info}" in
+        *"ELF 64-bit"*aarch64*) ;;
+        *)
+          echo "binary is not Linux aarch64 ELF: ${bin_path}" >&2
+          echo "detected: ${file_info}" >&2
+          echo "build Linux artifacts (not host Mach-O binaries) before staging" >&2
+          exit 1
+          ;;
+      esac
+      ;;
+    *)
+      echo "unsupported QEMU_ARCH for binary compatibility check: ${TARGET_ARCH}" >&2
+      exit 1
+      ;;
+  esac
+}
 
 mkdir -p "${ROOTFS}/usr/local/bin"
 mkdir -p "${ROOTFS}/usr/local/share/soliloquy"
@@ -24,6 +58,7 @@ if [ ! -f "${SERVO_BIN}" ]; then
   echo "expected in-tree fork build artifact; run ensure-servo-fork.sh first" >&2
   exit 1
 fi
+require_linux_elf_binary "${SERVO_BIN}"
 cp "${SERVO_BIN}" "${ROOTFS}/usr/local/bin/servo"
 chmod +x "${ROOTFS}/usr/local/bin/servo"
 
@@ -32,6 +67,7 @@ if [ ! -f "${SOLD_BIN}" ]; then
   echo "run cargo build --release -p sold before staging artifacts" >&2
   exit 1
 fi
+require_linux_elf_binary "${SOLD_BIN}"
 cp "${SOLD_BIN}" "${ROOTFS}/usr/local/bin/sold"
 chmod +x "${ROOTFS}/usr/local/bin/sold"
 
