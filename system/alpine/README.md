@@ -69,6 +69,17 @@ Important: the staged `servo` and `sold` binaries must be Linux ELF binaries for
 Building on macOS produces Mach-O binaries, which cannot run inside the Alpine Linux VM.
 The staging script now fails fast when binary formats do not match.
 
+`qemu-v0.sh` now prepares Linux binaries automatically before staging:
+
+- `sold` is built in a Linux container and stored under `build/alpine/artifacts/linux-<arch>/sold`
+- `servo` prefers an in-tree Linux ELF build; if unavailable on `x86_64`, it fetches the Servo Linux release binary into `build/alpine/artifacts/linux-<arch>/servo`
+
+Override servo source explicitly:
+
+```sh
+SERVO_BIN_LINUX=/absolute/path/to/linux/servo QEMU_ARCH=x86_64 ./system/alpine/scripts/qemu-v0.sh
+```
+
 Force a clean Servo rebuild during QEMU flow:
 
 ```sh

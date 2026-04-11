@@ -5,4 +5,6 @@ seatd
 cage
 mesa-egl
 mesa-gbm
+gcompat
+libstdc++
 font-noto

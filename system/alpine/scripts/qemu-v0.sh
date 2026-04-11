@@ -9,11 +9,12 @@ QEMU_RUN="${QEMU_RUN:-1}"
 QEMU_ARCH="${QEMU_ARCH:-x86_64}"
 export QEMU_ARCH
 
-SERVO_BUILD=1 "${ALPINE_SCRIPTS}/ensure-servo-fork.sh"
+SERVO_BUILD=0 "${ALPINE_SCRIPTS}/ensure-servo-fork.sh"
 "${ROOT_DIR}/tools/soliloquy/build_ui.sh"
-cargo build --release -p sold
+LINUX_BIN_DIR="$("${ALPINE_SCRIPTS}/ensure-linux-runtime-binaries.sh")"
 "${ALPINE_SCRIPTS}/build-rootfs.sh"
-"${ALPINE_SCRIPTS}/stage-soliloquy-artifacts.sh" "${ROOTFS_DIR}"
+SERVO_BIN="${LINUX_BIN_DIR}/servo" SOLD_BIN="${LINUX_BIN_DIR}/sold" \
+  "${ALPINE_SCRIPTS}/stage-soliloquy-artifacts.sh" "${ROOTFS_DIR}"
 "${ALPINE_SCRIPTS}/fetch-qemu-kernel.sh" "${QEMU_DIR}"
 "${ALPINE_SCRIPTS}/build-qemu-initramfs.sh" "${ROOTFS_DIR}" "${QEMU_DIR}/rootfs.cpio.gz"
 
