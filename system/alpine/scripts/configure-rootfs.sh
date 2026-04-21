@@ -58,6 +58,7 @@ mkdir -p "${ROOTFS}/etc/init.d" "${ROOTFS}/usr/local/bin"
 mkdir -p "${ROOTFS}/etc/local.d"
 mkdir -p "${ROOTFS}/etc/network"
 mkdir -p "${ROOTFS}/etc/soliloquy/plugins"
+mkdir -p "${ROOTFS}/etc/soliloquy/services"
 mkdir -p \
   "${ROOTFS}/var/lib/soliloquy/browser/profiles" \
   "${ROOTFS}/var/lib/soliloquy/browser/cache" \
@@ -171,6 +172,46 @@ cat > "${ROOTFS}/etc/soliloquy/plugins/remote-sync.json" <<'EOF'
     "photos": false,
     "clipboard": false
   }
+}
+EOF
+
+cat > "${ROOTFS}/etc/soliloquy/services.json" <<'EOF'
+{
+  "services": [
+    {
+      "id": "sold",
+      "display_name": "Soliloquy Local Server",
+      "run_as": "sold",
+      "restart": "always",
+      "dependencies": ["networking"],
+      "state_paths": [
+        "/var/lib/soliloquy/system",
+        "/var/log/soliloquy"
+      ]
+    },
+    {
+      "id": "sol-session",
+      "display_name": "Soliloquy Session",
+      "run_as": "root",
+      "restart": "always",
+      "dependencies": ["sold", "seatd"],
+      "state_paths": [
+        "/run/user/0",
+        "/var/lib/soliloquy/browser"
+      ]
+    },
+    {
+      "id": "remote-sync",
+      "display_name": "Remote Sync Plugin",
+      "run_as": "sold",
+      "restart": "on-failure",
+      "dependencies": ["sold"],
+      "optional": true,
+      "state_paths": [
+        "/var/lib/soliloquy/system/plugins"
+      ]
+    }
+  ]
 }
 EOF
 

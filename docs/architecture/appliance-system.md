@@ -47,6 +47,11 @@ The target service architecture borrows from several operating system designs:
 - Haiku: strong separation between immutable system state and user state.
 - ToaruOS and Vinix: lean startup path, explicit boot sequencing, minimal runtime assumptions.
 
+The current appliance now carries a small declarative service registry in
+`/etc/soliloquy/services.json`. It is intentionally small, but it is the first
+step toward a more Solaris/Fuchsia-style service graph instead of purely
+implicit shell-script ordering.
+
 ## Immediate System Changes
 
 These changes are already reflected or scaffolded in the current appliance path:
@@ -54,6 +59,7 @@ These changes are already reflected or scaffolded in the current appliance path:
 - Immutable-root assumptions are encoded in the system policy file.
 - Browser storage defaults point at system-owned directories.
 - The local system service exposes policy and plugin state over authenticated API endpoints.
+- The local system service exposes the service registry over authenticated API endpoints.
 - Boot scripts create and lock down system runtime directories.
 - Plugin state is separated into immutable defaults and writable runtime state.
 - System service accounts partition runtime ownership between browser and local system services.

@@ -26,6 +26,7 @@ struct AppState {
     term_sessions: Arc<Mutex<HashMap<String, TermSession>>>,
     system_config: Arc<Mutex<SystemConfig>>,
     plugin_state_path: Arc<PathBuf>,
+    service_registry: Arc<ServiceRegistry>,
 }
 
 #[derive(Clone, Debug)]
@@ -124,6 +125,23 @@ struct PersistedPluginState {
     plugins: Vec<PluginConfig>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct ServiceRegistry {
+    services: Vec<ServiceDefinition>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct ServiceDefinition {
+    id: String,
+    display_name: String,
+    run_as: String,
+    restart: String,
+    dependencies: Vec<String>,
+    #[serde(default)]
+    optional: bool,
+    state_paths: Vec<String>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -138,6 +156,7 @@ async fn main() -> anyhow::Result<()> {
     });
     let plugin_state_path = Arc::new(system_plugin_state_path());
     let system_config = Arc::new(Mutex::new(load_system_config(plugin_state_path.as_ref())));
+    let service_registry = Arc::new(load_service_registry());
     let ui_dir = std::env::var("SOLD_UI_DIR")
         .unwrap_or_else(|_| "/usr/local/share/soliloquy/ui".to_string());
     let index_file = format!("{ui_dir}/index.html");
@@ -146,6 +165,7 @@ async fn main() -> anyhow::Result<()> {
     let api = Router::new()
         .route("/healthz", get(health))
         .route("/v1/system/config", get(get_system_config))
+        .route("/v1/system/services", get(get_service_registry))
         .route("/v1/plugins", get(get_plugins))
         .route("/v1/plugins/{id}/state", post(update_plugin_state))
         .route("/v1/status/network", get(get_network_status))
@@ -169,6 +189,7 @@ async fn main() -> anyhow::Result<()> {
             term_sessions: Arc::new(Mutex::new(HashMap::new())),
             system_config,
             plugin_state_path,
+            service_registry,
         });
 
     let bind = std::env::var("SOLD_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
@@ -213,6 +234,64 @@ fn default_system_config() -> SystemConfig {
                 clipboard: false,
             },
         }],
+    }
+}
+
+fn default_service_registry() -> ServiceRegistry {
+    ServiceRegistry {
+        services: vec![
+            ServiceDefinition {
+                id: "sold".to_string(),
+                display_name: "Soliloquy Local Server".to_string(),
+                run_as: "sold".to_string(),
+                restart: "always".to_string(),
+                dependencies: vec!["networking".to_string()],
+                optional: false,
+                state_paths: vec![
+                    "/var/lib/soliloquy/system".to_string(),
+                    "/var/log/soliloquy".to_string(),
+                ],
+            },
+            ServiceDefinition {
+                id: "sol-session".to_string(),
+                display_name: "Soliloquy Session".to_string(),
+                run_as: "root".to_string(),
+                restart: "always".to_string(),
+                dependencies: vec!["sold".to_string(), "seatd".to_string()],
+                optional: false,
+                state_paths: vec![
+                    "/run/user/0".to_string(),
+                    "/var/lib/soliloquy/browser".to_string(),
+                ],
+            },
+            ServiceDefinition {
+                id: "remote-sync".to_string(),
+                display_name: "Remote Sync Plugin".to_string(),
+                run_as: "sold".to_string(),
+                restart: "on-failure".to_string(),
+                dependencies: vec!["sold".to_string()],
+                optional: true,
+                state_paths: vec!["/var/lib/soliloquy/system/plugins".to_string()],
+            },
+        ],
+    }
+}
+
+fn load_service_registry() -> ServiceRegistry {
+    let path = std::env::var("SOLILOQUY_SERVICE_REGISTRY")
+        .unwrap_or_else(|_| "/etc/soliloquy/services.json".to_string());
+    match std::fs::read_to_string(&path) {
+        Ok(raw) => match serde_json::from_str::<ServiceRegistry>(&raw) {
+            Ok(registry) => registry,
+            Err(error) => {
+                warn!("failed to parse service registry at {}: {}", path, error);
+                default_service_registry()
+            }
+        },
+        Err(error) => {
+            warn!("failed to read service registry at {}: {}", path, error);
+            default_service_registry()
+        }
     }
 }
 
@@ -337,6 +416,14 @@ async fn get_plugins(
             .into_response()
     })?;
     Ok(Json(config.plugins.clone()))
+}
+
+async fn get_service_registry(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ServiceRegistry>, Response> {
+    check_auth(&headers, &state)?;
+    Ok(Json((*state.service_registry).clone()))
 }
 
 async fn update_plugin_state(
@@ -471,6 +558,16 @@ mod tests {
         assert!(merged.plugins[0].sync.files);
         assert!(merged.plugins[0].sync.photos);
         assert!(!merged.plugins[0].sync.clipboard);
+    }
+
+    #[test]
+    fn default_service_registry_exposes_core_services() {
+        let registry = default_service_registry();
+        assert_eq!(registry.services.len(), 3);
+        assert_eq!(registry.services[0].id, "sold");
+        assert_eq!(registry.services[1].id, "sol-session");
+        assert_eq!(registry.services[2].id, "remote-sync");
+        assert!(registry.services[2].optional);
     }
 }
 
