@@ -12,11 +12,47 @@ ALPINE_DIR="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
 OVERLAY_DIR="${ALPINE_DIR}/rootfs-overlay"
 OPENRC_DIR="${ALPINE_DIR}/openrc"
 BIN_SRC="${ALPINE_DIR}/scripts"
+SOLILOQUY_UID="770"
+SOLILOQUY_GID="770"
+SOLD_UID="771"
+SOLD_GID="771"
 
 if [ ! -d "${ROOTFS}" ]; then
   echo "rootfs directory not found: ${ROOTFS}" >&2
   exit 1
 fi
+
+ensure_group() {
+  name="$1"
+  gid="$2"
+  if ! grep -q "^${name}:" "${ROOTFS}/etc/group" 2>/dev/null; then
+    printf '%s:x:%s:\n' "${name}" "${gid}" >>"${ROOTFS}/etc/group"
+  fi
+}
+
+ensure_user() {
+  name="$1"
+  uid="$2"
+  gid="$3"
+  home="$4"
+  if ! grep -q "^${name}:" "${ROOTFS}/etc/passwd" 2>/dev/null; then
+    printf '%s:x:%s:%s:%s:%s:/sbin/nologin\n' "${name}" "${uid}" "${gid}" "${name}" "${home}" >>"${ROOTFS}/etc/passwd"
+  fi
+}
+
+ensure_shadow() {
+  name="$1"
+  if [ -f "${ROOTFS}/etc/shadow" ] && ! grep -q "^${name}:" "${ROOTFS}/etc/shadow" 2>/dev/null; then
+    printf '%s:!::0:::::\n' "${name}" >>"${ROOTFS}/etc/shadow"
+  fi
+}
+
+ensure_group "soliloquy" "${SOLILOQUY_GID}"
+ensure_group "sold" "${SOLD_GID}"
+ensure_user "soliloquy" "${SOLILOQUY_UID}" "${SOLILOQUY_GID}" "/var/lib/soliloquy"
+ensure_user "sold" "${SOLD_UID}" "${SOLD_GID}" "/var/lib/soliloquy/system"
+ensure_shadow "soliloquy"
+ensure_shadow "sold"
 
 mkdir -p "${ROOTFS}/etc/init.d" "${ROOTFS}/usr/local/bin"
 mkdir -p "${ROOTFS}/etc/local.d"
@@ -105,11 +141,10 @@ cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
   },
   "plugins": [
     {
-      "id": "phone-sync",
-      "display_name": "Phone Sync",
+      "id": "remote-sync",
+      "display_name": "Remote Sync",
       "kind": "optional-download",
       "enabled": false,
-      "phone_source_of_truth": true,
       "sync": {
         "files": false,
         "photos": false,
@@ -120,17 +155,16 @@ cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
 }
 EOF
 
-cat > "${ROOTFS}/etc/soliloquy/plugins/phone-sync.json" <<'EOF'
+cat > "${ROOTFS}/etc/soliloquy/plugins/remote-sync.json" <<'EOF'
 {
-  "id": "phone-sync",
-  "display_name": "Phone Sync",
+  "id": "remote-sync",
+  "display_name": "Remote Sync",
   "kind": "optional-download",
-  "entrypoint": "/var/lib/soliloquy/system/plugins/phone-sync",
-  "phone_source_of_truth": true,
+  "entrypoint": "/var/lib/soliloquy/system/plugins/remote-sync",
   "capabilities": [
     "profile-sync",
-    "device-pairing",
-    "encrypted-relay"
+    "encrypted-relay",
+    "cross-device-sync"
   ],
   "sync_features": {
     "files": false,
@@ -144,11 +178,10 @@ cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-state.json" <<'EOF'
 {
   "plugins": [
     {
-      "id": "phone-sync",
-      "display_name": "Phone Sync",
+      "id": "remote-sync",
+      "display_name": "Remote Sync",
       "kind": "optional-download",
       "enabled": false,
-      "phone_source_of_truth": true,
       "sync": {
         "files": false,
         "photos": false,
@@ -162,6 +195,9 @@ EOF
 cat > "${ROOTFS}/etc/local.d/soliloquy-firstboot.start" <<'EOF'
 #!/bin/sh
 set -eu
+
+chown -R soliloquy:soliloquy /var/lib/soliloquy/browser >/dev/null 2>&1 || true
+chown -R sold:sold /var/lib/soliloquy/system >/dev/null 2>&1 || true
 
 if command -v rc-update >/dev/null 2>&1; then
   # Keep the service graph minimal for browser appliance mode.

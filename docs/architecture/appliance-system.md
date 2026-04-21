@@ -5,7 +5,7 @@
 - Keep the base system immutable.
 - Restrict user writes to home directories only.
 - Keep browser profiles system-managed.
-- Make the phone the source of truth when the optional sync plugin is enabled.
+- Keep cross-device sync optional and separate from the immutable base image.
 - Stay minimal in the base image while remaining feature rich through optional services and plugins.
 
 ## Filesystem Layout
@@ -29,16 +29,10 @@
 - Plugins are optional downloads rather than part of the immutable base.
 - Plugin policy defaults live in `/etc/soliloquy/system.json`.
 - Writable plugin state lives in `/var/lib/soliloquy/system/plugin-state.json`.
-- The first plugin is `phone-sync`, with separate feature flags for:
+- The first plugin is `remote-sync`, with separate feature flags for:
   - file sync
   - photo sync
   - clipboard sync
-
-## Phone-Authoritative Sync
-
-- The phone is the trust anchor for profile state.
-- Desktop devices can cache and propose state changes, but policy and durable profile truth come from the phone plugin flow.
-- The system should eventually expose scoped profile views rather than raw profile directories.
 
 ## Service Architecture
 
@@ -62,13 +56,13 @@ These changes are already reflected or scaffolded in the current appliance path:
 - The local system service exposes policy and plugin state over authenticated API endpoints.
 - Boot scripts create and lock down system runtime directories.
 - Plugin state is separated into immutable defaults and writable runtime state.
+- System service accounts partition runtime ownership between browser and local system services.
 
 ## Near-Term Follow-Up
 
-- Add a dedicated system service account for browser/profile ownership instead of using `root`.
-- Split `/var/lib/soliloquy/system` and `/var/lib/soliloquy/browser` permissions by service.
+- Reduce the remaining root-only session path once the display stack can run under a dedicated account.
 - Implement plugin download/install state and signature verification.
-- Add a phone-pairing service and encrypted sync log.
+- Add a generic encrypted sync service and trust model if cross-device sync is enabled.
 - Replace ad hoc OpenRC service behavior with a more declarative service registry over time.
 
 ## Why These Changes

@@ -103,7 +103,6 @@ struct PluginConfig {
     display_name: String,
     kind: String,
     enabled: bool,
-    phone_source_of_truth: bool,
     sync: SyncFeatureFlags,
 }
 
@@ -204,11 +203,10 @@ fn default_system_config() -> SystemConfig {
             logs_root: "/var/lib/soliloquy/browser/logs".to_string(),
         },
         plugins: vec![PluginConfig {
-            id: "phone-sync".to_string(),
-            display_name: "Phone Sync".to_string(),
+            id: "remote-sync".to_string(),
+            display_name: "Remote Sync".to_string(),
             kind: "optional-download".to_string(),
             enabled: false,
-            phone_source_of_truth: true,
             sync: SyncFeatureFlags {
                 files: false,
                 photos: false,
@@ -433,13 +431,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_system_config_exposes_phone_sync_plugin() {
+    fn default_system_config_exposes_remote_sync_plugin() {
         let config = default_system_config();
         assert!(config.filesystem.immutable_root);
         assert_eq!(config.browser.profile_management, "system");
         assert_eq!(config.plugins.len(), 1);
-        assert_eq!(config.plugins[0].id, "phone-sync");
-        assert!(config.plugins[0].phone_source_of_truth);
+        assert_eq!(config.plugins[0].id, "remote-sync");
         assert!(!config.plugins[0].sync.files);
         assert!(!config.plugins[0].sync.photos);
         assert!(!config.plugins[0].sync.clipboard);
@@ -454,11 +451,10 @@ mod tests {
             &path,
             serde_json::to_string(&PersistedPluginState {
                 plugins: vec![PluginConfig {
-                    id: "phone-sync".to_string(),
-                    display_name: "Phone Sync".to_string(),
+                    id: "remote-sync".to_string(),
+                    display_name: "Remote Sync".to_string(),
                     kind: "optional-download".to_string(),
                     enabled: true,
-                    phone_source_of_truth: true,
                     sync: SyncFeatureFlags {
                         files: true,
                         photos: true,
