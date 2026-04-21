@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Soliloquy Development Mode
-# Starts backend and UI with hot reload
+# Starts shell and UI with hot reload
 #
 # Usage: ./scripts/dev.sh [options]
 #
 # Options:
-#   --backend-only   Start only the backend (headless mode)
+#   --shell-only    Start only the shell
 #   --ui-only        Start only the UI dev server
-#   --port PORT      Backend port (default: 3030)
+#   --qemu           Build and run in QEMU (Linux target)
 #   --help           Show this help
 
 set -euo pipefail
@@ -19,26 +19,26 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # Defaults
-BACKEND_ONLY=false
+SHELL_ONLY=false
 UI_ONLY=false
-PORT=3030
-BACKEND_PID=""
+QEMU_BUILD=false
+SHELL_PID=""
 UI_PID=""
 
 # Parse options
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --backend-only)
-            BACKEND_ONLY=true
+        --shell-only)
+            SHELL_ONLY=true
             shift
             ;;
         --ui-only)
             UI_ONLY=true
             shift
             ;;
-        --port)
-            PORT="$2"
-            shift 2
+        --qemu)
+            QEMU_BUILD=true
+            shift
             ;;
         --help|-h)
             head -14 "$0" | tail -n +2 | sed 's/^# //' | sed 's/^#//'
@@ -59,26 +59,25 @@ cleanup() {
         kill "$UI_PID" 2>/dev/null || true
     fi
     
-    if [[ -n "$BACKEND_PID" ]]; then
-        kill "$BACKEND_PID" 2>/dev/null || true
+    if [[ -n "$SHELL_PID" ]]; then
+        kill "$SHELL_PID" 2>/dev/null || true
     fi
     
     # Clean up PID files
-    rm -f /tmp/soliloquy-backend.pid /tmp/soliloquy-ui.pid
+    rm -f /tmp/soliloquy-shell.pid /tmp/soliloquy-ui.pid
     
     log_success "Stopped"
 }
 
 trap cleanup EXIT INT TERM
 
-# Start backend
-start_backend() {
-    log_info "Starting V backend on port $PORT..."
+start_shell() {
+    log_info "Starting Rust shell..."
     
-    cd "${PROJECT_ROOT}/backend"
+    cd "${PROJECT_ROOT}"
     
-    if ! command -v v &> /dev/null; then
-        log_error "V compiler not found. Install from https://vlang.io"
+    if ! command -v cargo &> /dev/null; then
+        log_error "Cargo not found. Install Rust from https://rustup.rs"
         exit 1
     fi
     
@@ -90,27 +89,12 @@ start_backend() {
         set +a
     fi
     
-    # Start backend with watch mode if available
-    if v help 2>&1 | grep -q "watch"; then
-        v watch run . &
-    else
-        v run . &
-    fi
-    BACKEND_PID=$!
-    echo "$BACKEND_PID" > /tmp/soliloquy-backend.pid
+    # Start shell
+    cargo run --bin soliloquy_shell &
+    SHELL_PID=$!
+    echo "$SHELL_PID" > /tmp/soliloquy-shell.pid
     
-    # Wait for backend
-    log_info "Waiting for backend..."
-    for i in {1..30}; do
-        if curl -s "http://localhost:${PORT}/health" > /dev/null 2>&1; then
-            log_success "Backend ready at http://localhost:${PORT}"
-            return 0
-        fi
-        sleep 1
-    done
-    
-    log_error "Backend failed to start"
-    exit 1
+    log_success "Shell started"
 }
 
 # Start UI dev server
@@ -138,23 +122,56 @@ start_ui() {
     log_success "🚀 Open http://localhost:5173"
 }
 
+start_qemu() {
+    log_info "Building for QEMU (Linux x86_64 gnu target)..."
+    
+    cd "${PROJECT_ROOT}"
+    
+    if ! command -v cargo &> /dev/null; then
+        log_error "Cargo not found. Install Rust from https://rustup.rs"
+        exit 1
+    fi
+    
+    # Add linux target if not present
+    if ! rustup target list --installed | grep -q "x86_64-unknown-linux-gnu"; then
+        log_info "Adding Linux gnu target..."
+        rustup target add x86_64-unknown-linux-gnu
+    fi
+    
+    # Build for Linux gnu
+    log_info "Building release binary for Linux gnu..."
+    export CC_x86_64_unknown_linux_gnu="$PROJECT_ROOT/scripts/zig-cc-wrapper.sh"
+    export RING_TARGET_TRIPLE=x86_64-linux-gnu
+    export AWS_LC_SYS_TARGET_TRIPLE=x86_64-linux-gnu
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$PROJECT_ROOT/scripts/zig-cc-wrapper.sh"
+    cargo build --release --target x86_64-unknown-linux-gnu --bin soliloquy_shell
+    
+    log_success "Built soliloquy_shell for QEMU (gnu)"
+    log_info "To run in QEMU, set up a Linux VM image and copy target/x86_64-unknown-linux-gnu/release/soliloquy_shell"
+    log_info "Example: Use Ubuntu ISO and install the binary"
+}
+
 # Main
 main() {
     log_info "🌟 Soliloquy Development Mode"
     
-    if $UI_ONLY; then
+    if $QEMU_BUILD; then
+        start_qemu
+    elif $UI_ONLY; then
         start_ui
-    elif $BACKEND_ONLY; then
-        start_backend
+    elif $SHELL_ONLY; then
+        start_shell
     else
-        start_backend
+        start_shell
         start_ui
     fi
     
     echo ""
     log_success "✨ Development servers running"
-    log_info "Backend: http://localhost:${PORT}"
-    if ! $BACKEND_ONLY; then
+    if ! $SHELL_ONLY && ! $QEMU_BUILD; then
+        log_info "Shell: Running"
+    fi
+    if ! $UI_ONLY && ! $QEMU_BUILD; then
         log_info "Frontend: http://localhost:5173"
     fi
     log_info ""

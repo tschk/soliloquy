@@ -1,9 +1,31 @@
 #!/bin/sh
 set -eu
 
-START_URL="${SOL_START_URL:-http://127.0.0.1:8080/}"
+START_URL="${SOL_START_URL:-https://undivisible.dev/}"
+SPLASH_URL="file:///usr/local/share/soliloquy/splash/index.html#${START_URL}"
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
+SERVO_BIN="${SERVO_BIN:-/usr/local/bin/servo}"
+SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-x11}"
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
+export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-llvmpipe}"
+
+case "${SERVO_DISPLAY_BACKEND}" in
+  x11)
+    export XDG_SESSION_TYPE="x11"
+    export WINIT_UNIX_BACKEND="x11"
+    export EGL_PLATFORM="x11"
+    unset WAYLAND_DISPLAY
+    ;;
+  wayland)
+    export XDG_SESSION_TYPE="wayland"
+    export WINIT_UNIX_BACKEND="wayland"
+    export EGL_PLATFORM="wayland"
+    unset DISPLAY
+    ;;
+esac
+export RUST_LOG="${RUST_LOG:-info,servoshell=trace,servoshell<winit@=trace,constellation=trace,script=info,net=debug,compositing=trace,fonts=info}"
+export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
+export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 
 log() {
   line="[sol-servo] $1"
@@ -13,18 +35,105 @@ log() {
   fi
 }
 
-log "starting Servo at ${START_URL}"
+dump_servo_process_state() {
+  pid="$1"
+  if [ ! -d "/proc/${pid}" ]; then
+    log "proc entry missing for pid=${pid}"
+    return
+  fi
 
-if ! command -v servo >/dev/null 2>&1; then
-  log "servo binary not found in PATH; cannot start browser appliance"
+  if [ -r "/proc/${pid}/status" ]; then
+    grep -E '^(State|VmRSS|Threads):' "/proc/${pid}/status" 2>/dev/null | while IFS= read -r line; do
+      log "proc status: ${line}"
+    done || true
+  fi
+
+  if [ -d "/proc/${pid}/fd" ]; then
+    ls -l "/proc/${pid}/fd" 2>&1 | while IFS= read -r line; do
+      log "proc fd: ${line}"
+    done || true
+  fi
+
+  if [ -r "/proc/${pid}/maps" ]; then
+    grep -E 'libwayland|libEGL|libGLES|libGL|libxkbcommon|libdrm|libgbm' "/proc/${pid}/maps" 2>/dev/null | while IFS= read -r line; do
+      log "proc map: ${line}"
+    done || true
+  fi
+}
+
+log "starting Servo at ${START_URL}"
+log "splash url: ${SPLASH_URL}"
+log "servo binary: ${SERVO_BIN}"
+log "SERVO_DISPLAY_BACKEND=${SERVO_DISPLAY_BACKEND}"
+log "RUST_LOG=${RUST_LOG}"
+log "XDG_SESSION_TYPE=${XDG_SESSION_TYPE}"
+log "WINIT_UNIX_BACKEND=${WINIT_UNIX_BACKEND}"
+log "EGL_PLATFORM=${EGL_PLATFORM:-<unset>}"
+log "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-<unset>}"
+log "DISPLAY=${DISPLAY:-<unset>}"
+
+if [ -f /etc/resolv.conf ]; then
+  while IFS= read -r line; do
+    log "resolv.conf: ${line}"
+  done </etc/resolv.conf
+fi
+
+if command -v ip >/dev/null 2>&1; then
+  ip route 2>&1 | while IFS= read -r line; do
+    log "ip route: ${line}"
+  done || true
+fi
+
+if [ -d "${XDG_RUNTIME_DIR:-}" ]; then
+  ls -la "${XDG_RUNTIME_DIR}" 2>&1 | while IFS= read -r line; do
+    log "runtime dir: ${line}"
+  done || true
+fi
+
+if command -v wget >/dev/null 2>&1; then
+  log "starting background wget probe for ${START_URL}"
+  (
+    if wget_output="$(wget -S -O /dev/null -T 5 -t 1 "${START_URL}" 2>&1)"; then
+      printf '%s\n' "${wget_output}" | while IFS= read -r line; do log "wget: ${line}"; done
+      log "wget probe succeeded"
+    else
+      printf '%s\n' "${wget_output}" | while IFS= read -r line; do log "wget: ${line}"; done
+      log "wget probe failed; continuing to Servo anyway"
+    fi
+  ) &
+else
+  log "wget not available; skipping HTTP probe"
+fi
+
+if [ ! -x "${SERVO_BIN}" ]; then
+  log "servo binary not found at ${SERVO_BIN}; cannot start browser appliance"
   exit 1
 fi
 
 if [ -c "${SERIAL_CONSOLE}" ]; then
-  servo "${START_URL}" >>"${SERIAL_CONSOLE}" 2>&1
+  "${SERVO_BIN}" "${SPLASH_URL}" >>"${SERIAL_CONSOLE}" 2>&1 &
 else
-  servo "${START_URL}"
+  "${SERVO_BIN}" "${SPLASH_URL}" &
 fi
+servo_pid=$!
+log "servo pid=${servo_pid}"
+
+sleep 2
+if kill -0 "${servo_pid}" 2>/dev/null; then
+  log "servo still running after 2s"
+  dump_servo_process_state "${servo_pid}"
+else
+  log "servo exited before 2s"
+fi
+
+sleep 4
+if kill -0 "${servo_pid}" 2>/dev/null; then
+  log "servo still running after 6s"
+else
+  log "servo exited before 6s"
+fi
+
+wait "${servo_pid}"
 status=$?
 log "servo exited with status ${status}"
 exit "${status}"

@@ -1,7 +1,0 @@
-{
-  "short_description": "Display driver for Allwinner DE3.0 display engine",
-  "manufacturer": "Soliloquy",
-  "families": ["allwinner", "display"],
-  "models": [],
-  "areas": ["Graphics"]
-}

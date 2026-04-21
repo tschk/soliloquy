@@ -52,15 +52,55 @@ log() {
   fi
 }
 
-log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
-log "WLR_BACKENDS=${WLR_BACKENDS}"
-log "WLR_RENDERER=${WLR_RENDERER}"
-log "launching cage -> sol-servo-wrapper"
+has_drm_device() {
+  [ -e /dev/dri/card0 ] || [ -e /dev/dri/renderD128 ]
+}
 
-if [ -c "${SERIAL_CONSOLE}" ]; then
-  cage -- /usr/local/bin/sol-servo-wrapper >>"${SERIAL_CONSOLE}" 2>&1
+has_input_device() {
+  [ -e /dev/input/mice ] || { set -- /dev/input/event*; [ -e "$1" ]; }
+}
+
+launch_session() {
+  backend="$1"
+  export WLR_BACKENDS="${backend}"
+  if ! has_input_device; then
+    export WLR_LIBINPUT_NO_DEVICES=1
+    log "no input devices found; allowing wlroots to continue without libinput devices"
+  fi
+  log "WLR_BACKENDS=${WLR_BACKENDS}"
+  log "WLR_RENDERER=${WLR_RENDERER}"
+
+  if [ -c "${SERIAL_CONSOLE}" ]; then
+    cage -- /usr/local/bin/sol-servo-wrapper >>"${SERIAL_CONSOLE}" 2>&1
+  else
+    cage -- /usr/local/bin/sol-servo-wrapper
+  fi
+}
+
+log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
+
+if has_drm_device; then
+  log "DRM device found; using cage (Wayland)"
+  launch_session "${WLR_BACKENDS:-drm,libinput}"
 else
-  cage -- /usr/local/bin/sol-servo-wrapper
+  log "no DRM device found; using Xvfb (X11)"
+  export XDG_SESSION_TYPE="x11"
+  export DISPLAY="${DISPLAY:-:0}"
+  if command -v Xvfb >/dev/null 2>&1; then
+    log "starting Xvfb on display ${DISPLAY}"
+    Xvfb "${DISPLAY}" -screen 0 1024x768x24 +extension GLX >>"${SERIAL_CONSOLE}" 2>&1 &
+    xvfb_pid=$!
+    sleep 1
+    if kill -0 "${xvfb_pid}" 2>/dev/null; then
+      log "Xvfb started with pid ${xvfb_pid}"
+    else
+      log "Xvfb failed to start"
+    fi
+  else
+    log "Xvfb not available"
+  fi
+  log "launching sol-servo-wrapper directly (no cage)"
+  /usr/local/bin/sol-servo-wrapper >>"${SERIAL_CONSOLE}" 2>&1
 fi
 status=$?
 log "cage exited with status ${status}"

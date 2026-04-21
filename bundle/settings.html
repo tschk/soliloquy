@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Soliloquy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="max-w-2xl mx-auto py-8"><h1 class="text-3xl font-bold mb-8">Browser Settings</h1><div class="mb-8"><h3 class="text-xl font-semibold mb-4">Appearance</h3><div class="mb-4"><label class="block mb-2 font-medium">Theme:</label><select id="theme" class="w-full p-2 border border-gray-300 rounded"><option value="light">Light</option><option value="dark">Dark</option><option value="auto">Auto</option></select></div></div><div class="mb-8"><h3 class="text-xl font-semibold mb-4">Performance</h3><div class="mb-4"><label class="block mb-2 font-medium">Cache Size (MB):</label><input id="cache-size" class="w-full p-2 border border-gray-300 rounded" type="number" min="10" max="1000"></input></div></div><div class="mb-8"><h3 class="text-xl font-semibold mb-4">Security</h3><div class="mb-4"><label><input id="enable-js" class="mr-2" type="checkbox"></input>Enable JavaScript</label></div></div><div class="mb-8"><h3 class="text-xl font-semibold mb-4">General</h3><div class="mb-4"><label class="block mb-2 font-medium">Homepage:</label><input id="homepage" class="w-full p-2 border border-gray-300 rounded" type="url" placeholder="https://example.com"></input></div></div><button class="bg-blue-500 text-white px-6 py-3 rounded font-medium" onclick="saveSettings()">Save Settings</button><div id="message" class="mt-4"></div></div>
+
+    <script>
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const settings = await response.json();
+                document.getElementById('theme').value = settings.theme || 'light';
+                document.getElementById('cache-size').value = settings.cache_size_mb || 100;
+                document.getElementById('enable-js').checked = settings.enable_javascript !== false;
+                document.getElementById('homepage').value = settings.homepage || '';
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+            }
+        }
+
+        async function saveSettings() {
+            const settings = {
+                theme: document.getElementById('theme').value,
+                cache_size_mb: parseInt(document.getElementById('cache-size').value) || 100,
+                enable_javascript: document.getElementById('enable-js').checked,
+                homepage: document.getElementById('homepage').value,
+            };
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+                if (response.ok) {
+                    showMessage('Settings saved successfully!', 'success');
+                } else {
+                    showMessage('Failed to save settings', 'error');
+                }
+            } catch (error) {
+                console.error('Failed to save settings:', error);
+                showMessage('Failed to save settings', 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = `mt-4 p-2 rounded ${type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+            setTimeout(() => message.textContent = '', 3000);
+        }
+
+        // Load settings on startup
+        loadSettings();
+    </script>
+</body>
+</html>

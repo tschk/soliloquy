@@ -2,12 +2,6 @@
 
 workspace(name = "soliloquy")
 
-# Fuchsia SDK
-local_repository(
-    name = "fuchsia_sdk",
-    path = "sdk",
-)
-
 # Rust rules
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 

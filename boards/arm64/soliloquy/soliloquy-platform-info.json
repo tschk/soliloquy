@@ -1,7 +1,0 @@
-{
-  "short_description": "Soliloquy platform board driver for Allwinner A527",
-  "manufacturer": "Soliloquy",
-  "families": ["allwinner", "a527", "arm64"],
-  "models": ["Radxa Cubie A5E"],
-  "areas": ["Platform"]
-}

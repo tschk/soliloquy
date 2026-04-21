@@ -1,7 +1,0 @@
-group("tests") {
-  testonly = true
-  deps = [
-    "//drivers/common/soliloquy_hal/tests:soliloquy_hal_mmio_tests",
-    "//drivers/wifi/aic8800/tests:aic8800_init_tests",
-  ]
-}

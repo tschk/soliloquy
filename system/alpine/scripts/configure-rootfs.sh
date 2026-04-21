@@ -20,6 +20,7 @@ fi
 
 mkdir -p "${ROOTFS}/etc/init.d" "${ROOTFS}/usr/local/bin"
 mkdir -p "${ROOTFS}/etc/local.d"
+mkdir -p "${ROOTFS}/etc/network"
 mkdir -p \
   "${ROOTFS}/var/lib/soliloquy/browser/profile" \
   "${ROOTFS}/var/lib/soliloquy/browser/cache" \
@@ -58,16 +59,35 @@ if [ -f "${ALPINE_DIR}/packages-v0-dev.txt" ]; then
   cp "${ALPINE_DIR}/packages-v0-dev.txt" "${ROOTFS}/etc/apk/world.soliloquy.dev"
 fi
 
+cat > "${ROOTFS}/etc/rc.conf" <<'EOF'
+rc_logger="NO"
+rc_parallel="YES"
+rc_quiet_openrc="YES"
+EOF
+
+cat > "${ROOTFS}/etc/network/interfaces" <<'EOF'
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+
+cat > "${ROOTFS}/etc/resolv.conf" <<'EOF'
+nameserver 10.0.2.3
+EOF
+
 cat > "${ROOTFS}/etc/local.d/soliloquy-firstboot.start" <<'EOF'
 #!/bin/sh
 set -eu
 
 if command -v rc-update >/dev/null 2>&1; then
   # Keep the service graph minimal for browser appliance mode.
-  for svc in acpid avahi-daemon bluetooth cron cupsd hwdrivers localmount machine-id nftables networking syslog wpa_supplicant; do
+  for svc in acpid avahi-daemon bluetooth cron cupsd hwdrivers localmount machine-id nftables syslog wpa_supplicant; do
     rc-update del "${svc}" default >/dev/null 2>&1 || true
   done
   rc-update add local default >/dev/null 2>&1 || true
+  rc-update add networking default >/dev/null 2>&1 || true
   rc-update add seatd default >/dev/null 2>&1 || true
 fi
 EOF
@@ -77,7 +97,7 @@ chmod +x "${ROOTFS}/etc/local.d/soliloquy-firstboot.start"
 # Make default runlevel explicit and minimal.
 mkdir -p "${ROOTFS}/etc/runlevels/default"
 find "${ROOTFS}/etc/runlevels/default" -mindepth 1 -maxdepth 1 -exec rm -f {} +
-for svc in local seatd sold; do
+for svc in local networking seatd sold; do
   if [ -f "${ROOTFS}/etc/init.d/${svc}" ]; then
     ln -sf "/etc/init.d/${svc}" "${ROOTFS}/etc/runlevels/default/${svc}"
   fi

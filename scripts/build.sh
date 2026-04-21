@@ -8,8 +8,7 @@
 #   all       - Build everything (default)
 #   backend   - Build V backend only
 #   ui        - Build Svelte UI only
-#   shell     - Build Servo shell (requires Fuchsia SDK)
-#   fuchsia   - Full Fuchsia source build (Linux only)
+#   shell     - Build Servo shell
 #
 # Options:
 #   --release  - Release build (default: debug)
@@ -112,44 +111,31 @@ build_ui() {
 }
 
 build_shell() {
-    log_info "Building Servo shell..."
+    log_info "Building Servo shell with Cargo..."
     cd "${PROJECT_ROOT}"
-    
-    # Check for Bazel
-    if ! command -v bazel &> /dev/null; then
-        log_error "Bazel not found. Install Bazel first."
+
+    if ! command -v cargo &> /dev/null; then
+        log_error "Cargo not found. Install Rust first."
         exit 1
     fi
     
     if $CLEAN_FIRST; then
-        bazel clean
+        cargo clean --manifest-path src/shell/Cargo.toml
     fi
     
-    local bazel_config=""
+    local cargo_flags="--manifest-path src/shell/Cargo.toml"
     if $RELEASE_MODE; then
-        bazel_config="-c opt"
+        cargo_flags="$cargo_flags --release"
     fi
-    
-    bazel build $bazel_config //src/shell:soliloquy_shell_simple
+
+    cargo build $cargo_flags
     log_success "Shell built"
     
     if $RUN_TESTS; then
         log_info "Running shell tests..."
-        bazel test $bazel_config //src/shell:soliloquy_shell_tests
+        cargo test $cargo_flags --lib
         log_success "Shell tests passed"
     fi
-}
-
-build_fuchsia() {
-    log_info "Building full Fuchsia source..."
-    
-    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
-        log_error "Full Fuchsia build requires Linux"
-        exit 1
-    fi
-    
-    # Delegate to legacy build script
-    "${PROJECT_ROOT}/tools/soliloquy/build.sh" "$@"
 }
 
 build_all() {
@@ -178,12 +164,9 @@ case "$TARGET" in
     shell)
         build_shell
         ;;
-    fuchsia)
-        build_fuchsia
-        ;;
     *)
         log_error "Unknown target: $TARGET"
-        echo "Valid targets: all, backend, ui, shell, fuchsia"
+        echo "Valid targets: all, backend, ui, shell"
         exit 1
         ;;
 esac

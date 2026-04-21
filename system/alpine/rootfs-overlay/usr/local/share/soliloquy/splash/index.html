@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Soliloquy Subspace</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --progress: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: "SF Mono", "IBM Plex Mono", "Cascadia Code", monospace;
+    }
+
+    body {
+      position: relative;
+      isolation: isolate;
+    }
+
+    .wash {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      transform-origin: bottom center;
+      transform: scaleY(calc(var(--progress) / 100));
+      transition: transform 180ms linear;
+      z-index: 0;
+    }
+
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+      background-size: 32px 32px;
+      opacity: 0.12;
+      mix-blend-mode: difference;
+      z-index: 1;
+    }
+
+    .frame {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 100%;
+      height: 100%;
+      padding: 28px;
+      mix-blend-mode: difference;
+    }
+
+    .header {
+      max-width: 920px;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      opacity: 0.72;
+    }
+
+    h1 {
+      margin: 18px 0 10px;
+      font-size: clamp(32px, 7vw, 88px);
+      line-height: 0.92;
+      font-weight: 600;
+      letter-spacing: -0.06em;
+    }
+
+    .subhead {
+      max-width: 620px;
+      font-size: 13px;
+      line-height: 1.8;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      opacity: 0.78;
+    }
+
+    .logs {
+      width: min(760px, 100%);
+      margin-top: 28px;
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .log {
+      display: flex;
+      gap: 14px;
+      white-space: nowrap;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .log.visible {
+      opacity: 0.92;
+      transform: translateY(0);
+    }
+
+    .log .stamp {
+      opacity: 0.56;
+      min-width: 68px;
+    }
+
+    .footer {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .progress {
+      font-size: clamp(32px, 10vw, 76px);
+      line-height: 0.9;
+      letter-spacing: -0.06em;
+      font-weight: 600;
+    }
+
+    .meta {
+      text-align: right;
+      opacity: 0.84;
+    }
+  </style>
+</head>
+<body>
+  <div class="wash" aria-hidden="true"></div>
+  <div class="grid" aria-hidden="true"></div>
+  <main class="frame">
+    <section class="header">
+      <div class="eyebrow">Soliloquy boot aperture</div>
+      <h1>Subspace handoff<br>in progress</h1>
+      <div class="subhead">Verbose surface trace for compositor, network path, and remote document acquisition.</div>
+      <div class="logs" id="logs"></div>
+    </section>
+
+    <footer class="footer">
+      <div class="progress" id="progress">000</div>
+      <div class="meta">Soliloquy subspace v0.1.x</div>
+    </footer>
+  </main>
+
+  <script>
+    const progressNode = document.getElementById('progress');
+    const logRoot = document.getElementById('logs');
+    const target = window.location.hash.slice(1) || 'https://undivisible.dev/';
+    const start = performance.now();
+    const durationMs = 3800;
+    const handoffMs = 4200;
+    const lines = [
+      'hypervisor link negotiated',
+      'framebuffer surface attached',
+      'seat broker active',
+      'packet route established',
+      'dns resolver primed',
+      'servo shell launch envelope open',
+      `target queued ${target}`,
+      'subspace transfer authorized'
+    ];
+
+    lines.forEach((message, index) => {
+      const row = document.createElement('div');
+      row.className = 'log';
+      row.innerHTML = `<span class="stamp">+${String(index).padStart(2, '0')}.0s</span><span>${message}</span>`;
+      logRoot.appendChild(row);
+      setTimeout(() => row.classList.add('visible'), 220 + index * 320);
+    });
+
+    function tick(now) {
+      const elapsed = now - start;
+      const progress = Math.min(100, Math.round((elapsed / durationMs) * 100));
+      document.documentElement.style.setProperty('--progress', String(progress));
+      progressNode.textContent = String(progress).padStart(3, '0');
+
+      if (progress < 100) {
+        requestAnimationFrame(tick);
+      }
+    }
+
+    requestAnimationFrame(tick);
+
+    setTimeout(() => {
+      window.location.replace(target);
+    }, handoffMs);
+  </script>
+</body>
+</html>

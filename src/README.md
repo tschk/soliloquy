@@ -22,14 +22,14 @@ Comprehensive optimization system for browser-as-desktop-environment enabling **
 │  └──────┬──────┘  └──────┬───────┘  └──────┬───────┘       │
 │         │                │                  │                │
 │  ┌──────▼──────┐  ┌──────▼───────┐  ┌──────▼───────┐       │
-│  │   Zircon    │  │    Cache     │  │   Network    │       │
-│  │     IPC     │  │   System     │  │   Stack      │       │
+│  │   Host I/O  │  │    Cache     │  │   Network    │       │
+│  │   Runtime   │  │   System     │  │   Stack      │       │
 │  └─────────────┘  └──────────────┘  └──────────────┘       │
 └─────────────────────────────────────────────────────────────┘
           │                │                  │
 ┌─────────▼────────────────▼──────────────────▼────────────────┐
-│                   Zircon Microkernel                          │
-│         (VMOs, Channels, Capabilities, Magma/Vulkan)          │
+│                     Alpine/Linux Host                         │
+│          (files, sockets, WGPU, local persistence)            │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -68,37 +68,18 @@ manager.run_eviction_pass(); // Checks all tabs, evicts idle ones
 manager.touch_tab(tab_id)?;
 ```
 
-### 2. Zircon Integration (`src/zircon/`)
+### 2. Runtime Integration (`src/shell/`, `src/gpu/`)
 
-**Zero-Copy Memory Sharing** via Virtual Memory Objects:
+The shell layer owns the desktop runtime:
 
-```rust
-use soliloquy_browser_optimizations::{ZirconTabMemory, create_channel};
+- Servo embedder lifecycle and page loading
+- V8 execution and script bootstrap
+- local display/session bookkeeping
+- input dispatch and tab state tracking
+- optional WGPU rendering paths
 
-// Create tab memory backed by VMO
-let mut tab_mem = ZirconTabMemory::new(1024 * 1024, tab_id)?;
-
-// Map for CPU access
-tab_mem.map()?;
-
-// Import into GPU for zero-copy rendering
-let gpu_buffer = tab_mem.import_to_gpu()?;
-
-// Fork for new tab (copy-on-write)
-let forked = tab_mem.fork()?;
-```
-
-**Capability-Based Security:**
-```rust
-use soliloquy_browser_optimizations::{IsolationManager, Capability};
-
-let manager = IsolationManager::new();
-manager.create_context(tab_id, "https://example.com".to_string())?;
-
-// Fine-grained permissions
-manager.grant_capability(tab_id, Capability::Camera)?;
-manager.check_capability(tab_id, Capability::Microphone)?; // false
-```
+The older platform-specific code was removed during the Alpine transition.
+The remaining integration points are normal host-side Linux/macOS code paths.
 
 ### 3. GPU Pipeline (`src/gpu/`)
 
@@ -299,7 +280,7 @@ cargo test --package soliloquy_browser_optimizations -- --nocapture
 
 **Test Coverage: 113 tests passing** ⬆️ (up from 99)
 - Memory: 15 + 8 disk storage tests = 23 tests
-- Zircon: 22 tests  
+- Runtime integration: 22 tests  
 - GPU: 15 tests
 - Cache: 17 + 7 disk cache tests = 24 tests
 - V8: 14 tests
@@ -439,8 +420,6 @@ let mut layout_compute = GpuLayoutCompute::new(1920.0, 1080.0);
 // Tab creation
 let tab_id = residency.register_tab(url);
 isolation.create_context(tab_id, origin)?;
-let tab_mem = ZirconTabMemory::new(size, tab_id)?;
-
 // Tab interaction
 residency.touch_tab(tab_id)?;
 gc_scheduler.record_interaction();
@@ -479,7 +458,7 @@ isolation.remove_context(tab_id)?;
 | Disk Cache | ✅ Production | Persists across sessions, <5ms access time |
 | Tab Residency | ✅ Production | Automatic eviction, <1% CPU overhead |
 | GPU Layout | ⚠️ Prototype | Parallel computation ready for wgpu integration |
-| VMO Zero-Copy | ⚠️ Prototype | Ready for Zircon FFI bindings |
+| GPU Buffer Import | ⚠️ Prototype | Ready for host-side buffer interop |
 
 ## Updated Benchmarks
 
@@ -509,10 +488,8 @@ isolation.remove_context(tab_id)?;
 - [ ] Brotli response decompression
 - [ ] Service worker caching integration
 - [ ] Shader variant caching system
-- [ ] Zircon inspect integration for debugging
 - [ ] Performance profiling dashboard
 - [ ] Actual wgpu pipeline integration
-- [ ] Real Zircon VMO/Channel FFI bindings
 
 ## License
 
@@ -521,7 +498,6 @@ MIT OR Apache-2.0 (consistent with Soliloquy project)
 ## References
 
 - [bodegaOS Memory Management](https://www.bodega.systems/) - Inspiration for tab residency
-- [Zircon Documentation](https://fuchsia.dev/fuchsia-src/concepts/kernel) - Kernel primitives
 - [WebGPU Best Practices](https://toji.github.io/webgpu-best-practices/) - GPU optimization
 - [V8 Optimization Guide](https://v8.dev/docs) - JavaScript engine tuning
 - [zstd Compression](https://facebook.github.io/zstd/) - Fast compression library

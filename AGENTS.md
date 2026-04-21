@@ -15,9 +15,7 @@ Soliloquy Shell (Rust) --- Desktop shell, window management
   Cache System ------------ LRU + disk + V8 bytecode + texture atlas
   Platform Layer ---------- Fuchsia (Flatland), Linux (winit+WGPU), macOS
 RV8 Browser Engine (Rust) - Multi-process browser with IPC via ipc-channel
-Backend (V language) ------ Cupboard memory storage, vweb server
 Drivers (Rust) ------------ AIC8800 WiFi, GPIO, Mali G57 GPU (stubs)
-Zircon translations (V) --- C-to-V translated kernel subsystems
 
 ## Build Systems
 
@@ -38,7 +36,6 @@ The root BUILD.gn defines targets: :default, :soliloquy, :soliloquy_headless, :s
     src/memory/         Tab residency, compression, pressure monitoring, disk storage
     src/gpu/            layout_compute.rs, compositor.rs, wgpu_integration.rs
     src/cache/          unified.rs (LRU), texture_atlas.rs, disk_cache.rs
-    backend/            V language: cupboard.v (memory storage with inverted index), main.v
     drivers/            wifi/aic8800, gpio, gpu/mali_g57, common/soliloquy_hal
     boards/             arm64/soliloquy (A527 board support)
     third_party/        fuchsia-sdk-rust/, zircon_v/ (C-to-V translated: vm, ipc, scenic)
@@ -68,7 +65,6 @@ Root workspace: 25 members, edition 2021, Apache 2.0 license
   (PROTOCOL_NAME) added as needed.
 - Borrow checker in speculation.rs: evaluate_speculation collects actions into a Vec before
   calling mutable methods to avoid borrow conflicts
-- Platform conditional: V code uses  fuchsia ? for Fuchsia-specific paths
 - Async bridging: pollster::block_on wraps async WGPU calls in sync contexts;
   std::thread::spawn bridges blocking IPC receivers to tokio mpsc channels
 
@@ -86,7 +82,6 @@ The shell test_flatland_present validates Flatland compositor integration.
 
 - fuchsia-component has a trait bound error that blocks some integration tests (pre-existing)
 - QUIC test_quic_connect is disabled (requires network access)
-- V language backend cannot be compiled without the V toolchain (built locally for ARM64)
 - GPU tests require WGPU-compatible hardware or will fall back to CPU
 
 ## Performance Targets
@@ -96,11 +91,3 @@ The shell test_flatland_present validates Flatland compositor integration.
     Predicted navigation: < 0.2s
     Per-tab memory:       < 20MB
     150 tabs total:       < 3GB RAM
-
-## Backend: Cupboard Memory System
-
-The V language backend (backend/cupboard.v) implements a memory storage system with:
-- Inverted index for ~20x faster search (tokenize -> intersect candidate IDs)
-- Background write worker using channel-based I/O (file kept open, append mode)
-- User memory index for O(1) user-scoped lookups
-- REST endpoints: /api/cupboard/store, /api/cupboard/retrieve, /api/cupboard/delete, /api/cupboard/stats

@@ -146,7 +146,7 @@ impl ResourceLoader {
             .expect("Failed to create HTTP client");
 
         Self {
-            user_agent: "Soliloquy/0.1.0 (Fuchsia; Servo)".to_string(),
+            user_agent: "Soliloquy/0.1.0 (Alpine; Servo)".to_string(),
             max_redirects: 10,
             accept_encoding: "gzip, deflate, br".to_string(),
             client,
@@ -422,11 +422,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_resource_loader_fetch() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0u8; 1024];
+                let _ = stream.read(&mut buffer);
+                let response = b"HTTP/1.1 200 OK\r\nContent-Length: 13\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nHello, world!";
+                let _ = stream.write_all(response);
+            }
+        });
+
         let loader = ResourceLoader::new();
-        let request = ResourceRequest::get("https://example.com");
+        let request = ResourceRequest::get(&format!("http://{}/", addr));
         let response = loader.fetch(request).await.unwrap();
         
         assert!(response.is_success());
+
+        let _ = server.join();
     }
 
     #[test]

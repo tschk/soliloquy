@@ -1,7 +1,0 @@
-{
-  "short_description": "GPIO driver for Allwinner A527 SoC",
-  "manufacturer": "Soliloquy",
-  "families": ["allwinner", "gpio"],
-  "models": [],
-  "areas": ["Input"]
-}

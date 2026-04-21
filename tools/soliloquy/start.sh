@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Start Soliloquy in appropriate mode (desktop or headless)
-# Note: Display detection via Zircon scenic is handled by the V backend
 # This script just starts the backend and optionally the UI for dev purposes
 
 set -euo pipefail
@@ -33,10 +32,8 @@ log_error() {
     echo -e "${RED}[soliloquy]${NC} $1"
 }
 
-# Check if we're in dev mode (not on Zircon)
+# Check if we're in dev mode (not on a packaged device image)
 check_dev_mode() {
-    # If not running on Fuchsia, this is a dev environment
-    # On Zircon, display detection is handled by the backend querying scenic
     if [[ "$OSTYPE" == "darwin"* ]] || [[ "$OSTYPE" == "linux-gnu"* ]]; then
         return 0
     fi
@@ -143,15 +140,10 @@ main() {
     # Always start backend
     start_backend
     
-    # In dev mode, start UI as well
-    # On Zircon, the backend will check scenic for display and launch Servo+V8 if found
+    # In dev mode, start UI as well.
     if check_dev_mode; then
         log_info "🔧 Dev mode detected - starting UI dev server"
         start_ui
-    else
-        log_info "🔌 Running on Zircon - display detection handled by backend"
-        log_info "📡 Backend will check scenic and launch Servo+V8 if display present"
-        log_info "💾 Cupboard API available at http://localhost:3030/api/cupboard/"
     fi
     
     # Keep running

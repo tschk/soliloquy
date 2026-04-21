@@ -9,7 +9,7 @@
 use wgpu;
 
 #[cfg(feature = "wgpu_rendering")]
-use log::{debug, error, info};
+use log::{debug, info};
 
 #[cfg(feature = "wgpu_rendering")]
 use std::sync::Arc;
@@ -143,22 +143,6 @@ impl WgpuContext {
 
         debug!("Created compositor render pipeline");
         Ok(pipeline)
-    }
-
-    /// Create a GPU buffer from VMO (Zircon memory object)
-    #[cfg(all(target_os = "fuchsia", feature = "fuchsia"))]
-    pub fn import_vmo_as_buffer(
-        &self,
-        vmo: &fuchsia_zircon::Vmo,
-        size: u64,
-    ) -> Result<wgpu::Buffer, String> {
-        // On Fuchsia, we can import VMOs directly as GPU buffers
-        // This is a placeholder for the actual Fuchsia-specific WGPU extension
-        
-        error!("VMO import not yet implemented - requires Fuchsia WGPU extensions");
-        
-        // Fallback: create a regular buffer
-        self.create_buffer(size, wgpu::BufferUsages::STORAGE)
     }
 
     /// Create a GPU buffer

@@ -34,11 +34,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "fs", "net", "io-util", "macros"] }
 futures = "0.3"
 async-channel = "2.2"
+soliloquy_browser_optimizations = { path = ".." }
 
 # gpui = { git = "https://github.com/zed-industries/zed", package = "gpui" }
 
 # Networking
-reqwest = { version = "0.12", features = ["json", "cookies", "gzip", "brotli"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "cookies", "gzip", "brotli"] }
 url = "2.5"
 http = "1.0"
 bytes = "1.5"
@@ -65,7 +66,8 @@ rayon = "1.10"
 # Memory
 memmap2 = "0.9"
 
-# System info
+# System calls
+nix = { version = "0.27", features = ["sched"] }
 num_cpus = "1.16"
 dirs = "6"
 
@@ -91,14 +93,14 @@ hardware-acceleration = []
 criterion = "0.5"
 tokio-test = "0.4"
 
-# Benchmarks will be added later
-# [[bench]]
-# name = "rendering"
-# harness = false
+# Benchmarks
+[[bench]]
+name = "js_execution"
+harness = false
 
-# [[bench]]
-# name = "js_execution"
-# harness = false
+[[bench]]
+name = "rendering"
+harness = false
 
 [profile.release]
 opt-level = 3

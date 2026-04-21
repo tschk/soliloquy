@@ -1,10 +1,14 @@
 #!/sbin/openrc-run
 
-description="Soliloquy desktop and terminal bridge"
+description="Soliloquy local server"
+
 command="/usr/local/bin/sold"
+command_args="--port 8080 --static /usr/share/soliloquy/bundle"
+command_user="root"
 command_background="yes"
-pidfile="/run/sold.pid"
+pidfile="/run/${RC_SVCNAME}.pid"
 
 depend() {
     need localmount
+    after seatd
 }

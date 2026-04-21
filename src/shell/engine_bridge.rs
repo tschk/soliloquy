@@ -36,6 +36,10 @@ use log::{debug, info};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
+use soliloquy_browser_optimizations::runtime::{
+    EngineRuntime, InputEvent, LifecycleEvent, RuntimeError, SurfaceDescriptor, SurfaceId,
+};
+
 use crate::v8_runtime::V8Runtime;
 
 /// DOM Node types matching Servo's internal representation
@@ -111,6 +115,18 @@ pub struct EngineBridge {
 
     /// Bridge state
     state: Arc<RwLock<BridgeState>>,
+
+    /// Surfaces attached through the shared runtime contract.
+    surfaces: Arc<RwLock<HashMap<SurfaceId, SurfaceDescriptor>>>,
+
+    /// Most recent input event forwarded from the platform.
+    last_input_event: Arc<RwLock<Option<InputEvent>>>,
+
+    /// Most recent lifecycle event forwarded from the platform.
+    last_lifecycle_event: Arc<RwLock<Option<LifecycleEvent>>>,
+
+    /// Surfaces that have been presented most recently.
+    presented_frames: Arc<Mutex<Vec<SurfaceId>>>,
 }
 
 /// Native function type for V8 callbacks
@@ -138,6 +154,10 @@ impl EngineBridge {
             event_listeners: Arc::new(RwLock::new(HashMap::new())),
             native_functions: Arc::new(RwLock::new(HashMap::new())),
             state: Arc::new(RwLock::new(BridgeState::Uninitialized)),
+            surfaces: Arc::new(RwLock::new(HashMap::new())),
+            last_input_event: Arc::new(RwLock::new(None)),
+            last_lifecycle_event: Arc::new(RwLock::new(None)),
+            presented_frames: Arc::new(Mutex::new(Vec::new())),
         };
 
         Ok(bridge)
@@ -659,11 +679,113 @@ impl EngineBridge {
             .map_err(|e| format!("Failed to lock state: {}", e))?;
         Ok(state.clone())
     }
+
+    pub fn surface(&self, surface_id: SurfaceId) -> Result<Option<SurfaceDescriptor>, String> {
+        let surfaces = self
+            .surfaces
+            .read()
+            .map_err(|e| format!("Failed to lock surfaces: {}", e))?;
+        Ok(surfaces.get(&surface_id).cloned())
+    }
+
+    pub fn last_input_event(&self) -> Result<Option<InputEvent>, String> {
+        let input = self
+            .last_input_event
+            .read()
+            .map_err(|e| format!("Failed to lock input event: {}", e))?;
+        Ok(input.clone())
+    }
+
+    pub fn last_lifecycle_event(&self) -> Result<Option<LifecycleEvent>, String> {
+        let lifecycle = self
+            .last_lifecycle_event
+            .read()
+            .map_err(|e| format!("Failed to lock lifecycle event: {}", e))?;
+        Ok(*lifecycle)
+    }
+
+    pub fn presented_frames(&self) -> Result<Vec<SurfaceId>, String> {
+        let frames = self
+            .presented_frames
+            .lock()
+            .map_err(|e| format!("Failed to lock presented frames: {}", e))?;
+        Ok(frames.clone())
+    }
+}
+
+impl EngineRuntime for EngineBridge {
+    fn attach_surface(&self, surface: SurfaceDescriptor) -> Result<(), RuntimeError> {
+        if surface.size.width == 0 || surface.size.height == 0 {
+            return Err(RuntimeError::InvalidSurface(
+                "surface dimensions must be non-zero".to_string(),
+            ));
+        }
+
+        let mut surfaces = self
+            .surfaces
+            .write()
+            .map_err(|e| RuntimeError::Unsupported(format!("surface registry lock failed: {}", e)))?;
+        surfaces.insert(surface.id, surface);
+        Ok(())
+    }
+
+    fn present_frame(&self, surface_id: SurfaceId) -> Result<(), RuntimeError> {
+        let surfaces = self
+            .surfaces
+            .read()
+            .map_err(|e| RuntimeError::Unsupported(format!("surface registry lock failed: {}", e)))?;
+        let surface = surfaces
+            .get(&surface_id)
+            .ok_or(RuntimeError::SurfaceNotFound(surface_id.0))?
+            .clone();
+        drop(surfaces);
+
+        let mut presented = self
+            .presented_frames
+            .lock()
+            .map_err(|e| RuntimeError::Unsupported(format!("present queue lock failed: {}", e)))?;
+        presented.push(surface.id);
+        debug!(
+            "presenting surface {} at {}x{} ({:?})",
+            surface.id.0, surface.size.width, surface.size.height, surface.tier
+        );
+        Ok(())
+    }
+
+    fn handle_input(&self, event: InputEvent) -> Result<(), RuntimeError> {
+        let mut last_input = self
+            .last_input_event
+            .write()
+            .map_err(|e| RuntimeError::Unsupported(format!("input lock failed: {}", e)))?;
+        *last_input = Some(event);
+        Ok(())
+    }
+
+    fn handle_lifecycle(&self, event: LifecycleEvent) -> Result<(), RuntimeError> {
+        let mut last_lifecycle = self
+            .last_lifecycle_event
+            .write()
+            .map_err(|e| RuntimeError::Unsupported(format!("lifecycle lock failed: {}", e)))?;
+        *last_lifecycle = Some(event);
+
+        if matches!(event, LifecycleEvent::Shutdown) {
+            let mut state = self
+                .state
+                .write()
+                .map_err(|e| RuntimeError::Unsupported(format!("state lock failed: {}", e)))?;
+            *state = BridgeState::Ready;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use soliloquy_browser_optimizations::runtime::{
+        EngineRuntime, InputEvent, LifecycleEvent, PlatformTier, SurfaceDescriptor, SurfaceId,
+    };
 
     #[test]
     fn test_engine_bridge_creation() {
@@ -710,5 +832,31 @@ mod tests {
 
         let mutations = bridge.drain_mutations().unwrap();
         assert_eq!(mutations.len(), 1);
+    }
+
+    #[test]
+    fn test_runtime_contract_surface_and_input() {
+        let runtime = V8Runtime::new().expect("Failed to create V8 runtime");
+        let bridge = EngineBridge::new(runtime).unwrap();
+
+        let surface = SurfaceDescriptor::new(42, 1280, 720, PlatformTier::Desktop);
+        bridge.attach_surface(surface.clone()).unwrap();
+        assert_eq!(bridge.surface(SurfaceId(42)).unwrap(), Some(surface));
+
+        bridge
+            .handle_input(InputEvent::PointerMove { x: 11.0, y: 22.0 })
+            .unwrap();
+        assert_eq!(
+            bridge.last_input_event().unwrap(),
+            Some(InputEvent::PointerMove { x: 11.0, y: 22.0 })
+        );
+
+        bridge
+            .handle_lifecycle(LifecycleEvent::Suspended)
+            .unwrap();
+        assert_eq!(
+            bridge.last_lifecycle_event().unwrap(),
+            Some(LifecycleEvent::Suspended)
+        );
     }
 }

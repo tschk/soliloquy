@@ -156,7 +156,7 @@ impl SystemMemoryInfo {
     #[cfg(not(target_os = "linux"))]
     pub fn get() -> Result<Self, String> {
         // Placeholder for other platforms
-        // TODO: Implement for Fuchsia using kernel.stats API
+        // TODO: Add native per-platform memory probes when we support more hosts.
         Ok(SystemMemoryInfo {
             total_memory: 8 * 1024 * 1024 * 1024,
             available_memory: 4 * 1024 * 1024 * 1024,

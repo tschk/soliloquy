@@ -19,7 +19,7 @@ def main():
     v_binary = os.path.join(args.v_home, "v")
     if not os.path.exists(v_binary):
         print(f"Error: V binary not found at {v_binary}", file=sys.stderr)
-        print("Run tools/soliloquy/c2v_pipeline.sh --bootstrap-only to install V", file=sys.stderr)
+        print("Install V and set --v-home to its directory.", file=sys.stderr)
         return 1
     
     os.makedirs(args.output_dir, exist_ok=True)

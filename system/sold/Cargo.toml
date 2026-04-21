@@ -2,17 +2,19 @@
 name = "sold"
 version = "0.1.0"
 edition = "2021"
-license-file.workspace = true
+license-file = "../../LICENSE"
+
+[workspace]
 
 [dependencies]
-tokio.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-axum.workspace = true
-uuid.workspace = true
-portable-pty.workspace = true
-futures-util.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
-anyhow.workspace = true
-tower-http.workspace = true
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+axum = { version = "0.8", features = ["ws", "json"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+portable-pty = "0.8"
+futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+anyhow = "1.0"
+tower-http = { version = "0.6", features = ["cors", "fs"] }

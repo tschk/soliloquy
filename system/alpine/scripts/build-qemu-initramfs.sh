@@ -4,6 +4,11 @@ set -eu
 ROOTFS_DIR="${1:-build/alpine/rootfs}"
 OUT_INITRD="${2:-build/alpine/qemu/rootfs.cpio.gz}"
 
+case "${OUT_INITRD}" in
+  /*) ;;
+  *) OUT_INITRD="$(pwd)/${OUT_INITRD}" ;;
+esac
+
 if [ ! -d "${ROOTFS_DIR}" ]; then
   echo "rootfs directory not found: ${ROOTFS_DIR}" >&2
   exit 1

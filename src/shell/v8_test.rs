@@ -1,4 +1,4 @@
-//! Simple V8 integration test without Fuchsia dependencies
+//! Simple V8 integration test without platform dependencies
 
 mod v8_runtime;
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Soliloquy Display Detection Test
-# Tests display detection on Fuchsia/Zircon or simulates headless mode
+# Tests Alpine/Linux display detection or simulates headless mode
 #
 # Usage: ./scripts/display_test.sh [options]
 #
@@ -55,56 +55,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Detect if we're on Fuchsia
-is_fuchsia() {
-    [[ -d "/svc" ]] && [[ -d "/dev/class" ]]
-}
-
-# Check for display on Fuchsia
-check_fuchsia_display() {
-    local display_count=0
-    local display_info=""
-    
-    # Check /dev/class/display/
-    if [[ -d "/dev/class/display" ]]; then
-        for device in /dev/class/display/*; do
-            if [[ -e "$device" ]]; then
-                ((display_count++))
-                display_info="${display_info}${device}\n"
-            fi
-        done
-    fi
-    
-    # Check scenic service
-    local scenic_available=false
-    if [[ -e "/svc/fuchsia.ui.display.singleton.Info" ]]; then
-        scenic_available=true
-    fi
-    
-    if $JSON_OUTPUT; then
-        echo "{"
-        echo "  \"platform\": \"fuchsia\","
-        echo "  \"display_count\": $display_count,"
-        echo "  \"scenic_available\": $scenic_available,"
-        echo "  \"mode\": \"$([ $display_count -gt 0 ] && echo 'desktop' || echo 'headless')\""
-        echo "}"
-    else
-        log_info "Platform: Fuchsia/Zircon"
-        log_info "Displays found: $display_count"
-        log_info "Scenic service: $scenic_available"
-        
-        if [[ $display_count -gt 0 ]]; then
-            log_success "Mode: DESKTOP"
-            log_info "Servo + V8 will render UI"
-        else
-            log_success "Mode: HEADLESS"
-            log_info "Running as Cupboard sync server only"
-        fi
-    fi
-    
-    return $([[ $display_count -gt 0 ]] && echo 0 || echo 1)
-}
-
 # Check display on development host (macOS/Linux)
 check_host_display() {
     local has_display=false
@@ -148,7 +98,7 @@ check_host_display() {
         fi
         
         log_info ""
-        log_info "Note: On Fuchsia, display detection uses Zircon scenic service"
+        log_info "Note: On Linux, display detection uses host-side environment checks"
     fi
 }
 
@@ -235,16 +185,12 @@ main() {
     fi
     
     # Real detection
-    if is_fuchsia; then
-        check_fuchsia_display
-    else
-        check_host_display
-        
-        # Also test via backend if running
-        if curl -s "http://localhost:3030/health" > /dev/null 2>&1; then
-            echo ""
-            test_backend_api
-        fi
+    check_host_display
+    
+    # Also test via backend if running
+    if curl -s "http://localhost:3030/health" > /dev/null 2>&1; then
+        echo ""
+        test_backend_api
     fi
 }
 

@@ -1,8 +1,11 @@
 alpine-baselayout
 busybox
 openrc
+linux-virt
 seatd
 cage
+xwayland
+xvfb
 mesa-egl
 mesa-gbm
 gcompat

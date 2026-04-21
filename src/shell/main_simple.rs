@@ -1,12 +1,11 @@
 //! Soliloquy Shell - Simplified standalone version
-//! This version compiles without Fuchsia dependencies for testing
+//! This version compiles without desktop shell integration for quick testing
 
 fn main() {
     println!("Soliloquy Shell v0.1.0");
-    println!("Build system: Bazel");
+    println!("Target: Alpine/Linux");
     println!("Status: Build system functional");
     
-    // TODO: Add Fuchsia integration
     // TODO: Add Servo integration
-    // TODO: Add Flatland windowing
+    // TODO: Add native windowing
 }

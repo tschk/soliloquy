@@ -13,7 +13,7 @@ SERVO_BUILD=0 "${ALPINE_SCRIPTS}/ensure-servo-fork.sh"
 "${ROOT_DIR}/tools/soliloquy/build_ui.sh"
 LINUX_BIN_DIR="$("${ALPINE_SCRIPTS}/ensure-linux-runtime-binaries.sh")"
 "${ALPINE_SCRIPTS}/build-rootfs.sh"
-SERVO_BIN="${LINUX_BIN_DIR}/servo" SOLD_BIN="${LINUX_BIN_DIR}/sold" \
+SERVO_BIN="${LINUX_BIN_DIR}/servo" SERVO_RUNTIME_DIR="${LINUX_BIN_DIR}/servo-runtime-root" SOLD_BIN="${LINUX_BIN_DIR}/sold" \
   "${ALPINE_SCRIPTS}/stage-soliloquy-artifacts.sh" "${ROOTFS_DIR}"
 "${ALPINE_SCRIPTS}/fetch-qemu-kernel.sh" "${QEMU_DIR}"
 "${ALPINE_SCRIPTS}/build-qemu-initramfs.sh" "${ROOTFS_DIR}" "${QEMU_DIR}/rootfs.cpio.gz"

@@ -31,7 +31,7 @@ export const systemIndicators = readable(
 		battery: {
 			percentage: 85
 		},
-		runtime: 'Servo Runtime • Zircon Kernel'
+		runtime: 'Servo Runtime • Alpine Linux'
 	},
 	() => () => undefined
 );

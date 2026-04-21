@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Files - Soliloquy</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+        }
+        .file-item {
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+        .file-item:hover {
+            background: #f8f8f8;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="w-full h-screen flex"><div class="w-1/4 border-r border-gray-300 flex flex-col"><div class="p-4 border-b"><button class="bg-blue-500 text-white px-4 py-2 rounded mr-2" onclick="newFile()">New File</button><button class="bg-gray-500 text-white px-4 py-2 rounded" onclick="refreshFiles()">Refresh</button></div><div id="file-list" class="flex-1 overflow-y-auto"></div></div><div class="flex-1 flex flex-col"><div id="editor-header" class="p-4 bg-gray-100 border-b hidden"><span id="current-file">No file selected</span><button class="ml-auto" onclick="saveFile()">Save</button></div><div id="editor" class="flex-1 hidden"><textarea id="file-content" class="w-full h-full p-4 border-none resize-none" placeholder="Select a file to edit..."></textarea></div><div id="pdf-viewer" class="w-full h-full hidden"><iframe id="pdf-frame" class="w-full h-full"></iframe></div></div></div>
+
+    <script>
+        let currentFile = null;
+
+        async function loadFiles() {
+            try {
+                const response = await fetch('/api/files');
+                const files = await response.json();
+                const fileList = document.getElementById('file-list');
+                fileList.innerHTML = '';
+
+                files.forEach(file => {
+                    const div = document.createElement('div');
+                    div.className = 'file-item';
+                    div.innerHTML = `
+                        <span>${file.name}</span>
+                        <span>${file.size} bytes</span>
+                    `;
+                    div.onclick = () => openFile(file.name);
+                    fileList.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Failed to load files:', error);
+            }
+        }
+
+        async function openFile(filename) {
+            currentFile = filename;
+            document.getElementById('current-file').textContent = filename;
+
+            try {
+                const response = await fetch(`/api/files/${filename}`);
+                if (response.ok) {
+                    // Check if PDF
+                    if (filename.toLowerCase().endsWith('.pdf')) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        showPdfViewer(url);
+                    } else {
+                        const content = await response.text();
+                        document.getElementById('file-content').value = content;
+                        showEditor();
+                    }
+                } else {
+                    alert('Failed to load file');
+                }
+            } catch (error) {
+                console.error('Failed to open file:', error);
+            }
+        }
+
+        function showEditor() {
+            document.getElementById('editor').classList.remove('hidden');
+            document.getElementById('editor-header').classList.remove('hidden');
+            document.getElementById('pdf-viewer').classList.add('hidden');
+        }
+
+        function showPdfViewer(url) {
+            document.getElementById('editor').classList.add('hidden');
+            document.getElementById('editor-header').classList.add('hidden');
+            document.getElementById('pdf-viewer').classList.remove('hidden');
+            document.getElementById('pdf-frame').src = url;
+        }
+
+        async function saveFile() {
+            if (!currentFile) return;
+
+            const content = document.getElementById('file-content').value;
+            try {
+                const response = await fetch(`/api/files/${currentFile}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                if (response.ok) {
+                    alert('File saved!');
+                } else {
+                    alert('Failed to save file');
+                }
+            } catch (error) {
+                console.error('Failed to save file:', error);
+            }
+        }
+
+        function newFile() {
+            const filename = prompt('Enter filename:');
+            if (filename) {
+                currentFile = filename;
+                document.getElementById('current-file').textContent = filename;
+                document.getElementById('file-content').value = '';
+                showEditor();
+            }
+        }
+
+        function refreshFiles() {
+            loadFiles();
+        }
+
+        // Load files on startup
+        loadFiles();
+    </script>
+</body>
+</html>

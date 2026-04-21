@@ -9,6 +9,7 @@ fi
 
 REPO_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)"
 SERVO_BIN="${SERVO_BIN:-${REPO_ROOT}/third_party/servo/target/release/servoshell}"
+SERVO_RUNTIME_DIR="${SERVO_RUNTIME_DIR:-}"
 SOLD_BIN="${SOLD_BIN:-${REPO_ROOT}/target/release/sold}"
 UI_BUILD_DIR="${UI_BUILD_DIR:-${REPO_ROOT}/ui/desktop/build}"
 TARGET_ARCH="${QEMU_ARCH:-x86_64}"
@@ -61,6 +62,14 @@ fi
 require_linux_elf_binary "${SERVO_BIN}"
 cp "${SERVO_BIN}" "${ROOTFS}/usr/local/bin/servo"
 chmod +x "${ROOTFS}/usr/local/bin/servo"
+
+if [ -n "${SERVO_RUNTIME_DIR}" ]; then
+  if [ ! -d "${SERVO_RUNTIME_DIR}" ]; then
+    echo "servo runtime bundle not found: ${SERVO_RUNTIME_DIR}" >&2
+    exit 1
+  fi
+  cp -R "${SERVO_RUNTIME_DIR}/." "${ROOTFS}/"
+fi
 
 if [ ! -f "${SOLD_BIN}" ]; then
   echo "sold binary not found at ${SOLD_BIN}" >&2

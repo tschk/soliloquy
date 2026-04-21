@@ -84,10 +84,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/healthz", get(health))
         .route("/v1/status/network", get(get_network_status))
         .route("/v1/status/battery", get(get_battery_status))
-        .route("/v1/power/:action", post(power_action))
+        .route("/v1/power/{action}", post(power_action))
         .route("/v1/notify", post(notify))
         .route("/v1/term/session", post(create_term_session))
-        .route("/v1/term/session/:id/ws", get(term_ws))
+        .route("/v1/term/session/{id}/ws", get(term_ws))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

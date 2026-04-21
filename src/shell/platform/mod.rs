@@ -4,7 +4,7 @@
 //! This module allows Soliloquy to run on:
 //! - Linux (via winit + wgpu)
 //! - macOS (via winit + wgpu)
-//! - Fuchsia (via Flatland compositor)
+//! - Mobile Linux targets (postmarketOS, Ubuntu Touch, Phosh, etc.)
 
 #[cfg(all(target_os = "linux", feature = "desktop"))]
 pub mod linux;
@@ -12,8 +12,8 @@ pub mod linux;
 #[cfg(all(target_os = "macos", feature = "desktop"))]
 pub mod macos;
 
-#[cfg(feature = "fuchsia")]
-pub mod fuchsia;
+#[cfg(all(target_os = "linux", feature = "mobile"))]
+pub mod mobile;
 
 // Re-export the appropriate Window implementation based on platform
 #[cfg(all(target_os = "linux", feature = "desktop"))]
@@ -22,8 +22,8 @@ pub use linux::LinuxWindow as NativeWindow;
 #[cfg(all(target_os = "macos", feature = "desktop"))]
 pub use macos::MacOSWindow as NativeWindow;
 
-#[cfg(feature = "fuchsia")]
-pub use fuchsia::ZirconWindow as NativeWindow;
+#[cfg(all(target_os = "linux", feature = "mobile"))]
+pub use mobile::MobileWindow as NativeWindow;
 
 /// Platform-agnostic window trait
 ///
@@ -135,15 +135,13 @@ pub enum GraphicsBackend {
 /// Stub implementation for when no platform is available
 #[cfg(not(any(
     all(target_os = "linux", feature = "desktop"),
-    all(target_os = "macos", feature = "desktop"),
-    feature = "fuchsia"
+    all(target_os = "macos", feature = "desktop")
 )))]
 pub struct StubWindow;
 
 #[cfg(not(any(
     all(target_os = "linux", feature = "desktop"),
-    all(target_os = "macos", feature = "desktop"),
-    feature = "fuchsia"
+    all(target_os = "macos", feature = "desktop")
 )))]
 impl Window for StubWindow {
     fn new() -> Result<Self, String> {
@@ -173,7 +171,6 @@ impl Window for StubWindow {
 
 #[cfg(not(any(
     all(target_os = "linux", feature = "desktop"),
-    all(target_os = "macos", feature = "desktop"),
-    feature = "fuchsia"
+    all(target_os = "macos", feature = "desktop")
 )))]
 pub type NativeWindow = StubWindow;

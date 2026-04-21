@@ -1,6 +1,0 @@
-import("//build/v_rules.gni")
-
-v_library("zircon_v_vm") {
-  sources = [ "zircon_vm.v" ]
-  output_name = "zircon_vm"
-}

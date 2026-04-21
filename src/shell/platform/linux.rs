@@ -20,6 +20,8 @@ use winit::event::{
 #[cfg(feature = "desktop")]
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 #[cfg(feature = "desktop")]
+use winit::platform::scancode::PhysicalKeyExtScancode;
+#[cfg(feature = "desktop")]
 use winit::window::{Window as WinitWindow, WindowId};
 
 use super::{GraphicsConfig, KeyModifiers, MouseButton, Window, WindowEvent};

@@ -4,6 +4,11 @@ use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::process::{Child, Command};
 use tokio::sync::Mutex;
+#[cfg(target_os = "linux")]
+use nix::sched::sched_setaffinity;
+#[cfg(target_os = "linux")]
+use nix::sched::CpuSet;
+use num_cpus;
 
 use super::TabId;
 use crate::ipc::{
@@ -26,6 +31,9 @@ pub struct ProcessManager {
 
     /// IPC server for child process communication
     ipc_server: IpcServer,
+
+    /// Core assignment counter for per-tab isolation
+    core_counter: std::sync::atomic::AtomicUsize,
 }
 
 /// Wrapper for child process
@@ -45,6 +53,7 @@ impl ProcessManager {
             gpu_process: Mutex::new(None),
             network_process: Mutex::new(None),
             ipc_server: IpcServer::new(),
+            core_counter: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -57,6 +66,7 @@ impl ProcessManager {
             gpu_process: Mutex::new(None),
             network_process: Mutex::new(None),
             ipc_server: IpcServer::new(),
+            core_counter: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -91,6 +101,19 @@ impl ProcessManager {
             .arg(format!("--tab-id={}", tab_id.0))
             .spawn()
             .map_err(|e| format!("Failed to spawn renderer: {}", e))?;
+
+        // Set CPU affinity for per-tab core isolation
+        #[cfg(target_os = "linux")]
+        {
+            let core_count = num_cpus::get();
+            let core = self.core_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % core_count;
+            let pid = nix::unistd::Pid::from_raw(child.id() as i32);
+            let mut cpuset = CpuSet::new();
+            cpuset.set(core).unwrap();
+            if let Err(e) = sched_setaffinity(pid, &cpuset) {
+                warn!("Failed to set CPU affinity for renderer {} to core {}: {}", tab_id.0, core, e);
+            }
+        }
 
         // 3. Accept connection (handshake)
         // Run blocking accept in a blocking task

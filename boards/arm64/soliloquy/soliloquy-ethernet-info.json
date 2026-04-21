@@ -1,7 +1,0 @@
-{
-  "short_description": "Ethernet MAC driver for Allwinner EMAC",
-  "manufacturer": "Soliloquy",
-  "families": ["allwinner", "ethernet"],
-  "models": [],
-  "areas": ["Connectivity"]
-}

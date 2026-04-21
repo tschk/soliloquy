@@ -44,11 +44,6 @@ get_project_root() {
     cd "${script_dir}/.." && pwd
 }
 
-# Check if running on Fuchsia
-is_fuchsia() {
-    [[ -d "/svc" ]] && [[ -d "/dev/class" ]]
-}
-
 # Check if running in CI
 is_ci() {
     [[ -n "${CI:-}" ]] || [[ -n "${GITHUB_ACTIONS:-}" ]]
@@ -105,9 +100,7 @@ json_get() {
 
 # Platform detection
 get_platform() {
-    if is_fuchsia; then
-        echo "fuchsia"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "macos"
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
         echo "linux"

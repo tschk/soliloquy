@@ -20,8 +20,12 @@ mod v8_runtime;
 
 use engine_bridge::EngineBridge;
 use log::{debug, error, info, warn};
+use soliloquy_browser_optimizations::runtime::{
+    EngineRuntime, InputEvent as RuntimeInputEvent, LifecycleEvent, PlatformTier,
+    SurfaceDescriptor,
+};
+use std::sync::Arc;
 use optimizations::{init_optimizations, FramePacer, OptimizationSettings};
-use servo_embedder::{InputEvent, ServoEmbedder};
 
 #[cfg(feature = "desktop")]
 use platform::{Window, WindowEvent};
@@ -111,6 +115,22 @@ fn main() {
                 }
             };
 
+            let platform_tier = if cfg!(all(target_os = "linux", feature = "mobile")) {
+                PlatformTier::Mobile
+            } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+                PlatformTier::ArmLinux
+            } else {
+                PlatformTier::Desktop
+            };
+            let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
+            if let Err(e) = engine_bridge.attach_surface(surface) {
+                error!("Failed to attach surface: {}", e);
+                return;
+            }
+
+            let engine_bridge = Arc::new(engine_bridge);
+            let runtime_bridge = Arc::clone(&engine_bridge);
+
             // Create frame pacer for 60 FPS
             let mut frame_pacer = FramePacer::new(settings.render.target_fps);
             let mut frame_count: u64 = 0;
@@ -125,21 +145,27 @@ fn main() {
                 match event {
                     WindowEvent::CloseRequested => {
                         info!("Close requested, shutting down...");
+                        let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Shutdown);
                         info!("Total frames rendered: {}", frame_count);
                         info!("Average FPS: {:.1}", frame_pacer.current_fps());
                     }
 
                     WindowEvent::Resized { width, height } => {
                         debug!("Window resized to {}x{}", width, height);
-                        // TODO: Notify Servo of resize
+                        let resized_surface =
+                            SurfaceDescriptor::new(1, width, height, platform_tier);
+                        if let Err(e) = runtime_bridge.attach_surface(resized_surface) {
+                            warn!("Failed to update attached surface after resize: {}", e);
+                        }
                     }
 
                     WindowEvent::RedrawRequested => {
                         // Begin frame timing
                         let _delta = frame_pacer.begin_frame();
 
-                        // TODO: Render Servo content here
-                        // servo.render();
+                        if let Err(e) = runtime_bridge.present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1)) {
+                            warn!("Failed to present frame through runtime contract: {}", e);
+                        }
 
                         // Wait for frame pacing
                         frame_pacer.wait_for_frame();
@@ -164,24 +190,45 @@ fn main() {
                             y,
                             button
                         );
+                        let input = if pressed {
+                            RuntimeInputEvent::Touch { x, y }
+                        } else {
+                            RuntimeInputEvent::PointerMove { x, y }
+                        };
+                        if let Err(e) = runtime_bridge.handle_input(input) {
+                            warn!("Failed to forward pointer input: {}", e);
+                        }
                     }
 
                     WindowEvent::MouseMoved { x, y } => {
-                        // High-frequency event, don't log
+                        if let Err(e) = runtime_bridge.handle_input(RuntimeInputEvent::PointerMove { x, y }) {
+                            warn!("Failed to forward pointer move: {}", e);
+                        }
                     }
 
                     WindowEvent::KeyboardInput { key, pressed, .. } => {
                         if pressed {
                             debug!("Key pressed: {}", key);
+                            if let Err(e) = runtime_bridge.handle_input(RuntimeInputEvent::Key { code: key }) {
+                                warn!("Failed to forward key input: {}", e);
+                            }
                         }
                     }
 
                     WindowEvent::Focused => {
                         debug!("Window focused");
+                        let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Foregrounded);
                     }
 
                     WindowEvent::Unfocused => {
                         debug!("Window unfocused");
+                        let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Backgrounded);
+                    }
+
+                    WindowEvent::Scroll { delta_x, delta_y } => {
+                        if let Err(e) = runtime_bridge.handle_input(RuntimeInputEvent::Scroll { delta_x, delta_y }) {
+                            warn!("Failed to forward scroll: {}", e);
+                        }
                     }
 
                     _ => {}
@@ -208,6 +255,13 @@ fn main() {
                     return;
                 }
             };
+
+            let platform_tier = PlatformTier::Desktop;
+            let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
+            if let Err(e) = engine_bridge.attach_surface(surface) {
+                error!("Failed to attach macOS surface: {}", e);
+                return;
+            }
 
             info!("macOS event loop not yet implemented");
             // TODO: Implement macOS event loop similar to Linux

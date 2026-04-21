@@ -1,6 +1,5 @@
 # Override parent config for test support crate
-# Build for host target instead of Fuchsia target
-# This allows tests to run on the development machine
+# Build for the host target so tests run on the development machine
 
 [build]
 # Don't set a default target - use host target

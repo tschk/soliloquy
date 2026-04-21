@@ -1,9 +1,0 @@
-# Packaging configuration for the Soliloquy Shell
-# This target produces soliloquy_shell.far in the build output directory
-
-import("//build/components.gni")
-
-group("soliloquy_shell_pkg") {
-  testonly = false
-  deps = [ "//src/shell:soliloquy_shell" ]
-}

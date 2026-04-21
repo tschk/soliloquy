@@ -5,7 +5,9 @@ ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)"
 QEMU_ARCH="${QEMU_ARCH:-x86_64}"
 OUT_DIR="${ROOT_DIR}/build/alpine/artifacts/linux-${QEMU_ARCH}"
 SERVO_SRC_BIN="${ROOT_DIR}/third_party/servo/target/release/servoshell"
+SERVO_SOURCE_BUILD="${SERVO_SOURCE_BUILD:-1}"
 SERVO_RELEASE_TAG="${SERVO_RELEASE_TAG:-v0.0.6}"
+SERVO_RUNTIME_DIR="${OUT_DIR}/servo-runtime-root"
 
 require_tool() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -26,6 +28,42 @@ file_matches_arch() {
     aarch64|arm64)
       case "${file_info}" in
         *"ELF 64-bit"*aarch64*) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+sold_matches_runtime() {
+  bin_path="$1"
+  file_info="$(file "${bin_path}")"
+  case "${QEMU_ARCH}" in
+    x86_64)
+      case "${file_info}" in
+        *"interpreter /lib/ld-musl-x86_64.so.1"*) return 0 ;;
+      esac
+      ;;
+    aarch64|arm64)
+      case "${file_info}" in
+        *"interpreter /lib/ld-musl-aarch64.so.1"*) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
+servo_needs_glibc_runtime() {
+  bin_path="$1"
+  file_info="$(file "${bin_path}")"
+  case "${QEMU_ARCH}" in
+    x86_64)
+      case "${file_info}" in
+        *"interpreter /lib64/ld-linux-x86-64.so.2"*) return 0 ;;
+      esac
+      ;;
+    aarch64|arm64)
+      case "${file_info}" in
+        *"interpreter /lib/ld-linux-aarch64.so.1"*) return 0 ;;
       esac
       ;;
   esac
@@ -57,9 +95,79 @@ build_sold_linux() {
       set -eu
       export PATH=/usr/local/cargo/bin:\$PATH
       apk add --no-cache musl-dev
-      cargo build --release -p sold
-      cp target/release/sold build/alpine/artifacts/linux-${QEMU_ARCH}/sold
-    "
+      cargo build --release --manifest-path system/sold/Cargo.toml --target-dir target/system-sold
+      cp target/system-sold/release/sold build/alpine/artifacts/linux-${QEMU_ARCH}/sold
+    " >&2
+}
+
+build_servo_linux_from_source() {
+  require_tool docker
+
+  case "${QEMU_ARCH}" in
+    x86_64)
+      docker_platform="linux/amd64"
+      ;;
+    *)
+      echo "no source Servo Linux build configured for QEMU_ARCH=${QEMU_ARCH}" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "Building Servo Linux binary from local source for ${QEMU_ARCH}..." >&2
+  docker run --rm \
+    --platform "${docker_platform}" \
+    -e QEMU_ARCH="${QEMU_ARCH}" \
+    -v "${ROOT_DIR}:/work" \
+    rust:1.85-bookworm bash -lc '
+      set -eu
+      export DEBIAN_FRONTEND=noninteractive
+      export PATH=/usr/local/cargo/bin:$HOME/.local/bin:$PATH
+      apt-get update >/dev/null
+      apt-get install -y --no-install-recommends \
+        clang \
+        cmake \
+        libdbus-1-dev \
+        libegl1-mesa-dev \
+        libfontconfig1-dev \
+        libfreetype6-dev \
+        libglib2.0-dev \
+        libgstreamer-plugins-bad1.0-dev \
+        libgstreamer-plugins-base1.0-dev \
+        libgstreamer1.0-dev \
+        libssl-dev \
+        libx11-dev \
+        libx11-xcb-dev \
+        libxcb-shape0-dev \
+        libxcb-xfixes0-dev \
+        libxcursor-dev \
+        libxi-dev \
+        libxinerama-dev \
+        libxkbcommon-dev \
+        libxkbcommon-x11-dev \
+        libxrandr-dev \
+        llvm-dev \
+        make \
+        pkg-config \
+        python3 \
+        python3-pip \
+        rsync \
+        unzip \
+        wget >/dev/null
+      python3 -m pip install --break-system-packages uv >/dev/null
+      rm -rf /tmp/servo-src
+      mkdir -p /tmp/servo-src
+      rsync -a --delete /work/third_party/servo/ /tmp/servo-src/
+      cd /tmp/servo-src
+      export CC=cc
+      export CXX=c++
+      cargo build --release \
+        --locked \
+        --manifest-path ports/servoshell/Cargo.toml \
+        --target-dir target/linux-servoshell \
+        --config "target.x86_64-unknown-linux-gnu.linker=\"cc\"" \
+        --config "target.x86_64-unknown-linux-gnu.rustflags=[]"
+      cp target/linux-servoshell/release/servoshell /work/build/alpine/artifacts/linux-${QEMU_ARCH}/servo
+    ' >&2
 }
 
 fetch_servo_release_linux() {
@@ -89,9 +197,125 @@ fetch_servo_release_linux() {
   cp "${tmp_dir}/servo/servo" "${OUT_DIR}/servo"
 }
 
+build_servo_runtime_bundle() {
+  require_tool docker
+
+  case "${QEMU_ARCH}" in
+    x86_64)
+      docker_platform="linux/amd64"
+      loader_path="/lib64/ld-linux-x86-64.so.2"
+      ;;
+    *)
+      echo "no glibc Servo runtime bundling configured for QEMU_ARCH=${QEMU_ARCH}" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "Building packaged Servo runtime bundle for ${QEMU_ARCH}..." >&2
+  rm -rf "${SERVO_RUNTIME_DIR}"
+  mkdir -p "${SERVO_RUNTIME_DIR}"
+
+  docker run --rm \
+    --platform "${docker_platform}" \
+    -e QEMU_ARCH="${QEMU_ARCH}" \
+    -e SERVO_LOADER_PATH="${loader_path}" \
+    -v "${ROOT_DIR}:/work" \
+    -w /work \
+    ubuntu:24.04 bash -lc '
+      set -eu
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update >/dev/null
+      apt-get install -y --no-install-recommends \
+        python3 \
+        libudev1 \
+        libglib2.0-0 \
+        libgstreamer1.0-0 \
+        libgstreamer-plugins-base1.0-0 \
+        libgstreamer-plugins-bad1.0-0 \
+        libfontconfig1 \
+        libxcursor1 \
+        libxi6 \
+        libxrandr2 \
+        libxinerama1 \
+        libxkbcommon-x11-0 \
+        libx11-xcb1 \
+        libxcb1 \
+        libxrender1 \
+        zlib1g \
+        libstdc++6 >/dev/null
+      python3 - <<"PY"
+import os
+import re
+import shutil
+import subprocess
+from collections import deque
+
+root = "/work"
+servo = os.path.join(root, "build/alpine/artifacts/linux-" + os.environ["QEMU_ARCH"], "servo")
+bundle = os.path.join(root, "build/alpine/artifacts/linux-" + os.environ["QEMU_ARCH"], "servo-runtime-root")
+loader = os.environ["SERVO_LOADER_PATH"]
+
+needed = set([loader])
+queue = deque([servo])
+
+for extra in [
+    "/lib/x86_64-linux-gnu/libXcursor.so.1",
+    "/lib/x86_64-linux-gnu/libXi.so.6",
+    "/lib/x86_64-linux-gnu/libXrandr.so.2",
+    "/lib/x86_64-linux-gnu/libXinerama.so.1",
+    "/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0",
+    "/lib/x86_64-linux-gnu/libX11-xcb.so.1",
+    "/lib/x86_64-linux-gnu/libxcb.so.1",
+    "/lib/x86_64-linux-gnu/libXrender.so.1",
+]:
+    if os.path.exists(extra):
+        needed.add(extra)
+        queue.append(extra)
+
+while queue:
+    current = queue.popleft()
+    proc = subprocess.run(["ldd", current], text=True, capture_output=True, check=True)
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        match = re.search(r"=>\s+(/[^ ]+)", line)
+        if match:
+            lib = match.group(1)
+        elif line.startswith("/"):
+            lib = line.split(" ", 1)[0]
+        else:
+            continue
+        if lib not in needed and os.path.exists(lib):
+            needed.add(lib)
+            queue.append(lib)
+
+for src in sorted(needed):
+    dst = os.path.join(bundle, src.lstrip("/"))
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if os.path.islink(src):
+      target = os.readlink(src)
+      if os.path.lexists(dst):
+          os.remove(dst)
+      os.symlink(target, dst)
+      target_dst = os.path.normpath(os.path.join(os.path.dirname(dst), target))
+      real = os.path.realpath(src)
+      if os.path.exists(real):
+          real_dst = os.path.join(bundle, real.lstrip("/"))
+          os.makedirs(os.path.dirname(real_dst), exist_ok=True)
+          shutil.copy2(real, real_dst)
+          os.makedirs(os.path.dirname(target_dst), exist_ok=True)
+          if not os.path.exists(target_dst):
+              shutil.copy2(real, target_dst)
+    else:
+      shutil.copy2(src, dst)
+PY
+    ' >&2
+}
+
 mkdir -p "${OUT_DIR}"
 
-if [ -f "${OUT_DIR}/sold" ] && file_matches_arch "${OUT_DIR}/sold"; then
+if [ -f "${OUT_DIR}/sold" ] && file_matches_arch "${OUT_DIR}/sold" && sold_matches_runtime "${OUT_DIR}/sold"; then
   echo "Reusing Linux sold binary: ${OUT_DIR}/sold" >&2
 else
   build_sold_linux
@@ -111,8 +335,14 @@ if [ -n "${SERVO_BIN_LINUX:-}" ]; then
 elif [ -f "${SERVO_SRC_BIN}" ] && file_matches_arch "${SERVO_SRC_BIN}"; then
   echo "Using in-tree Linux Servo binary: ${SERVO_SRC_BIN}" >&2
   cp "${SERVO_SRC_BIN}" "${OUT_DIR}/servo"
+elif [ "${SERVO_SOURCE_BUILD}" = "1" ] && [ -f "${ROOT_DIR}/third_party/servo/ports/servoshell/Cargo.toml" ]; then
+  build_servo_linux_from_source
 else
   fetch_servo_release_linux
+fi
+
+if servo_needs_glibc_runtime "${OUT_DIR}/servo"; then
+  SERVO_LOADER_PATH="${loader_path:-/lib64/ld-linux-x86-64.so.2}" QEMU_ARCH="${QEMU_ARCH}" build_servo_runtime_bundle
 fi
 
 chmod +x "${OUT_DIR}/servo" "${OUT_DIR}/sold"

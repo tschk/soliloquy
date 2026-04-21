@@ -3,6 +3,7 @@
 //! Defines all message types for inter-process communication.
 
 use serde::{Deserialize, Serialize};
+use soliloquy_browser_optimizations::runtime::{SurfaceDescriptor, SurfaceId, SurfaceSize};
 
 /// Messages from renderer to browser process
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,23 +99,15 @@ pub enum RendererMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GpuMessage {
     /// Create surface for tab
-    CreateSurface {
-        tab_id: u64,
-        width: u32,
-        height: u32,
-    },
+    CreateSurface { tab_id: u64, surface: SurfaceDescriptor },
     /// Destroy surface
-    DestroySurface { tab_id: u64 },
+    DestroySurface { tab_id: u64, surface_id: SurfaceId },
     /// Resize surface
-    ResizeSurface {
-        tab_id: u64,
-        width: u32,
-        height: u32,
-    },
+    ResizeSurface { tab_id: u64, surface_id: SurfaceId, size: SurfaceSize },
     /// Submit frame for compositing
-    SubmitFrame { tab_id: u64, frame_id: u64 },
+    SubmitFrame { tab_id: u64, surface_id: SurfaceId, frame_id: u64 },
     /// Present composited frame
-    Present { tab_id: u64 },
+    Present { tab_id: u64, surface_id: SurfaceId },
     /// Update display list
     UpdateDisplayList { tab_id: u64, data: Vec<u8> },
     /// GPU context lost

@@ -71,4 +71,4 @@ use_repo(crate, "crates")
 # V toolchain is built locally from source - see .build-tools/v/
 # The v_compile.py script uses V_HOME or falls back to .build-tools/v/
 
-# TODO: Add Fuchsia SDK integration
+# TODO: Decide whether Bazel remains part of the Alpine/Linux toolchain

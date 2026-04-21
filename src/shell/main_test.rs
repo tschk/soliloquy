@@ -1,4 +1,4 @@
-//! Simplified main for testing V8 integration without Fuchsia dependencies
+//! Simplified main for testing V8 integration without platform dependencies
 
 mod servo_embedder;
 mod v8_runtime;

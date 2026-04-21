@@ -20,5 +20,13 @@ if ! mount -t devtmpfs devtmpfs /dev 2>/dev/null; then
   mknod -m 620 /dev/ttyS0 c 4 64 || true
 fi
 
+if command -v modprobe >/dev/null 2>&1; then
+  # Prefer the virtio DRM path in QEMU, but keep booting if modules are absent.
+  modprobe virtio_pci >/dev/null 2>&1 || true
+  modprobe virtio_net >/dev/null 2>&1 || true
+  modprobe virtio_input >/dev/null 2>&1 || true
+  modprobe virtio_gpu >/dev/null 2>&1 || true
+fi
+
 log "launching /sbin/init"
 exec /sbin/init

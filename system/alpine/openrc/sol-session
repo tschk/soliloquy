@@ -1,13 +1,13 @@
 #!/sbin/openrc-run
 
-name="soliloquy browser session"
-description="Launch the immutable browser appliance with Servo"
-command="/usr/local/bin/sol-session-start"
-command_background="yes"
-pidfile="/run/sol-session.pid"
+description="Soliloquy session launcher"
+
+command="/usr/local/bin/sol-session"
+command_user="root"
 
 depend() {
-    need localmount
-    need seatd
     need sold
 }
+
+respawn=YES
+respawn_delay=5
