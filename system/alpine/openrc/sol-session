@@ -2,7 +2,7 @@
 
 description="Soliloquy session launcher"
 
-command="/usr/local/bin/sol-session"
+command="/usr/local/bin/sol-session-start"
 command_user="root"
 
 depend() {

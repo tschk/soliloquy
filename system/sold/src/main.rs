@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::path::{Path as FsPath, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
@@ -23,6 +24,8 @@ use uuid::Uuid;
 struct AppState {
     token: String,
     term_sessions: Arc<Mutex<HashMap<String, TermSession>>>,
+    system_config: Arc<Mutex<SystemConfig>>,
+    plugin_state_path: Arc<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -64,6 +67,64 @@ struct TermSessionResponse {
     session_id: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct SystemConfig {
+    filesystem: FilesystemPolicy,
+    browser: BrowserPolicy,
+    plugins: Vec<PluginConfig>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct FilesystemPolicy {
+    immutable_root: bool,
+    user_home_root: String,
+    user_writable_scope: String,
+    tmp_policy: TmpPolicy,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct TmpPolicy {
+    path: String,
+    mode: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct BrowserPolicy {
+    profile_management: String,
+    profiles_root: String,
+    cache_root: String,
+    state_root: String,
+    logs_root: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PluginConfig {
+    id: String,
+    display_name: String,
+    kind: String,
+    enabled: bool,
+    phone_source_of_truth: bool,
+    sync: SyncFeatureFlags,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct SyncFeatureFlags {
+    files: bool,
+    photos: bool,
+    clipboard: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct PluginStateUpdate {
+    enabled: Option<bool>,
+    sync: Option<SyncFeatureFlags>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PersistedPluginState {
+    plugins: Vec<PluginConfig>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -76,12 +137,18 @@ async fn main() -> anyhow::Result<()> {
         warn!("SOL_TOKEN not set; using development token");
         "dev-token-change-me".to_string()
     });
-    let ui_dir = std::env::var("SOLD_UI_DIR").unwrap_or_else(|_| "/usr/local/share/soliloquy/ui".to_string());
+    let plugin_state_path = Arc::new(system_plugin_state_path());
+    let system_config = Arc::new(Mutex::new(load_system_config(plugin_state_path.as_ref())));
+    let ui_dir = std::env::var("SOLD_UI_DIR")
+        .unwrap_or_else(|_| "/usr/local/share/soliloquy/ui".to_string());
     let index_file = format!("{ui_dir}/index.html");
     let static_files = ServeDir::new(&ui_dir).not_found_service(ServeFile::new(index_file));
 
     let api = Router::new()
         .route("/healthz", get(health))
+        .route("/v1/system/config", get(get_system_config))
+        .route("/v1/plugins", get(get_plugins))
+        .route("/v1/plugins/{id}/state", post(update_plugin_state))
         .route("/v1/status/network", get(get_network_status))
         .route("/v1/status/battery", get(get_battery_status))
         .route("/v1/power/{action}", post(power_action))
@@ -101,6 +168,8 @@ async fn main() -> anyhow::Result<()> {
         .with_state(AppState {
             token,
             term_sessions: Arc::new(Mutex::new(HashMap::new())),
+            system_config,
+            plugin_state_path,
         });
 
     let bind = std::env::var("SOLD_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
@@ -114,6 +183,110 @@ async fn main() -> anyhow::Result<()> {
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "ok": true }))
+}
+
+fn default_system_config() -> SystemConfig {
+    SystemConfig {
+        filesystem: FilesystemPolicy {
+            immutable_root: true,
+            user_home_root: "/home".to_string(),
+            user_writable_scope: "home-only".to_string(),
+            tmp_policy: TmpPolicy {
+                path: "/tmp".to_string(),
+                mode: "system-only".to_string(),
+            },
+        },
+        browser: BrowserPolicy {
+            profile_management: "system".to_string(),
+            profiles_root: "/var/lib/soliloquy/browser/profiles".to_string(),
+            cache_root: "/var/lib/soliloquy/browser/cache".to_string(),
+            state_root: "/var/lib/soliloquy/browser/state".to_string(),
+            logs_root: "/var/lib/soliloquy/browser/logs".to_string(),
+        },
+        plugins: vec![PluginConfig {
+            id: "phone-sync".to_string(),
+            display_name: "Phone Sync".to_string(),
+            kind: "optional-download".to_string(),
+            enabled: false,
+            phone_source_of_truth: true,
+            sync: SyncFeatureFlags {
+                files: false,
+                photos: false,
+                clipboard: false,
+            },
+        }],
+    }
+}
+
+fn system_plugin_state_path() -> PathBuf {
+    std::env::var("SOLILOQUY_PLUGIN_STATE_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/var/lib/soliloquy/system/plugin-state.json"))
+}
+
+fn load_system_config(plugin_state_path: &FsPath) -> SystemConfig {
+    let path = std::env::var("SOLILOQUY_SYSTEM_CONFIG")
+        .unwrap_or_else(|_| "/etc/soliloquy/system.json".to_string());
+    let base = match std::fs::read_to_string(&path) {
+        Ok(raw) => match serde_json::from_str::<SystemConfig>(&raw) {
+            Ok(config) => config,
+            Err(error) => {
+                warn!("failed to parse system config at {}: {}", path, error);
+                default_system_config()
+            }
+        },
+        Err(error) => {
+            warn!("failed to read system config at {}: {}", path, error);
+            default_system_config()
+        }
+    };
+
+    apply_persisted_plugin_state(base, plugin_state_path)
+}
+
+fn apply_persisted_plugin_state(
+    mut config: SystemConfig,
+    plugin_state_path: &FsPath,
+) -> SystemConfig {
+    let Ok(raw) = std::fs::read_to_string(plugin_state_path) else {
+        return config;
+    };
+
+    let Ok(persisted) = serde_json::from_str::<PersistedPluginState>(&raw) else {
+        warn!(
+            "failed to parse plugin state at {}",
+            plugin_state_path.display()
+        );
+        return config;
+    };
+
+    for persisted_plugin in persisted.plugins {
+        if let Some(plugin) = config
+            .plugins
+            .iter_mut()
+            .find(|plugin| plugin.id == persisted_plugin.id)
+        {
+            plugin.enabled = persisted_plugin.enabled;
+            plugin.sync = persisted_plugin.sync;
+        }
+    }
+
+    config
+}
+
+fn persist_plugin_state(config: &SystemConfig, plugin_state_path: &FsPath) -> anyhow::Result<()> {
+    if let Some(parent) = plugin_state_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+
+    let persisted = PersistedPluginState {
+        plugins: config.plugins.clone(),
+    };
+    let encoded =
+        serde_json::to_string_pretty(&persisted).context("failed to encode plugin state")?;
+    std::fs::write(plugin_state_path, encoded)
+        .with_context(|| format!("failed to write {}", plugin_state_path.display()))
 }
 
 fn check_auth(headers: &HeaderMap, state: &AppState) -> Result<(), Response> {
@@ -132,6 +305,95 @@ fn check_auth(headers: &HeaderMap, state: &AppState) -> Result<(), Response> {
         }),
     )
         .into_response())
+}
+
+async fn get_system_config(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<SystemConfig>, Response> {
+    check_auth(&headers, &state)?;
+    let config = state.system_config.lock().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError {
+                error: "system config lock failed",
+            }),
+        )
+            .into_response()
+    })?;
+    Ok(Json(config.clone()))
+}
+
+async fn get_plugins(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<PluginConfig>>, Response> {
+    check_auth(&headers, &state)?;
+    let config = state.system_config.lock().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiError {
+                error: "system config lock failed",
+            }),
+        )
+            .into_response()
+    })?;
+    Ok(Json(config.plugins.clone()))
+}
+
+async fn update_plugin_state(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(update): Json<PluginStateUpdate>,
+) -> Result<Json<PluginConfig>, Response> {
+    check_auth(&headers, &state)?;
+
+    let updated_plugin = {
+        let mut config = state.system_config.lock().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "system config lock failed",
+                }),
+            )
+                .into_response()
+        })?;
+
+        let Some(plugin_index) = config.plugins.iter().position(|plugin| plugin.id == id) else {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ApiError {
+                    error: "plugin not found",
+                }),
+            )
+                .into_response());
+        };
+
+        if let Some(enabled) = update.enabled {
+            config.plugins[plugin_index].enabled = enabled;
+        }
+        if let Some(sync) = update.sync {
+            config.plugins[plugin_index].sync = sync;
+        }
+
+        let updated_plugin = config.plugins[plugin_index].clone();
+
+        persist_plugin_state(&config, state.plugin_state_path.as_ref()).map_err(|error| {
+            error!("failed to persist plugin state: {}", error);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "failed to persist plugin state",
+                }),
+            )
+                .into_response()
+        })?;
+
+        updated_plugin
+    };
+
+    Ok(Json(updated_plugin))
 }
 
 async fn get_network_status(
@@ -164,6 +426,56 @@ async fn get_network_status(
         connected: !interfaces.is_empty(),
         interfaces,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_system_config_exposes_phone_sync_plugin() {
+        let config = default_system_config();
+        assert!(config.filesystem.immutable_root);
+        assert_eq!(config.browser.profile_management, "system");
+        assert_eq!(config.plugins.len(), 1);
+        assert_eq!(config.plugins[0].id, "phone-sync");
+        assert!(config.plugins[0].phone_source_of_truth);
+        assert!(!config.plugins[0].sync.files);
+        assert!(!config.plugins[0].sync.photos);
+        assert!(!config.plugins[0].sync.clipboard);
+    }
+
+    #[test]
+    fn persisted_plugin_state_overrides_defaults() {
+        let base = default_system_config();
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let path = temp_dir.path().join("plugin-state.json");
+        std::fs::write(
+            &path,
+            serde_json::to_string(&PersistedPluginState {
+                plugins: vec![PluginConfig {
+                    id: "phone-sync".to_string(),
+                    display_name: "Phone Sync".to_string(),
+                    kind: "optional-download".to_string(),
+                    enabled: true,
+                    phone_source_of_truth: true,
+                    sync: SyncFeatureFlags {
+                        files: true,
+                        photos: true,
+                        clipboard: false,
+                    },
+                }],
+            })
+            .expect("json"),
+        )
+        .expect("write state");
+
+        let merged = apply_persisted_plugin_state(base, &path);
+        assert!(merged.plugins[0].enabled);
+        assert!(merged.plugins[0].sync.files);
+        assert!(merged.plugins[0].sync.photos);
+        assert!(!merged.plugins[0].sync.clipboard);
+    }
 }
 
 async fn get_battery_status(
@@ -303,7 +615,11 @@ async fn term_ws(
     ws.on_upgrade(move |socket| handle_ws_term(socket, state, id))
 }
 
-fn check_auth_with_token(headers: &HeaderMap, query_token: Option<&str>, state: &AppState) -> Result<(), Response> {
+fn check_auth_with_token(
+    headers: &HeaderMap,
+    query_token: Option<&str>,
+    state: &AppState,
+) -> Result<(), Response> {
     if let Some(token) = query_token {
         if token == state.token {
             return Ok(());

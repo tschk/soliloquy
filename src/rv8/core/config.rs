@@ -27,17 +27,20 @@ impl BrowserDataDirs {
     /// Default writable locations for the browser appliance.
     pub fn appliance() -> Self {
         Self {
-            profile_dir: Self::env_dir("SOLILOQUY_PROFILE_DIR", ".soliloquy/browser/profile"),
-            cache_dir: Self::env_dir("SOLILOQUY_CACHE_DIR", ".soliloquy/browser/cache"),
+            profile_dir: Self::env_dir(
+                "SOLILOQUY_PROFILE_DIR",
+                "/var/lib/soliloquy/browser/profiles/default",
+            ),
+            cache_dir: Self::env_dir("SOLILOQUY_CACHE_DIR", "/var/lib/soliloquy/browser/cache"),
             downloads_dir: Self::env_dir(
                 "SOLILOQUY_DOWNLOADS_DIR",
-                ".soliloquy/browser/downloads",
+                "/var/lib/soliloquy/browser/downloads",
             ),
-            state_dir: Self::env_dir("SOLILOQUY_STATE_DIR", ".soliloquy/browser/state"),
-            logs_dir: Self::env_dir("SOLILOQUY_LOG_DIR", ".soliloquy/browser/logs"),
+            state_dir: Self::env_dir("SOLILOQUY_STATE_DIR", "/var/lib/soliloquy/browser/state"),
+            logs_dir: Self::env_dir("SOLILOQUY_LOG_DIR", "/var/lib/soliloquy/browser/logs"),
             terminal_state_dir: Self::env_dir(
                 "SOLILOQUY_TERMINAL_STATE_DIR",
-                ".soliloquy/browser/terminal",
+                "/var/lib/soliloquy/browser/terminal",
             ),
         }
     }

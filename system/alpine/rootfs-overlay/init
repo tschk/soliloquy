@@ -9,6 +9,11 @@ log "starting early userspace"
 mount -t proc proc /proc || true
 mount -t sysfs sysfs /sys || true
 mount -t tmpfs tmpfs /run || true
+mount -t tmpfs -o mode=755,nosuid,nodev tmpfs /tmp || true
+
+mkdir -p /run/soliloquy /var/log/soliloquy /var/cache/soliloquy || true
+chmod 755 /tmp || true
+chmod 700 /run/soliloquy /var/log/soliloquy /var/cache/soliloquy || true
 
 if ! mount -t devtmpfs devtmpfs /dev 2>/dev/null; then
   log "devtmpfs unavailable; falling back to tmpfs /dev"

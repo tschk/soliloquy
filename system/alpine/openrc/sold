@@ -3,10 +3,11 @@
 description="Soliloquy local server"
 
 command="/usr/local/bin/sold"
-command_args="--port 8080 --static /usr/share/soliloquy/bundle"
 command_user="root"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
+export SOLD_BIND="127.0.0.1:8080"
+export SOLILOQUY_SYSTEM_CONFIG="/etc/soliloquy/system.json"
 
 depend() {
     need localmount

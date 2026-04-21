@@ -21,21 +21,29 @@ fi
 mkdir -p "${ROOTFS}/etc/init.d" "${ROOTFS}/usr/local/bin"
 mkdir -p "${ROOTFS}/etc/local.d"
 mkdir -p "${ROOTFS}/etc/network"
+mkdir -p "${ROOTFS}/etc/soliloquy/plugins"
 mkdir -p \
-  "${ROOTFS}/var/lib/soliloquy/browser/profile" \
+  "${ROOTFS}/var/lib/soliloquy/browser/profiles" \
   "${ROOTFS}/var/lib/soliloquy/browser/cache" \
   "${ROOTFS}/var/lib/soliloquy/browser/downloads" \
   "${ROOTFS}/var/lib/soliloquy/browser/state" \
   "${ROOTFS}/var/lib/soliloquy/browser/logs" \
-  "${ROOTFS}/var/lib/soliloquy/browser/terminal"
+  "${ROOTFS}/var/lib/soliloquy/browser/terminal" \
+  "${ROOTFS}/var/lib/soliloquy/system" \
+  "${ROOTFS}/var/lib/soliloquy/system/plugins"
 
 chmod 700 \
-  "${ROOTFS}/var/lib/soliloquy/browser/profile" \
+  "${ROOTFS}/var/lib/soliloquy/browser/profiles" \
   "${ROOTFS}/var/lib/soliloquy/browser/cache" \
   "${ROOTFS}/var/lib/soliloquy/browser/downloads" \
   "${ROOTFS}/var/lib/soliloquy/browser/state" \
   "${ROOTFS}/var/lib/soliloquy/browser/logs" \
-  "${ROOTFS}/var/lib/soliloquy/browser/terminal"
+  "${ROOTFS}/var/lib/soliloquy/browser/terminal" \
+  "${ROOTFS}/var/lib/soliloquy/system" \
+  "${ROOTFS}/var/lib/soliloquy/system/plugins"
+
+mkdir -p "${ROOTFS}/tmp"
+chmod 755 "${ROOTFS}/tmp"
 
 cp -R "${OVERLAY_DIR}/." "${ROOTFS}/"
 cp "${OPENRC_DIR}/sol-session" "${ROOTFS}/etc/init.d/sol-session"
@@ -75,6 +83,80 @@ EOF
 
 cat > "${ROOTFS}/etc/resolv.conf" <<'EOF'
 nameserver 10.0.2.3
+EOF
+
+cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
+{
+  "filesystem": {
+    "immutable_root": true,
+    "user_home_root": "/home",
+    "user_writable_scope": "home-only",
+    "tmp_policy": {
+      "path": "/tmp",
+      "mode": "system-only"
+    }
+  },
+  "browser": {
+    "profile_management": "system",
+    "profiles_root": "/var/lib/soliloquy/browser/profiles",
+    "cache_root": "/var/lib/soliloquy/browser/cache",
+    "state_root": "/var/lib/soliloquy/browser/state",
+    "logs_root": "/var/lib/soliloquy/browser/logs"
+  },
+  "plugins": [
+    {
+      "id": "phone-sync",
+      "display_name": "Phone Sync",
+      "kind": "optional-download",
+      "enabled": false,
+      "phone_source_of_truth": true,
+      "sync": {
+        "files": false,
+        "photos": false,
+        "clipboard": false
+      }
+    }
+  ]
+}
+EOF
+
+cat > "${ROOTFS}/etc/soliloquy/plugins/phone-sync.json" <<'EOF'
+{
+  "id": "phone-sync",
+  "display_name": "Phone Sync",
+  "kind": "optional-download",
+  "entrypoint": "/var/lib/soliloquy/system/plugins/phone-sync",
+  "phone_source_of_truth": true,
+  "capabilities": [
+    "profile-sync",
+    "device-pairing",
+    "encrypted-relay"
+  ],
+  "sync_features": {
+    "files": false,
+    "photos": false,
+    "clipboard": false
+  }
+}
+EOF
+
+cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-state.json" <<'EOF'
+{
+  "plugins": [
+    {
+      "id": "phone-sync",
+      "display_name": "Phone Sync",
+      "kind": "optional-download",
+      "enabled": false,
+      "phone_source_of_truth": true,
+      "sync": {
+        "files": false,
+        "photos": false,
+        "clipboard": false
+      }
+    }
+  ]
+}
 EOF
 
 cat > "${ROOTFS}/etc/local.d/soliloquy-firstboot.start" <<'EOF'
