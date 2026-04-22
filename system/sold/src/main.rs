@@ -30,6 +30,8 @@ struct AppState {
     plugin_install_state_path: Arc<PathBuf>,
     plugin_manifests: Arc<Vec<PluginManifest>>,
     service_registry: Arc<ServiceRegistry>,
+    update_policy: Arc<UpdatePolicy>,
+    update_state_path: Arc<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -176,6 +178,29 @@ struct PluginInventoryEntry {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct UpdatePolicy {
+    strategy: String,
+    rollback_enabled: bool,
+    channels: Vec<String>,
+    generation_root: String,
+    retained_generations: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct UpdateState {
+    active_generation: String,
+    staged_generation: Option<String>,
+    rollback_generation: Option<String>,
+    last_result: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+struct UpdateStatus {
+    policy: UpdatePolicy,
+    state: UpdateState,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct ServiceRegistry {
     services: Vec<ServiceDefinition>,
 }
@@ -209,6 +234,8 @@ async fn main() -> anyhow::Result<()> {
     let system_config = Arc::new(Mutex::new(load_system_config(plugin_state_path.as_ref())));
     let plugin_manifests = Arc::new(load_plugin_manifests());
     let service_registry = Arc::new(load_service_registry());
+    let update_policy = Arc::new(load_update_policy());
+    let update_state_path = Arc::new(system_update_state_path());
     let ui_dir = std::env::var("SOLD_UI_DIR")
         .unwrap_or_else(|_| "/usr/local/share/soliloquy/ui".to_string());
     let index_file = format!("{ui_dir}/index.html");
@@ -218,6 +245,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/healthz", get(health))
         .route("/v1/system/config", get(get_system_config))
         .route("/v1/system/services", get(get_service_registry))
+        .route("/v1/system/updates", get(get_update_status))
         .route("/v1/plugins", get(get_plugins))
         .route("/v1/plugins/manifests", get(get_plugin_manifests))
         .route("/v1/plugins/{id}/state", post(update_plugin_state))
@@ -246,6 +274,8 @@ async fn main() -> anyhow::Result<()> {
             plugin_install_state_path,
             plugin_manifests,
             service_registry,
+            update_policy,
+            update_state_path,
         });
 
     let bind = std::env::var("SOLD_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
@@ -358,6 +388,25 @@ fn default_plugin_manifests() -> Vec<PluginManifest> {
     }]
 }
 
+fn default_update_policy() -> UpdatePolicy {
+    UpdatePolicy {
+        strategy: "atomic-generations".to_string(),
+        rollback_enabled: true,
+        channels: vec!["stable".to_string()],
+        generation_root: "/sysroot/soliloquy".to_string(),
+        retained_generations: 2,
+    }
+}
+
+fn default_update_state() -> UpdateState {
+    UpdateState {
+        active_generation: "soliloquy-0001".to_string(),
+        staged_generation: None,
+        rollback_generation: None,
+        last_result: "bootstrapped".to_string(),
+    }
+}
+
 fn load_plugin_manifests() -> Vec<PluginManifest> {
     let manifest_dir = std::env::var("SOLILOQUY_PLUGIN_MANIFEST_DIR")
         .unwrap_or_else(|_| "/etc/soliloquy/plugins".to_string());
@@ -422,6 +471,38 @@ fn system_plugin_install_state_path() -> PathBuf {
     std::env::var("SOLILOQUY_PLUGIN_INSTALL_STATE_FILE")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/var/lib/soliloquy/system/plugin-installs.json"))
+}
+
+fn system_update_state_path() -> PathBuf {
+    std::env::var("SOLILOQUY_UPDATE_STATE_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/var/lib/soliloquy/system/update-state.json"))
+}
+
+fn load_update_policy() -> UpdatePolicy {
+    let path = std::env::var("SOLILOQUY_UPDATE_POLICY_FILE")
+        .unwrap_or_else(|_| "/etc/soliloquy/update-policy.json".to_string());
+    match std::fs::read_to_string(&path) {
+        Ok(raw) => serde_json::from_str(&raw).unwrap_or_else(|error| {
+            warn!("failed to parse update policy at {}: {}", path, error);
+            default_update_policy()
+        }),
+        Err(_) => default_update_policy(),
+    }
+}
+
+fn load_update_state(path: &FsPath) -> UpdateState {
+    match std::fs::read_to_string(path) {
+        Ok(raw) => serde_json::from_str(&raw).unwrap_or_else(|error| {
+            warn!(
+                "failed to parse update state at {}: {}",
+                path.display(),
+                error
+            );
+            default_update_state()
+        }),
+        Err(_) => default_update_state(),
+    }
 }
 
 fn load_plugin_install_state(path: &FsPath) -> PersistedPluginInstallState {
@@ -606,6 +687,17 @@ async fn get_service_registry(
 ) -> Result<Json<ServiceRegistry>, Response> {
     check_auth(&headers, &state)?;
     Ok(Json((*state.service_registry).clone()))
+}
+
+async fn get_update_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<UpdateStatus>, Response> {
+    check_auth(&headers, &state)?;
+    Ok(Json(UpdateStatus {
+        policy: (*state.update_policy).clone(),
+        state: load_update_state(state.update_state_path.as_ref()),
+    }))
 }
 
 async fn update_plugin_state(
@@ -864,6 +956,14 @@ mod tests {
             digest,
             "24542161a161a4c7dd3731e98f15bf4e917ed9b595b4b325ab12344f6c6a997e"
         );
+    }
+
+    #[test]
+    fn default_update_policy_enables_rollback() {
+        let policy = default_update_policy();
+        assert_eq!(policy.strategy, "atomic-generations");
+        assert!(policy.rollback_enabled);
+        assert_eq!(policy.channels, vec!["stable".to_string()]);
     }
 }
 

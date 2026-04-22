@@ -76,6 +76,13 @@ These changes are already reflected or scaffolded in the current appliance path:
 - Add a generic encrypted sync service and trust model if cross-device sync is enabled.
 - Replace ad hoc OpenRC service behavior with a more declarative service registry over time.
 
+## Updates And Rollback
+
+- Update policy lives in `/etc/soliloquy/update-policy.json`.
+- Writable update state lives in `/var/lib/soliloquy/system/update-state.json`.
+- The current strategy is `atomic-generations` with rollback enabled.
+- This mirrors the direction borrowed from Solaris boot environments, Fuchsia system updates, and modern image-based Linux systems.
+
 ## Why These Changes
 
 The operating system research pushed the design in a consistent direction:

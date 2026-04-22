@@ -229,6 +229,16 @@ cat > "${ROOTFS}/etc/soliloquy/services.json" <<'EOF'
 }
 EOF
 
+cat > "${ROOTFS}/etc/soliloquy/update-policy.json" <<'EOF'
+{
+  "strategy": "atomic-generations",
+  "rollback_enabled": true,
+  "channels": ["stable"],
+  "generation_root": "/sysroot/soliloquy",
+  "retained_generations": 2
+}
+EOF
+
 cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-state.json" <<'EOF'
 {
   "plugins": [
@@ -244,6 +254,15 @@ cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-state.json" <<'EOF'
       }
     }
   ]
+}
+EOF
+
+cat > "${ROOTFS}/var/lib/soliloquy/system/update-state.json" <<'EOF'
+{
+  "active_generation": "soliloquy-0001",
+  "staged_generation": null,
+  "rollback_generation": null,
+  "last_result": "bootstrapped"
 }
 EOF
 
