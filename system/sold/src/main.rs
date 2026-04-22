@@ -13,6 +13,7 @@ use axum::{Json, Router};
 use futures_util::StreamExt;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tower_http::cors::{Any, CorsLayer};
@@ -26,6 +27,8 @@ struct AppState {
     term_sessions: Arc<Mutex<HashMap<String, TermSession>>>,
     system_config: Arc<Mutex<SystemConfig>>,
     plugin_state_path: Arc<PathBuf>,
+    plugin_install_state_path: Arc<PathBuf>,
+    plugin_manifests: Arc<Vec<PluginManifest>>,
     service_registry: Arc<ServiceRegistry>,
 }
 
@@ -126,6 +129,53 @@ struct PersistedPluginState {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PluginManifest {
+    id: String,
+    display_name: String,
+    kind: String,
+    entrypoint: String,
+    capabilities: Vec<String>,
+    sync_features: SyncFeatureFlags,
+    #[serde(default)]
+    packages: Vec<PluginPackage>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PluginPackage {
+    version: String,
+    filename: String,
+    sha256: String,
+    signature: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PersistedPluginInstallState {
+    plugins: Vec<PluginInstallRecord>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PluginInstallRecord {
+    id: String,
+    installed: bool,
+    version: Option<String>,
+    source_path: Option<String>,
+    sha256: Option<String>,
+    verified: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct PluginInstallRequest {
+    version: String,
+    source_path: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+struct PluginInventoryEntry {
+    manifest: PluginManifest,
+    install: Option<PluginInstallRecord>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct ServiceRegistry {
     services: Vec<ServiceDefinition>,
 }
@@ -155,7 +205,9 @@ async fn main() -> anyhow::Result<()> {
         "dev-token-change-me".to_string()
     });
     let plugin_state_path = Arc::new(system_plugin_state_path());
+    let plugin_install_state_path = Arc::new(system_plugin_install_state_path());
     let system_config = Arc::new(Mutex::new(load_system_config(plugin_state_path.as_ref())));
+    let plugin_manifests = Arc::new(load_plugin_manifests());
     let service_registry = Arc::new(load_service_registry());
     let ui_dir = std::env::var("SOLD_UI_DIR")
         .unwrap_or_else(|_| "/usr/local/share/soliloquy/ui".to_string());
@@ -167,7 +219,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/system/config", get(get_system_config))
         .route("/v1/system/services", get(get_service_registry))
         .route("/v1/plugins", get(get_plugins))
+        .route("/v1/plugins/manifests", get(get_plugin_manifests))
         .route("/v1/plugins/{id}/state", post(update_plugin_state))
+        .route("/v1/plugins/{id}/install", post(stage_plugin_install))
         .route("/v1/status/network", get(get_network_status))
         .route("/v1/status/battery", get(get_battery_status))
         .route("/v1/power/{action}", post(power_action))
@@ -189,6 +243,8 @@ async fn main() -> anyhow::Result<()> {
             term_sessions: Arc::new(Mutex::new(HashMap::new())),
             system_config,
             plugin_state_path,
+            plugin_install_state_path,
+            plugin_manifests,
             service_registry,
         });
 
@@ -277,6 +333,67 @@ fn default_service_registry() -> ServiceRegistry {
     }
 }
 
+fn default_plugin_manifests() -> Vec<PluginManifest> {
+    vec![PluginManifest {
+        id: "remote-sync".to_string(),
+        display_name: "Remote Sync".to_string(),
+        kind: "optional-download".to_string(),
+        entrypoint: "/var/lib/soliloquy/system/plugins/remote-sync".to_string(),
+        capabilities: vec![
+            "profile-sync".to_string(),
+            "encrypted-relay".to_string(),
+            "cross-device-sync".to_string(),
+        ],
+        sync_features: SyncFeatureFlags {
+            files: false,
+            photos: false,
+            clipboard: false,
+        },
+        packages: vec![PluginPackage {
+            version: "0.1.0".to_string(),
+            filename: "remote-sync-0.1.0.sqplug".to_string(),
+            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            signature: "dev-signature-placeholder".to_string(),
+        }],
+    }]
+}
+
+fn load_plugin_manifests() -> Vec<PluginManifest> {
+    let manifest_dir = std::env::var("SOLILOQUY_PLUGIN_MANIFEST_DIR")
+        .unwrap_or_else(|_| "/etc/soliloquy/plugins".to_string());
+    let Ok(entries) = std::fs::read_dir(&manifest_dir) else {
+        return default_plugin_manifests();
+    };
+
+    let mut manifests = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            warn!("failed to read plugin manifest at {}", path.display());
+            continue;
+        };
+        match serde_json::from_str::<PluginManifest>(&raw) {
+            Ok(manifest) => manifests.push(manifest),
+            Err(error) => warn!(
+                "failed to parse plugin manifest at {}: {}",
+                path.display(),
+                error
+            ),
+        }
+    }
+
+    if manifests.is_empty() {
+        default_plugin_manifests()
+    } else {
+        manifests.sort_by(|a, b| a.id.cmp(&b.id));
+        manifests
+    }
+}
+
 fn load_service_registry() -> ServiceRegistry {
     let path = std::env::var("SOLILOQUY_SERVICE_REGISTRY")
         .unwrap_or_else(|_| "/etc/soliloquy/services.json".to_string());
@@ -299,6 +416,49 @@ fn system_plugin_state_path() -> PathBuf {
     std::env::var("SOLILOQUY_PLUGIN_STATE_FILE")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("/var/lib/soliloquy/system/plugin-state.json"))
+}
+
+fn system_plugin_install_state_path() -> PathBuf {
+    std::env::var("SOLILOQUY_PLUGIN_INSTALL_STATE_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/var/lib/soliloquy/system/plugin-installs.json"))
+}
+
+fn load_plugin_install_state(path: &FsPath) -> PersistedPluginInstallState {
+    match std::fs::read_to_string(path) {
+        Ok(raw) => serde_json::from_str(&raw).unwrap_or_else(|error| {
+            warn!(
+                "failed to parse plugin install state at {}: {}",
+                path.display(),
+                error
+            );
+            PersistedPluginInstallState {
+                plugins: Vec::new(),
+            }
+        }),
+        Err(_) => PersistedPluginInstallState {
+            plugins: Vec::new(),
+        },
+    }
+}
+
+fn persist_plugin_install_state(
+    state: &PersistedPluginInstallState,
+    path: &FsPath,
+) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    let encoded = serde_json::to_string_pretty(state).context("failed to encode install state")?;
+    std::fs::write(path, encoded).with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn sha256_file(path: &FsPath) -> anyhow::Result<String> {
+    let bytes =
+        std::fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
+    let digest = Sha256::digest(bytes);
+    Ok(format!("{:x}", digest))
 }
 
 fn load_system_config(plugin_state_path: &FsPath) -> SystemConfig {
@@ -418,6 +578,28 @@ async fn get_plugins(
     Ok(Json(config.plugins.clone()))
 }
 
+async fn get_plugin_manifests(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<PluginInventoryEntry>>, Response> {
+    check_auth(&headers, &state)?;
+    let installs = load_plugin_install_state(state.plugin_install_state_path.as_ref());
+    let entries = state
+        .plugin_manifests
+        .iter()
+        .cloned()
+        .map(|manifest| PluginInventoryEntry {
+            install: installs
+                .plugins
+                .iter()
+                .find(|item| item.id == manifest.id)
+                .cloned(),
+            manifest,
+        })
+        .collect();
+    Ok(Json(entries))
+}
+
 async fn get_service_registry(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -479,6 +661,99 @@ async fn update_plugin_state(
     };
 
     Ok(Json(updated_plugin))
+}
+
+async fn stage_plugin_install(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(request): Json<PluginInstallRequest>,
+) -> Result<Json<PluginInstallRecord>, Response> {
+    check_auth(&headers, &state)?;
+
+    let Some(manifest) = state
+        .plugin_manifests
+        .iter()
+        .find(|manifest| manifest.id == id)
+    else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiError {
+                error: "plugin not found",
+            }),
+        )
+            .into_response());
+    };
+
+    let Some(package) = manifest
+        .packages
+        .iter()
+        .find(|package| package.version == request.version)
+    else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "plugin package not found",
+            }),
+        )
+            .into_response());
+    };
+
+    let source_path = PathBuf::from(&request.source_path);
+    let actual_sha256 = sha256_file(&source_path).map_err(|error| {
+        error!("failed to hash plugin package: {}", error);
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "invalid plugin package path",
+            }),
+        )
+            .into_response()
+    })?;
+
+    if actual_sha256 != package.sha256 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError {
+                error: "plugin package checksum mismatch",
+            }),
+        )
+            .into_response());
+    }
+
+    let record = PluginInstallRecord {
+        id: manifest.id.clone(),
+        installed: true,
+        version: Some(package.version.clone()),
+        source_path: Some(request.source_path.clone()),
+        sha256: Some(actual_sha256),
+        verified: true,
+    };
+
+    let mut installs = load_plugin_install_state(state.plugin_install_state_path.as_ref());
+    if let Some(existing) = installs
+        .plugins
+        .iter_mut()
+        .find(|item| item.id == record.id)
+    {
+        *existing = record.clone();
+    } else {
+        installs.plugins.push(record.clone());
+    }
+    persist_plugin_install_state(&installs, state.plugin_install_state_path.as_ref()).map_err(
+        |error| {
+            error!("failed to persist plugin install state: {}", error);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError {
+                    error: "failed to persist plugin install state",
+                }),
+            )
+                .into_response()
+        },
+    )?;
+
+    Ok(Json(record))
 }
 
 async fn get_network_status(
@@ -568,6 +843,27 @@ mod tests {
         assert_eq!(registry.services[1].id, "sol-session");
         assert_eq!(registry.services[2].id, "remote-sync");
         assert!(registry.services[2].optional);
+    }
+
+    #[test]
+    fn default_plugin_manifests_include_remote_sync_package() {
+        let manifests = default_plugin_manifests();
+        assert_eq!(manifests.len(), 1);
+        assert_eq!(manifests[0].id, "remote-sync");
+        assert_eq!(manifests[0].packages.len(), 1);
+        assert_eq!(manifests[0].packages[0].version, "0.1.0");
+    }
+
+    #[test]
+    fn sha256_file_matches_expected_digest() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let path = temp_dir.path().join("plugin.sqplug");
+        std::fs::write(&path, b"soliloquy-plugin").expect("write plugin file");
+        let digest = sha256_file(&path).expect("digest");
+        assert_eq!(
+            digest,
+            "24542161a161a4c7dd3731e98f15bf4e917ed9b595b4b325ab12344f6c6a997e"
+        );
     }
 }
 

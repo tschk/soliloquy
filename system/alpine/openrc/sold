@@ -9,6 +9,8 @@ pidfile="/run/${RC_SVCNAME}.pid"
 export SOLD_BIND="127.0.0.1:8080"
 export SOLILOQUY_SYSTEM_CONFIG="/etc/soliloquy/system.json"
 export SOLILOQUY_PLUGIN_STATE_FILE="/var/lib/soliloquy/system/plugin-state.json"
+export SOLILOQUY_PLUGIN_INSTALL_STATE_FILE="/var/lib/soliloquy/system/plugin-installs.json"
+export SOLILOQUY_PLUGIN_MANIFEST_DIR="/etc/soliloquy/plugins"
 
 depend() {
     need localmount

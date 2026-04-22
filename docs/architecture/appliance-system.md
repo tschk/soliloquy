@@ -28,11 +28,16 @@
 
 - Plugins are optional downloads rather than part of the immutable base.
 - Plugin policy defaults live in `/etc/soliloquy/system.json`.
+- Plugin package manifests live in `/etc/soliloquy/plugins/*.json`.
 - Writable plugin state lives in `/var/lib/soliloquy/system/plugin-state.json`.
+- Writable plugin install state lives in `/var/lib/soliloquy/system/plugin-installs.json`.
 - The first plugin is `remote-sync`, with separate feature flags for:
   - file sync
   - photo sync
   - clipboard sync
+
+Package staging now requires a manifest-declared version and checksum match before
+the install state is marked verified.
 
 ## Service Architecture
 

@@ -171,7 +171,21 @@ cat > "${ROOTFS}/etc/soliloquy/plugins/remote-sync.json" <<'EOF'
     "files": false,
     "photos": false,
     "clipboard": false
-  }
+  },
+  "packages": [
+    {
+      "version": "0.1.0",
+      "filename": "remote-sync-0.1.0.sqplug",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "signature": "dev-signature-placeholder"
+    }
+  ]
+}
+EOF
+
+cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-installs.json" <<'EOF'
+{
+  "plugins": []
 }
 EOF
 
