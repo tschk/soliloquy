@@ -143,10 +143,10 @@ cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
   },
   "package_manager": {
     "id": "wax",
-    "mode": "developer-only",
+    "mode": "system-packages",
     "binary": "/usr/local/bin/wax",
     "root": "/var/lib/soliloquy/wax",
-    "developer_mode_required": true
+    "developer_mode_required": false
   },
   "plugins": [
     {
@@ -168,17 +168,18 @@ cat > "${ROOTFS}/etc/soliloquy/package-manager.json" <<'EOF'
 {
   "id": "wax",
   "display_name": "Wax",
-  "mode": "developer-only",
+  "mode": "system-packages",
   "binary": "/usr/local/bin/wax",
   "state_root": "/var/lib/soliloquy/wax",
-  "developer_mode_required": true,
+  "developer_mode_required": false,
   "manages": [
-    "developer-tools",
-    "optional-userland-packages"
+    "system-packages",
+    "userland-packages",
+    "generations",
+    "manifests"
   ],
   "does_not_manage": [
-    "immutable-base-image",
-    "atomic-system-generations"
+    "browser-profile-vault"
   ]
 }
 EOF

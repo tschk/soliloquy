@@ -85,10 +85,10 @@ These changes are already reflected or scaffolded in the current appliance path:
 
 ## Package Management
 
-- Wax is the declared package manager for Soliloquy developer mode.
-- Wax manages optional userland packages and developer tooling.
-- Wax does not manage the immutable base image or atomic system generations.
-- This keeps the browser appliance minimal while still giving developer mode a fast package workflow.
+- Wax is the declared package manager for Soliloquy system packages.
+- Soliloquy should track Wax's `system-packages` direction rather than the simpler Homebrew-style user package workflow.
+- Wax is expected to manage generations, manifests, and system/userland package state under `/var/lib/soliloquy/wax`.
+- The browser profile vault remains outside package-manager ownership.
 
 ## Why These Changes
 

@@ -337,10 +337,10 @@ fn default_system_config() -> SystemConfig {
         },
         package_manager: PackageManagerPolicy {
             id: "wax".to_string(),
-            mode: "developer-only".to_string(),
+            mode: "system-packages".to_string(),
             binary: "/usr/local/bin/wax".to_string(),
             root: "/var/lib/soliloquy/wax".to_string(),
-            developer_mode_required: true,
+            developer_mode_required: false,
         },
         plugins: vec![PluginConfig {
             id: "remote-sync".to_string(),
@@ -360,18 +360,17 @@ fn default_package_manager_config() -> PackageManagerConfig {
     PackageManagerConfig {
         id: "wax".to_string(),
         display_name: "Wax".to_string(),
-        mode: "developer-only".to_string(),
+        mode: "system-packages".to_string(),
         binary: "/usr/local/bin/wax".to_string(),
         state_root: "/var/lib/soliloquy/wax".to_string(),
-        developer_mode_required: true,
+        developer_mode_required: false,
         manages: vec![
-            "developer-tools".to_string(),
-            "optional-userland-packages".to_string(),
+            "system-packages".to_string(),
+            "userland-packages".to_string(),
+            "generations".to_string(),
+            "manifests".to_string(),
         ],
-        does_not_manage: vec![
-            "immutable-base-image".to_string(),
-            "atomic-system-generations".to_string(),
-        ],
+        does_not_manage: vec!["browser-profile-vault".to_string()],
     }
 }
 
@@ -965,7 +964,8 @@ mod tests {
         assert!(config.filesystem.immutable_root);
         assert_eq!(config.browser.profile_management, "system");
         assert_eq!(config.package_manager.id, "wax");
-        assert!(config.package_manager.developer_mode_required);
+        assert_eq!(config.package_manager.mode, "system-packages");
+        assert!(!config.package_manager.developer_mode_required);
         assert_eq!(config.plugins.len(), 1);
         assert_eq!(config.plugins[0].id, "remote-sync");
         assert!(!config.plugins[0].sync.files);
@@ -1047,9 +1047,10 @@ mod tests {
     fn default_package_manager_config_uses_wax() {
         let config = default_package_manager_config();
         assert_eq!(config.id, "wax");
-        assert_eq!(config.mode, "developer-only");
-        assert!(config.developer_mode_required);
-        assert!(config.manages.contains(&"developer-tools".to_string()));
+        assert_eq!(config.mode, "system-packages");
+        assert!(!config.developer_mode_required);
+        assert!(config.manages.contains(&"system-packages".to_string()));
+        assert!(config.manages.contains(&"generations".to_string()));
     }
 }
 
