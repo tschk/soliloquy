@@ -83,6 +83,13 @@ These changes are already reflected or scaffolded in the current appliance path:
 - The current strategy is `atomic-generations` with rollback enabled.
 - This mirrors the direction borrowed from Solaris boot environments, Fuchsia system updates, and modern image-based Linux systems.
 
+## Package Management
+
+- Wax is the declared package manager for Soliloquy developer mode.
+- Wax manages optional userland packages and developer tooling.
+- Wax does not manage the immutable base image or atomic system generations.
+- This keeps the browser appliance minimal while still giving developer mode a fast package workflow.
+
 ## Why These Changes
 
 The operating system research pushed the design in a consistent direction:

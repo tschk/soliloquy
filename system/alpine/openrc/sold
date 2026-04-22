@@ -13,6 +13,7 @@ export SOLILOQUY_PLUGIN_INSTALL_STATE_FILE="/var/lib/soliloquy/system/plugin-ins
 export SOLILOQUY_PLUGIN_MANIFEST_DIR="/etc/soliloquy/plugins"
 export SOLILOQUY_UPDATE_POLICY_FILE="/etc/soliloquy/update-policy.json"
 export SOLILOQUY_UPDATE_STATE_FILE="/var/lib/soliloquy/system/update-state.json"
+export SOLILOQUY_PACKAGE_MANAGER_FILE="/etc/soliloquy/package-manager.json"
 
 depend() {
     need localmount

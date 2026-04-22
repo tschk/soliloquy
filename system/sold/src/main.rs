@@ -77,6 +77,7 @@ struct TermSessionResponse {
 struct SystemConfig {
     filesystem: FilesystemPolicy,
     browser: BrowserPolicy,
+    package_manager: PackageManagerPolicy,
     plugins: Vec<PluginConfig>,
 }
 
@@ -101,6 +102,27 @@ struct BrowserPolicy {
     cache_root: String,
     state_root: String,
     logs_root: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PackageManagerPolicy {
+    id: String,
+    mode: String,
+    binary: String,
+    root: String,
+    developer_mode_required: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PackageManagerConfig {
+    id: String,
+    display_name: String,
+    mode: String,
+    binary: String,
+    state_root: String,
+    developer_mode_required: bool,
+    manages: Vec<String>,
+    does_not_manage: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -244,6 +266,10 @@ async fn main() -> anyhow::Result<()> {
     let api = Router::new()
         .route("/healthz", get(health))
         .route("/v1/system/config", get(get_system_config))
+        .route(
+            "/v1/system/package-manager",
+            get(get_package_manager_config),
+        )
         .route("/v1/system/services", get(get_service_registry))
         .route("/v1/system/updates", get(get_update_status))
         .route("/v1/plugins", get(get_plugins))
@@ -309,6 +335,13 @@ fn default_system_config() -> SystemConfig {
             state_root: "/var/lib/soliloquy/browser/state".to_string(),
             logs_root: "/var/lib/soliloquy/browser/logs".to_string(),
         },
+        package_manager: PackageManagerPolicy {
+            id: "wax".to_string(),
+            mode: "developer-only".to_string(),
+            binary: "/usr/local/bin/wax".to_string(),
+            root: "/var/lib/soliloquy/wax".to_string(),
+            developer_mode_required: true,
+        },
         plugins: vec![PluginConfig {
             id: "remote-sync".to_string(),
             display_name: "Remote Sync".to_string(),
@@ -320,6 +353,40 @@ fn default_system_config() -> SystemConfig {
                 clipboard: false,
             },
         }],
+    }
+}
+
+fn default_package_manager_config() -> PackageManagerConfig {
+    PackageManagerConfig {
+        id: "wax".to_string(),
+        display_name: "Wax".to_string(),
+        mode: "developer-only".to_string(),
+        binary: "/usr/local/bin/wax".to_string(),
+        state_root: "/var/lib/soliloquy/wax".to_string(),
+        developer_mode_required: true,
+        manages: vec![
+            "developer-tools".to_string(),
+            "optional-userland-packages".to_string(),
+        ],
+        does_not_manage: vec![
+            "immutable-base-image".to_string(),
+            "atomic-system-generations".to_string(),
+        ],
+    }
+}
+
+fn load_package_manager_config() -> PackageManagerConfig {
+    let path = std::env::var("SOLILOQUY_PACKAGE_MANAGER_FILE")
+        .unwrap_or_else(|_| "/etc/soliloquy/package-manager.json".to_string());
+    match std::fs::read_to_string(&path) {
+        Ok(raw) => serde_json::from_str(&raw).unwrap_or_else(|error| {
+            warn!(
+                "failed to parse package manager config at {}: {}",
+                path, error
+            );
+            default_package_manager_config()
+        }),
+        Err(_) => default_package_manager_config(),
     }
 }
 
@@ -642,6 +709,14 @@ async fn get_system_config(
     Ok(Json(config.clone()))
 }
 
+async fn get_package_manager_config(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<PackageManagerConfig>, Response> {
+    check_auth(&headers, &state)?;
+    Ok(Json(load_package_manager_config()))
+}
+
 async fn get_plugins(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -889,6 +964,8 @@ mod tests {
         let config = default_system_config();
         assert!(config.filesystem.immutable_root);
         assert_eq!(config.browser.profile_management, "system");
+        assert_eq!(config.package_manager.id, "wax");
+        assert!(config.package_manager.developer_mode_required);
         assert_eq!(config.plugins.len(), 1);
         assert_eq!(config.plugins[0].id, "remote-sync");
         assert!(!config.plugins[0].sync.files);
@@ -964,6 +1041,15 @@ mod tests {
         assert_eq!(policy.strategy, "atomic-generations");
         assert!(policy.rollback_enabled);
         assert_eq!(policy.channels, vec!["stable".to_string()]);
+    }
+
+    #[test]
+    fn default_package_manager_config_uses_wax() {
+        let config = default_package_manager_config();
+        assert_eq!(config.id, "wax");
+        assert_eq!(config.mode, "developer-only");
+        assert!(config.developer_mode_required);
+        assert!(config.manages.contains(&"developer-tools".to_string()));
     }
 }
 

@@ -67,7 +67,8 @@ mkdir -p \
   "${ROOTFS}/var/lib/soliloquy/browser/logs" \
   "${ROOTFS}/var/lib/soliloquy/browser/terminal" \
   "${ROOTFS}/var/lib/soliloquy/system" \
-  "${ROOTFS}/var/lib/soliloquy/system/plugins"
+  "${ROOTFS}/var/lib/soliloquy/system/plugins" \
+  "${ROOTFS}/var/lib/soliloquy/wax"
 
 chmod 700 \
   "${ROOTFS}/var/lib/soliloquy/browser/profiles" \
@@ -140,6 +141,13 @@ cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
     "state_root": "/var/lib/soliloquy/browser/state",
     "logs_root": "/var/lib/soliloquy/browser/logs"
   },
+  "package_manager": {
+    "id": "wax",
+    "mode": "developer-only",
+    "binary": "/usr/local/bin/wax",
+    "root": "/var/lib/soliloquy/wax",
+    "developer_mode_required": true
+  },
   "plugins": [
     {
       "id": "remote-sync",
@@ -152,6 +160,25 @@ cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
         "clipboard": false
       }
     }
+  ]
+}
+EOF
+
+cat > "${ROOTFS}/etc/soliloquy/package-manager.json" <<'EOF'
+{
+  "id": "wax",
+  "display_name": "Wax",
+  "mode": "developer-only",
+  "binary": "/usr/local/bin/wax",
+  "state_root": "/var/lib/soliloquy/wax",
+  "developer_mode_required": true,
+  "manages": [
+    "developer-tools",
+    "optional-userland-packages"
+  ],
+  "does_not_manage": [
+    "immutable-base-image",
+    "atomic-system-generations"
   ]
 }
 EOF

@@ -17,6 +17,11 @@ cp "target/x86_64-unknown-linux-musl/release/soliloquy_shell" "${ROOTFS_DIR}/usr
 cp "target/x86_64-unknown-linux-musl/release/sold" "${ROOTFS_DIR}/usr/local/bin/"
 cp "target/x86_64-unknown-linux-musl/release/rv8" "${ROOTFS_DIR}/usr/local/bin/"
 
+WAX_BIN="${PROJECT_ROOT}/../wax/build/wax"
+if [ -x "${WAX_BIN}" ]; then
+    cp "${WAX_BIN}" "${ROOTFS_DIR}/usr/local/bin/wax"
+fi
+
 # Create sol-session script
 cat > "${ROOTFS_DIR}/usr/local/bin/sol-session" << 'EOF'
 #!/bin/sh
