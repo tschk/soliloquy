@@ -8,6 +8,7 @@ use log::{info, debug, warn, error};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
+use crate::js_engine::JsEngineStatus;
 use crate::v8_runtime::V8Runtime;
 use crate::browser_optimizations::{TabResidencyManager, GcScheduler, MemoryPressureMonitor};
 /// Main embedder context that bridges Servo browser engine with the shell runtime.
@@ -27,9 +28,9 @@ pub struct ServoEmbedder {
     display_session: Option<Arc<Mutex<DisplaySession>>>,
     /// Thread-safe queue for buffering input events before dispatch to Servo.
     event_queue: Arc<Mutex<Vec<InputEvent>>>,
-    /// V8 JavaScript runtime instance for executing web page scripts.
-    /// Initialized lazily on first use so startup stays cheap.
-    v8_runtime: Option<V8Runtime>,
+    /// JavaScript runtime ownership state. We begin in Servo-managed mode and
+    /// only promote into the embedder-side V8 experiment when a caller needs it.
+    js_runtime: EmbedderJsRuntime,
     /// Servo webview handle (placeholder for actual Servo browser instance).
     webview: Option<Arc<Mutex<ServoWebview>>>,
     /// Currently loaded URL, used for reload and navigation state.
@@ -95,6 +96,45 @@ pub struct ServoWebview {
     pub is_loading: bool,
 }
 
+enum EmbedderJsRuntime {
+    ServoManaged(JsEngineStatus),
+    V8(V8Runtime),
+}
+
+impl EmbedderJsRuntime {
+    fn servo_managed() -> Self {
+        Self::ServoManaged(JsEngineStatus::servo_managed_from_environment())
+    }
+
+    fn status(&self) -> JsEngineStatus {
+        match self {
+            Self::ServoManaged(status) => status.clone(),
+            Self::V8(runtime) => runtime.status(),
+        }
+    }
+
+    fn maybe_runtime_mut(&mut self) -> Option<&mut V8Runtime> {
+        match self {
+            Self::V8(runtime) => Some(runtime),
+            Self::ServoManaged(_) => None,
+        }
+    }
+
+    fn ensure_v8_runtime(&mut self) -> Result<&mut V8Runtime, String> {
+        if matches!(self, Self::ServoManaged(_)) {
+            let mut runtime = V8Runtime::new()
+                .map_err(|e| format!("V8 initialization failed: {}", e))?;
+            runtime.begin_embedder_experiment();
+            *self = Self::V8(runtime);
+        }
+
+        match self {
+            Self::V8(runtime) => Ok(runtime),
+            Self::ServoManaged(_) => Err("failed to activate embedder V8 runtime".to_string()),
+        }
+    }
+}
+
 impl ServoEmbedder {
     /// Creates and initializes a new Servo embedder instance.
     ///
@@ -120,7 +160,7 @@ impl ServoEmbedder {
         let mut embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
-            v8_runtime: None,
+            js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
             state: EmbedderState::Uninitialized,
@@ -148,10 +188,9 @@ impl ServoEmbedder {
 
     /// Lazily initialize the V8 runtime the first time browser execution needs it.
     fn ensure_v8_runtime(&mut self) -> Result<&mut V8Runtime, String> {
-        if self.v8_runtime.is_none() {
+        if self.js_runtime.maybe_runtime_mut().is_none() {
             info!("Initializing V8 runtime on demand");
-            let mut runtime = V8Runtime::new()
-                .map_err(|e| format!("V8 initialization failed: {}", e))?;
+            let runtime = self.js_runtime.ensure_v8_runtime()?;
 
             // One tiny warmup script gives us a fast first real navigation without
             // paying the cost during constructor startup.
@@ -159,14 +198,8 @@ impl ServoEmbedder {
                 Ok(result) => debug!("V8 warmup result: {}", result),
                 Err(e) => warn!("V8 warmup script failed: {}", e),
             }
-
-            self.v8_runtime = Some(runtime);
         }
-
-        Ok(self
-            .v8_runtime
-            .as_mut()
-            .expect("V8 runtime must exist after initialization"))
+        self.js_runtime.ensure_v8_runtime()
     }
 
     /// Lazily create the display session used by presentation code.
@@ -311,7 +344,7 @@ impl ServoEmbedder {
         // servo::input::handle_event(event);
         
         // Execute JavaScript for input handling if needed
-        if let Some(ref mut runtime) = self.v8_runtime {
+        if let Some(runtime) = self.js_runtime.maybe_runtime_mut() {
             match event {
                 InputEvent::Touch { x, y } => {
                     let script = format!(
@@ -385,7 +418,7 @@ impl ServoEmbedder {
         }
         
         // Execute JavaScript for frame presentation
-        if let Some(ref mut runtime) = self.v8_runtime {
+        if let Some(runtime) = self.js_runtime.maybe_runtime_mut() {
             let frame_script = r#"
             if (window.onFrame) {
                 window.onFrame();
@@ -416,6 +449,11 @@ impl ServoEmbedder {
     /// - `None`: No URL has been loaded yet
     pub fn get_current_url(&self) -> Option<&String> {
         self.current_url.as_ref()
+    }
+
+    /// Report which JavaScript engine currently owns execution in the embedder.
+    pub fn js_engine_status(&self) -> JsEngineStatus {
+        self.js_runtime.status()
     }
     
     /// Retrieves metadata about the current webview state.
@@ -676,7 +714,7 @@ mod tests {
         let mut embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
-            v8_runtime: None,
+            js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
             state: EmbedderState::Uninitialized,
@@ -696,7 +734,7 @@ mod tests {
         let mut embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
-            v8_runtime: None,
+            js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
             state: EmbedderState::Initializing,
@@ -758,7 +796,7 @@ mod tests {
         let embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
-            v8_runtime: None,
+            js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
             state: EmbedderState::Error("Test error".to_string()),
@@ -783,5 +821,28 @@ mod tests {
     fn test_display_present() {
         let mut embedder = ServoEmbedder::new().expect("Should initialize");
         assert!(embedder.present().is_ok());
+    }
+
+    #[test]
+    fn test_embedder_starts_with_servo_owned_javascript() {
+        let embedder = ServoEmbedder::new().expect("Should initialize");
+        let status = embedder.js_engine_status();
+
+        assert!(status.servo_controls_javascript);
+        assert_eq!(status.active_engine, crate::js_engine::JsEngineKind::Mozjs);
+    }
+
+    #[test]
+    fn test_execute_js_promotes_embedder_to_v8_experiment() {
+        let mut embedder = ServoEmbedder::new().expect("Should initialize");
+        let result = embedder.execute_js("1 + 1").expect("script should execute");
+        let status = embedder.js_engine_status();
+
+        assert_eq!(result, "2");
+        assert_eq!(status.active_engine, crate::js_engine::JsEngineKind::V8Mock);
+        assert_eq!(
+            status.swap_stage,
+            crate::js_engine::JsEngineSwapStage::EmbedderV8Experiment
+        );
     }
 }

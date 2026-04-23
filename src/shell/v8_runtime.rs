@@ -5,13 +5,15 @@
 //! 
 //! MOCK IMPLEMENTATION - rusty_v8 dependency missing in environment
 
-use log::{info, debug};
+use log::{debug, info};
 use std::sync::Mutex;
+
+use crate::js_engine::{JsEngineKind, JsEngineStatus, JsEngineSwapStage};
 
 /// V8 Runtime context wrapper
 pub struct V8Runtime {
-    // Mock fields
     _lock: Mutex<()>,
+    engine_status: JsEngineStatus,
 }
 
 impl V8Runtime {
@@ -22,6 +24,7 @@ impl V8Runtime {
         
         Ok(V8Runtime {
             _lock: Mutex::new(()),
+            engine_status: JsEngineStatus::embedder_v8_mock_from_environment(),
         })
     }
     
@@ -70,10 +73,30 @@ impl V8Runtime {
     pub fn is_initialized(&self) -> bool {
         true
     }
+
+    /// Report which engine is actually executing JavaScript for this runtime handle.
+    pub fn engine_kind(&self) -> JsEngineKind {
+        self.engine_status.active_engine
+    }
+
+    /// Report the current swap stage from the shell's point of view.
+    pub fn swap_stage(&self) -> JsEngineSwapStage {
+        self.engine_status.swap_stage
+    }
+
+    /// Snapshot of the current engine wiring.
+    pub fn status(&self) -> JsEngineStatus {
+        self.engine_status.clone()
+    }
+
+    /// Mark this runtime as participating in the embedder-side V8 experiment.
+    pub fn begin_embedder_experiment(&mut self) {
+        self.engine_status.swap_stage = JsEngineSwapStage::EmbedderV8Experiment;
+    }
     
     /// Get V8 version information
     pub fn get_version() -> String {
-        "0.0.0 (Mock)".to_string()
+        "mock-v8 placeholder".to_string()
     }
 }
 

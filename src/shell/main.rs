@@ -4,6 +4,7 @@
 
 mod browser_optimizations;
 mod engine_bridge;
+mod js_engine;
 mod optimizations;
 mod platform;
 mod servo_embedder;
