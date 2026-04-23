@@ -72,6 +72,7 @@ launch_session() {
   log "WLR_BACKENDS=${WLR_BACKENDS}"
   log "WLR_RENDERER=${WLR_RENDERER}"
   log "SERVO_DISPLAY_BACKEND=${SERVO_DISPLAY_BACKEND}"
+  log "SOLILOQUY_JS_ENGINE=${SOLILOQUY_JS_ENGINE:-v8-experimental}"
 
   if [ -c "${SERIAL_CONSOLE}" ]; then
     cage -- /usr/local/bin/sol-servo-wrapper >>"${SERIAL_CONSOLE}" 2>&1
@@ -92,6 +93,7 @@ else
   export DISPLAY="${DISPLAY:-:0}"
   export SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-x11}"
   log "SERVO_DISPLAY_BACKEND=${SERVO_DISPLAY_BACKEND}"
+  log "SOLILOQUY_JS_ENGINE=${SOLILOQUY_JS_ENGINE:-v8-experimental}"
   if command -v Xvfb >/dev/null 2>&1; then
     log "starting Xvfb on display ${DISPLAY}"
     Xvfb "${DISPLAY}" -screen 0 1024x768x24 +extension GLX >>"${SERIAL_CONSOLE}" 2>&1 &
