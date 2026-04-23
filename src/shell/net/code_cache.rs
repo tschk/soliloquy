@@ -332,10 +332,20 @@ fn sanitize_filename(url: &str) -> String {
 mod tests {
     use super::*;
     use std::env;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEST_DIR_ID: AtomicU64 = AtomicU64::new(0);
+
+    fn test_cache_dir() -> PathBuf {
+        env::temp_dir().join(format!(
+            "soliloquy_cache_test_{}_{}",
+            current_timestamp(),
+            NEXT_TEST_DIR_ID.fetch_add(1, Ordering::Relaxed),
+        ))
+    }
 
     fn setup_test_cache() -> CodeCache {
-        let temp_dir = env::temp_dir().join(format!("soliloquy_cache_test_{}", current_timestamp()));
-        CodeCache::new(temp_dir, Some(1024 * 1024)).unwrap()
+        CodeCache::new(test_cache_dir(), Some(1024 * 1024)).unwrap()
     }
 
     #[test]
@@ -376,8 +386,7 @@ mod tests {
 
     #[test]
     fn test_lru_eviction() {
-        let temp_dir = env::temp_dir().join(format!("soliloquy_cache_test_{}", current_timestamp()));
-        let mut cache = CodeCache::new(temp_dir, Some(100)).unwrap();
+        let mut cache = CodeCache::new(test_cache_dir(), Some(100)).unwrap();
 
         // Add entries that exceed cache size
         cache.put("url1", "code1", &vec![0; 40]).unwrap();
@@ -431,7 +440,7 @@ mod tests {
 
     #[test]
     fn test_metadata_persistence() {
-        let temp_dir = env::temp_dir().join(format!("soliloquy_cache_test_{}", current_timestamp()));
+        let temp_dir = test_cache_dir();
         
         {
             let mut cache = CodeCache::new(temp_dir.clone(), Some(1024 * 1024)).unwrap();

@@ -1,143 +1,94 @@
 # Soliloquy
 
-Soliloquy is an experimental browser appliance built on Alpine Linux. It uses Servo as its rendering engine and V8 as its JavaScript runtime, targeting x86_64 and ARM64 Linux systems. The project is in early development and is not production-ready.
+Soliloquy is an experimental browser appliance built around a Rust shell, Servo integration work, a V8 runtime layer, and an Alpine-based runtime image. The repository also contains older architecture notes and adjacent experiments, but the code that is wired up today is primarily Linux/Alpine-focused.
 
-## Appliance Architecture
+This project is early-stage and not production-ready.
 
-Soliloquy treats Alpine as a build substrate, not a distro:
+## What Is In This Repo
 
-- **Immutable rootfs**: SquashFS read-only root, tmpfs for writable data
-- **Minimal system**: busybox, openrc, seatd, wlroots/cage, Servo, sold
-- **No logins/shells**: Direct boot to browser session
-- **Appliance model**: Single-purpose browser device
+The root workspace currently contains four Rust packages:
 
-### Services
-- **seatd**: Seat management
-- **sold**: Local static file server (Rust/axum)
-- **sol-session**: Launches cage with Servo fullscreen
+- `src/` - `soliloquy_browser_optimizations`
+- `src/shell/` - `soliloquy-shell`
+- `src/rv8/` - `rv8`
+- `sold/` - `sold`
 
-### Filesystem
-- `/` (squashfs): Immutable system
-- `/tmp`, `/var/log` (tmpfs): Ephemeral
-- `/var/lib/soliloquy`: Browser profile/state (persistent)
+Other important top-level areas:
 
-## Quick Start
+- `system/alpine/` - appliance rootfs assembly, staging, and QEMU scripts
+- `ui/desktop/` - Svelte desktop UI used by the dev flow and Alpine staging
+- `bundle/` - static UI assets served by `sold`
+- `soliloquy-web/` - Crepuscularity-based web UI/runtime experiments
+- `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
+- `docs/` - project docs; some sections are current, some are historical
 
-### Development Mode
-```bash
-./scripts/dev.sh          # Start shell and UI dev server
-./scripts/dev.sh --shell-only  # Shell only
-./scripts/dev.sh --ui-only     # UI only
-./scripts/dev.sh --qemu        # Build for QEMU
+## Architecture Snapshot
+
+- `soliloquy-shell` handles shell/runtime concerns, networking, platform integration, and the Servo/V8 bridge
+- `soliloquy_browser_optimizations` provides cache, memory residency, GPU, network, and V8 support modules
+- `rv8` is the experimental browser/runtime engine crate with IPC, rendering, parsing, and JS execution paths
+- `sold` is a local Axum service that serves bundled UI assets and simple file/settings APIs
+- `system/alpine` packages the runtime into an appliance-style Alpine image and boots it under QEMU
+
+## Build And Run
+
+### Rust workspace
+
+```sh
+cargo build
+cargo test
 ```
 
-### Appliance Build
-```bash
-cd system/alpine
-./setup-host.sh           # Setup build deps
-./qemu-v0.sh             # Full build and run in QEMU
+Targeted packages:
+
+```sh
+cargo test -p soliloquy-shell
+cargo test -p rv8
+cargo test -p sold
 ```
 
-### Manual Build Steps
-```bash
-./build-rootfs.sh        # Build minimal Alpine rootfs
-./ensure-servo-fork.sh   # Build Rust binaries (musl)
-./configure-rootfs.sh    # Apply appliance configuration
-./stage-soliloquy-artifacts.sh  # Stage binaries and bundle
+### Local dev flow
+
+```sh
+./scripts/dev.sh
+./scripts/dev.sh --shell-only
+./scripts/dev.sh --ui-only
+./scripts/dev.sh --qemu
 ```
 
-## Build System
+`./scripts/dev.sh` starts the Rust shell and the Svelte UI dev server from `ui/desktop/`.
 
-Alpine is used only for building the rootfs artifact:
-- `apk` assembles minimal packages at build time
-- Custom OpenRC services replace Alpine defaults
-- Final image is squashfs + qcow2 for QEMU
+### Alpine appliance / QEMU flow
 
-At runtime, Alpine components are invisible - it's a pure appliance.
-
-## Browser APIs
-
-The Rust browser connects to Alpine kernel via standard Linux syscalls:
-- **Networking**: reqwest/tokio (compatible with musl)
-- **Display**: winit + WGPU (Wayland/X11)
-- **Storage**: sled (embedded, no Alpine deps)
-- **IPC**: ipc-channel (cross-platform)
-
-Musl target ensures clean static linking and Alpine compatibility.
-
-## Build Systems
-
-- Cargo: cargo build / cargo test (workspace members)
-
-## Project Layout
-
-    src/shell/          Rust shell: servo_embedder, v8_runtime, engine_bridge, platform/*
-    src/shell/net/      Networking: quic.rs, resource_loader.rs, connection_manager.rs,
-                        speculation.rs, code_cache.rs
-    src/rv8/            RV8 browser engine: core/, ipc/, renderer/, js/, servo_embed/
-    src/memory/         Tab residency, compression, pressure monitoring, disk storage
-    src/gpu/            layout_compute.rs, compositor.rs, wgpu_integration.rs
-    src/cache/          unified.rs (LRU), texture_atlas.rs, disk_cache.rs
-    docs/               ARCHITECTURE.md, browser_optimizations.md, build.md, guides/
-
-## Key Crates and Dependencies
-
-Shell (src/shell/Cargo.toml):
-- rusty_v8 0.32 (V8 bindings), tokio 1.40 (async), serde/serde_json (serialization)
-- Networking: quinn 0.11 (QUIC), rustls 0.23, hyper 1.4, reqwest 0.12
-
-RV8 (src/rv8/):
-- ipc-channel for real multi-process IPC (bootstrap server pattern)
-- html5ever for HTML tokenization/parsing
-
-Root workspace: 25 members, edition 2021, Apache 2.0 license
-
-## Quick Start
-
-### Development Mode
-```bash
-./scripts/dev.sh          # Start shell and UI dev server
-./scripts/dev.sh --shell-only  # Shell only
-./scripts/dev.sh --ui-only     # UI only
+```sh
+./system/alpine/scripts/setup-host.sh
+./system/alpine/scripts/qemu-v0.sh
 ```
 
-### QEMU Boot
-```bash
-./scripts/dev.sh --qemu   # Build and boot Rust system in QEMU
-```
+More detail lives in [system/alpine/README.md](system/alpine/README.md).
 
-### Build
-```bash
-cargo build --release     # Build all Rust components
-```
+## Current Build-System Reality
 
-## Common Patterns
+Several build systems appear in the repo, but they are not in the same state:
 
-- License field: Use license-file.workspace = true (not license.workspace) in Cargo.toml files
-- Borrow checker in speculation.rs: evaluate_speculation collects actions into a Vec before
-  calling mutable methods to avoid borrow conflicts
-- Async bridging: pollster::block_on wraps async WGPU calls in sync contexts;
-  std::thread::spawn bridges blocking IPC receivers to tokio mpsc channels
+- `Cargo` is the clearest active path for local Rust work
+- `system/alpine/scripts/*` is the clearest active path for appliance packaging and QEMU boot
+- `Bazel` files exist, but they look partial
+- older docs reference `GN/Ninja` and Zircon/Fuchsia-oriented layouts that are not represented by a root `BUILD.gn` in this checkout
 
-## Testing
+## Audit Notes
 
-    cargo test                        # All Rust tests
-    cargo test -p soliloquy-shell     # Shell crate only
-    cargo test -p soliloquy-shell --lib  # Library tests only
-    bazel test //...                  # All Bazel tests
+During this pass, a few repo-level mismatches stood out:
 
-Networking module has 56+ tests. Memory, GPU, and cache modules have their own test suites.
-The shell test_flatland_present validates Flatland compositor integration.
+- the previous root README described the project more narrowly than the codebase now warrants
+- the previous `CLAUDE.md` claimed a 25-member workspace and a `backend/` tree that do not exist here
+- `scripts/build.sh` still references a removed `backend/` target
+- `docs/README.md` still links to missing translation/component-manifest material
+- the working tree is already dirty in `system/alpine/scripts/sol-servo-wrapper` and `third_party/servo`
 
-## Known Issues
+## Where To Look Next
 
-- QUIC test_quic_connect is disabled (requires network access)
-- GPU tests require WGPU-compatible hardware or will fall back to CPU
-
-## Performance Targets
-
-    Cold page load:       < 3.0s
-    Warm page load:       < 1.0s
-    Predicted navigation: < 0.2s
-    Per-tab memory:       < 20MB
-    150 tabs total:       < 3GB RAM
+- [CLAUDE.md](CLAUDE.md) for a concise repo-operating guide
+- [system/alpine/README.md](system/alpine/README.md) for the appliance path
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/architecture/architecture.md](docs/architecture/architecture.md) for broader design context
+- [src/README.md](src/README.md) for the optimization library internals

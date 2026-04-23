@@ -423,10 +423,15 @@ mod tests {
     #[tokio::test]
     async fn test_resource_loader_fetch() {
         use std::io::{Read, Write};
+        use std::io::ErrorKind;
         use std::net::TcpListener;
         use std::thread;
 
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let listener = match TcpListener::bind("127.0.0.1:0") {
+            Ok(listener) => listener,
+            Err(err) if err.kind() == ErrorKind::PermissionDenied => return,
+            Err(err) => panic!("failed to bind local test server: {err}"),
+        };
         let addr = listener.local_addr().unwrap();
 
         let server = thread::spawn(move || {
