@@ -7,12 +7,30 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Servo has an in-tree backend selection seam controlled by `SOLILOQUY_JS_ENGINE`.
 - `v8-experimental` is real as a mode selection, but Servo script still boots through `mozjs`.
 - `servoshell` is already patched in-tree and connected to Soliloquy optimization hooks.
+- Phase 1 of the bridge extraction has started: live DOM snapshot storage and typed bridge operations now live in `third_party/servo/components/servo/soliloquy_bridge.rs`.
 - `WebView::evaluate_javascript()` has a Soliloquy dispatcher for:
   - simple literals and `+` expressions
   - structured command calls through `window.__soliloquyEval(...)`
   - live snapshot-backed reads for `document.title`, `location.href`, and `document.readyState`
-  - snapshot-backed writes for `document.title`
+  - snapshot-backed writes for `document.title` and absolute / relative `location.href`
+  - stable command result envelopes for ok, error, and unsupported outcomes
+- The shell-side V8 mock now understands the same typed bridge command surface and keeps a small DOM snapshot in sync with shell navigations.
 - Unsupported evaluation paths still fall back to Servo's existing `mozjs` path.
+
+## What Has Been Done
+
+- Added a typed Servo-side bridge module for the current snapshot-backed operations.
+- Replaced direct snapshot ownership in the evaluator with bridge helpers and typed read/write targets.
+- Added a stable command result envelope carrying `ok`, `status`, `value`, and `detail`.
+- Replaced the structured command dispatcher internals with typed command variants before execution.
+- Added a narrow `location.href` write path that updates the live snapshot and marks `document.readyState` as `loading`.
+- Resolved relative `location.href` writes against the live document URL before mutation routing.
+- Routed validated `location.href` writes through Servo's `LoadUrl` constellation message.
+- Taught the shell-side V8 mock to execute typed bridge reads, writes, command envelopes, and navigation snapshot updates.
+- Kept the `rv8` dispatcher local-first, with fallback to Servo's existing `mozjs` path for unsupported operations.
+- Kept the shell-side JS engine status plumbing aligned with `SOLILOQUY_JS_ENGINE`.
+- Upgraded the desktop UI dependency stack and cleared the open `ui/desktop` Dependabot alerts locally.
+- Verified the current shell and UI paths with passing tests/builds.
 
 ## What Is Still Missing
 
@@ -27,13 +45,18 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 ### Phase 1: Harden The Host Bridge
 
-- Replace ad hoc string commands with typed bridge operations:
-  - `GetDocumentTitle`
-  - `SetDocumentTitle`
-  - `GetLocationHref`
-  - `GetReadyState`
-- Move the current snapshot store behind a dedicated bridge module instead of keeping it inside the evaluator file.
-- Define a stable result envelope for strings, booleans, null, errors, and unsupported operations.
+- Completed in part:
+  - moved the current snapshot store behind a dedicated bridge module
+  - introduced typed read targets for `document.title`, `location.href`, and `document.readyState`
+  - introduced typed write targets for `document.title` and `location.href`
+  - defined the initial stable command result envelope for ok, error, and unsupported operations
+  - moved structured command dispatch through typed command variants
+  - connected absolute `location.href` writes to Servo's real navigation request path
+  - resolved relative `location.href` writes against the live document URL
+  - mirrored the typed bridge surface in the shell-side V8 mock
+- Still to do:
+  - move the typed command definitions into the bridge boundary if the V8 host needs to share them directly
+  - add more result-envelope coverage for arrays and objects as bridge commands expand
 
 ### Phase 2: Introduce A Real V8 Execution Core
 
@@ -92,13 +115,13 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 ## Current Blockers
 
 - Local Servo Rust validation is still blocked on the existing `mozangle` Apple / LLVM header failure on this machine.
+  - Reconfirmed with `cargo test -p servo soliloquy_javascript --lib` and `cargo test -p servo soliloquy_javascript --lib --no-default-features`; both fail in `mozangle v0.5.5` while generating shader bindings against Homebrew LLVM 21 libc++ headers.
 - The current bridge is intentionally narrow and does not yet own general DOM execution.
-- GitHub alert cleanup for `ui/desktop` needs to be pushed before Dependabot clears the open alerts on the repo.
+- The default branch still shows the historical Dependabot alerts until the `rv8` dependency updates are merged.
 
 ## Immediate Next Steps
 
-1. Extract the snapshot-backed operations into a dedicated `rv8` bridge module inside Servo.
-2. Replace string command names with typed bridge enums.
-3. Teach the shell-side V8 layer to execute those bridge operations instead of only reporting mock status.
-4. Add one end-to-end mutation test around `document.title` using the typed bridge.
-5. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.
+1. Move or generate shared bridge command definitions so Servo dispatch and shell V8 mock cannot drift.
+2. Add one end-to-end mutation test around the new navigation bridge path once Servo-side tests can run locally.
+3. Introduce the Servo-side script backend trait for the Phase 2 `mozjs` / V8 execution split.
+4. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.

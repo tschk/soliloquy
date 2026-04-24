@@ -274,6 +274,7 @@ impl ServoEmbedder {
         // The runtime is brought up only when a real navigation happens.
         {
             let runtime = self.ensure_v8_runtime()?;
+            runtime.record_navigation(url);
             let init_script = format!(
                 r#"
                 console.log('Loading URL: {}');
@@ -291,6 +292,7 @@ impl ServoEmbedder {
             match runtime.execute_script(&init_script) {
                 Ok(result) => {
                     debug!("Page initialization script result: {}", result);
+                    runtime.record_load_complete();
                     
                     // Update webview title
                     if let Some(ref webview_arc) = self.webview {
