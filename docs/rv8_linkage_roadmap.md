@@ -16,6 +16,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - stable command result envelopes for ok, error, and unsupported outcomes
 - The `v8-experimental` dispatch backend now owns an explicit dispatch-only V8 isolate owner stub so the status surface can distinguish bridge dispatch from a real isolate.
 - Servo now publishes the bridge command schema from `soliloquy_bridge_schema.json`; the shell-side V8 mock includes the same file when reporting bridge capabilities.
+- Servo now has an opt-in `soliloquy_v8` feature that wires the V8 owner stub to `rusty_v8` platform and isolate initialization while leaving the default dispatch-only path unchanged.
 - The shell-side V8 mock now understands the same typed bridge command surface and keeps a small DOM snapshot in sync with shell navigations.
 - Unsupported evaluation paths still fall back to Servo's existing `mozjs` path.
 
@@ -33,6 +34,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Added the initial Servo-side script backend trait with `mozjs` fallback and `v8-experimental` dispatch implementations.
 - Added a dispatch-only V8 isolate owner stub behind the `v8-experimental` backend and exposed it through `engine.status`.
 - Added a shared bridge schema JSON and exposed it through `dom.capabilities` on both the Servo bridge and shell V8 mock.
+- Added an opt-in `soliloquy_v8` feature that initializes a real `rusty_v8` platform and isolate for the V8 owner status path.
 - Kept the `rv8` dispatcher local-first, with fallback to Servo's existing `mozjs` path for unsupported operations.
 - Kept the shell-side JS engine status plumbing aligned with `SOLILOQUY_JS_ENGINE`.
 - Upgraded the desktop UI dependency stack and cleared the open `ui/desktop` Dependabot alerts locally.
@@ -72,8 +74,8 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - added a `mozjs` fallback implementation that declines local execution
   - moved the current Soliloquy V8 dispatch path behind a `v8-experimental` backend implementation
   - added a dispatch-only V8 isolate owner stub so backend status can report `isolateOwner` and `realIsolate`
+  - added an opt-in `soliloquy_v8` feature that bootstraps `rusty_v8` platform / isolate ownership
 - Still to do:
-  - replace the dispatch-only isolate owner with real `rusty_v8` platform and isolate initialization
   - define isolate lifetime, value transport, and error propagation contracts
   - route only the narrow bridge operations through V8 first
   - keep direct DOM execution out of scope until value transport, error propagation, and isolate lifetime are stable
@@ -136,6 +138,6 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 ## Immediate Next Steps
 
 1. Add one end-to-end mutation test around the new navigation bridge path once Servo-side tests can run locally.
-2. Turn the dispatch-only V8 isolate owner into a real `rusty_v8` platform / isolate bootstrap behind the existing backend trait.
+2. Define the V8 owner lifetime contract so `rusty_v8` isolates are reused safely instead of bootstrapped per backend instance.
 3. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.
 4. Add generated parser tests from `soliloquy_bridge_schema.json` so future commands update schema and parser together.
