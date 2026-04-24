@@ -86,10 +86,15 @@ fn env_requests_v8() -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::{JsEngineKind, JsEngineStatus, JsEngineSwapStage, SOLILOQUY_JS_ENGINE_ENV};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn servo_status_defaults_to_mozjs_without_override() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::remove_var(SOLILOQUY_JS_ENGINE_ENV);
         let status = JsEngineStatus::servo_managed_from_environment();
 
@@ -100,6 +105,7 @@ mod tests {
 
     #[test]
     fn servo_status_reports_v8_request_when_env_is_set() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::set_var(SOLILOQUY_JS_ENGINE_ENV, "v8");
         let status = JsEngineStatus::servo_managed_from_environment();
         std::env::remove_var(SOLILOQUY_JS_ENGINE_ENV);
