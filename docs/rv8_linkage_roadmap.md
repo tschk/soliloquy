@@ -23,6 +23,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Replaced direct snapshot ownership in the evaluator with bridge helpers and typed read/write targets.
 - Added a stable command result envelope carrying `ok`, `status`, `value`, and `detail`.
 - Replaced the structured command dispatcher internals with typed command variants before execution.
+- Moved the Servo-side bridge command enum and command-target parsing into the bridge boundary.
 - Added a narrow `location.href` write path that updates the live snapshot and marks `document.readyState` as `loading`.
 - Resolved relative `location.href` writes against the live document URL before mutation routing.
 - Routed validated `location.href` writes through Servo's `LoadUrl` constellation message.
@@ -51,11 +52,12 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - introduced typed write targets for `document.title` and `location.href`
   - defined the initial stable command result envelope for ok, error, and unsupported operations
   - moved structured command dispatch through typed command variants
+  - moved Servo-side bridge command definitions into the bridge boundary
   - connected absolute `location.href` writes to Servo's real navigation request path
   - resolved relative `location.href` writes against the live document URL
   - mirrored the typed bridge surface in the shell-side V8 mock
 - Still to do:
-  - move the typed command definitions into the bridge boundary if the V8 host needs to share them directly
+  - generate or share the bridge command schema across Servo and the shell-side V8 mock to prevent drift
   - add more result-envelope coverage for arrays and objects as bridge commands expand
 
 ### Phase 2: Introduce A Real V8 Execution Core
@@ -121,7 +123,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 ## Immediate Next Steps
 
-1. Move or generate shared bridge command definitions so Servo dispatch and shell V8 mock cannot drift.
+1. Generate or share the bridge command schema across Servo and the shell-side V8 mock.
 2. Add one end-to-end mutation test around the new navigation bridge path once Servo-side tests can run locally.
 3. Introduce the Servo-side script backend trait for the Phase 2 `mozjs` / V8 execution split.
 4. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.
