@@ -12,6 +12,10 @@ use url::{ParseError, Url};
 
 use crate::js_engine::{JsEngineKind, JsEngineStatus, JsEngineSwapStage};
 
+const SOLILOQUY_BRIDGE_SCHEMA: &str =
+    include_str!("../../third_party/servo/components/servo/soliloquy_bridge_schema.json");
+const SOLILOQUY_BRIDGE_SCHEMA_VERSION: &str = "rv8-bridge-v1";
+
 #[derive(Clone, Debug, Default)]
 struct ShellDomSnapshot {
     title: Option<String>,
@@ -235,6 +239,8 @@ impl V8Runtime {
                 "navigationWrites": true,
                 "controlsDom": true,
                 "fallbackEngine": "mozjs",
+                "schemaVersion": SOLILOQUY_BRIDGE_SCHEMA_VERSION,
+                "schema": SOLILOQUY_BRIDGE_SCHEMA,
             })),
             ShellBridgeCommand::DomInspect(target) => bridge_envelope(self.inspect_target(target)),
             ShellBridgeCommand::DomSet(write) => self.apply_bridge_write(write, true)?,
@@ -583,6 +589,28 @@ mod tests {
             runtime.execute_script("location.href").unwrap(),
             "https://soliloquy.test/nested/page"
         );
+    }
+
+    #[test]
+    fn shell_bridge_capabilities_use_servo_bridge_schema() {
+        let mut runtime = V8Runtime::new().unwrap();
+
+        let result = runtime
+            .execute_script("window.__soliloquyEval('dom.capabilities')")
+            .unwrap();
+        let envelope: Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(envelope["ok"], true);
+        assert_eq!(
+            envelope["value"]["schemaVersion"],
+            SOLILOQUY_BRIDGE_SCHEMA_VERSION
+        );
+        assert_eq!(envelope["value"]["schema"], SOLILOQUY_BRIDGE_SCHEMA);
+
+        let schema: Value =
+            serde_json::from_str(envelope["value"]["schema"].as_str().unwrap()).unwrap();
+        assert_eq!(schema["version"], SOLILOQUY_BRIDGE_SCHEMA_VERSION);
+        assert_eq!(schema["commands"][0]["name"], "engine.backend");
     }
 
     #[test]

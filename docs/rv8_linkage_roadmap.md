@@ -15,6 +15,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - snapshot-backed writes for `document.title` and absolute / relative `location.href`
   - stable command result envelopes for ok, error, and unsupported outcomes
 - The `v8-experimental` dispatch backend now owns an explicit dispatch-only V8 isolate owner stub so the status surface can distinguish bridge dispatch from a real isolate.
+- Servo now publishes the bridge command schema from `soliloquy_bridge_schema.json`; the shell-side V8 mock includes the same file when reporting bridge capabilities.
 - The shell-side V8 mock now understands the same typed bridge command surface and keeps a small DOM snapshot in sync with shell navigations.
 - Unsupported evaluation paths still fall back to Servo's existing `mozjs` path.
 
@@ -31,6 +32,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Taught the shell-side V8 mock to execute typed bridge reads, writes, command envelopes, and navigation snapshot updates.
 - Added the initial Servo-side script backend trait with `mozjs` fallback and `v8-experimental` dispatch implementations.
 - Added a dispatch-only V8 isolate owner stub behind the `v8-experimental` backend and exposed it through `engine.status`.
+- Added a shared bridge schema JSON and exposed it through `dom.capabilities` on both the Servo bridge and shell V8 mock.
 - Kept the `rv8` dispatcher local-first, with fallback to Servo's existing `mozjs` path for unsupported operations.
 - Kept the shell-side JS engine status plumbing aligned with `SOLILOQUY_JS_ENGINE`.
 - Upgraded the desktop UI dependency stack and cleared the open `ui/desktop` Dependabot alerts locally.
@@ -59,8 +61,8 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - connected absolute `location.href` writes to Servo's real navigation request path
   - resolved relative `location.href` writes against the live document URL
   - mirrored the typed bridge surface in the shell-side V8 mock
+  - published the bridge command schema from Servo and included it from the shell-side V8 mock
 - Still to do:
-  - generate or share the bridge command schema across Servo and the shell-side V8 mock to prevent drift
   - add more result-envelope coverage for arrays and objects as bridge commands expand
 
 ### Phase 2: Introduce A Real V8 Execution Core
@@ -133,7 +135,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 ## Immediate Next Steps
 
-1. Generate or share the bridge command schema across Servo and the shell-side V8 mock.
-2. Add one end-to-end mutation test around the new navigation bridge path once Servo-side tests can run locally.
-3. Turn the dispatch-only V8 isolate owner into a real `rusty_v8` platform / isolate bootstrap behind the existing backend trait.
-4. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.
+1. Add one end-to-end mutation test around the new navigation bridge path once Servo-side tests can run locally.
+2. Turn the dispatch-only V8 isolate owner into a real `rusty_v8` platform / isolate bootstrap behind the existing backend trait.
+3. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.
+4. Add generated parser tests from `soliloquy_bridge_schema.json` so future commands update schema and parser together.
