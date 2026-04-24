@@ -28,6 +28,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Resolved relative `location.href` writes against the live document URL before mutation routing.
 - Routed validated `location.href` writes through Servo's `LoadUrl` constellation message.
 - Taught the shell-side V8 mock to execute typed bridge reads, writes, command envelopes, and navigation snapshot updates.
+- Added the initial Servo-side script backend trait with `mozjs` fallback and `v8-experimental` dispatch implementations.
 - Kept the `rv8` dispatcher local-first, with fallback to Servo's existing `mozjs` path for unsupported operations.
 - Kept the shell-side JS engine status plumbing aligned with `SOLILOQUY_JS_ENGINE`.
 - Upgraded the desktop UI dependency stack and cleared the open `ui/desktop` Dependabot alerts locally.
@@ -62,9 +63,15 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 ### Phase 2: Introduce A Real V8 Execution Core
 
-- Add a Servo-side trait for script execution backends with one implementation for `mozjs` and one for Soliloquy V8.
-- Route only the narrow bridge operations through V8 first.
-- Keep direct DOM execution out of scope until value transport, error propagation, and isolate lifetime are stable.
+- Completed in part:
+  - added a Servo-side trait for script execution backends
+  - added a `mozjs` fallback implementation that declines local execution
+  - moved the current Soliloquy V8 dispatch path behind a `v8-experimental` backend implementation
+- Still to do:
+  - replace the dispatch-only V8 backend with a real V8 isolate owner
+  - define isolate lifetime, value transport, and error propagation contracts
+  - route only the narrow bridge operations through V8 first
+  - keep direct DOM execution out of scope until value transport, error propagation, and isolate lifetime are stable
 
 ### Phase 3: Add DOM Handle Semantics
 
@@ -125,5 +132,5 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 1. Generate or share the bridge command schema across Servo and the shell-side V8 mock.
 2. Add one end-to-end mutation test around the new navigation bridge path once Servo-side tests can run locally.
-3. Introduce the Servo-side script backend trait for the Phase 2 `mozjs` / V8 execution split.
+3. Replace the dispatch-only V8 backend with the first real V8 isolate owner.
 4. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.
