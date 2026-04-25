@@ -44,6 +44,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - `cargo test -p servo soliloquy_javascript --lib`
   - `cargo test -p servo javascript_evaluator --lib`
   - `cargo test -p servo soliloquy_javascript --lib --features soliloquy_v8`
+- Added `tools/rv8_servo_test.sh` so the targeted Servo bridge checks can run with the required macOS SDK sysroot env without hand-typing it.
 
 ## What Is Still Missing
 
@@ -137,14 +138,15 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 - Plain local Servo Rust validation still needs a toolchain env shim on this machine.
   - Running without an explicit Xcode SDK sysroot still fails in `mozangle v0.5.5` while generating shader bindings against Homebrew LLVM 21 libc++ headers.
-  - Running with `SDKROOT` plus `BINDGEN_EXTRA_CLANG_ARGS=-isysroot .../MacOSX.sdk` clears that blocker and the targeted Servo bridge tests pass.
+  - `tools/rv8_servo_test.sh bridge` applies the env shim and runs the non-feature Servo bridge test groups.
+  - `tools/rv8_servo_test.sh v8` applies the env shim and runs the feature-gated `soliloquy_v8` bridge test group.
   - The feature-gated `soliloquy_v8` test also needs the `rusty_v8` static archive available; the escalated run downloaded/built it and passed.
 - The current bridge is intentionally narrow and does not yet own general DOM execution.
 - The default branch still shows the historical Dependabot alerts until the `rv8` dependency updates are merged.
 
 ## Immediate Next Steps
 
-1. Persist or script the Servo SDK sysroot env so plain local Cargo validation no longer rediscovers the `mozangle` Homebrew LLVM header mismatch.
-2. Broaden the navigation bridge test into an integration path that crosses `WebView::evaluate_javascript()` and observes the emitted `LoadUrl` request.
-3. Add generated parser tests from `soliloquy_bridge_schema.json` so future commands update schema and parser together.
-4. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
+1. Broaden the navigation bridge test into an integration path that crosses `WebView::evaluate_javascript()` and observes the emitted `LoadUrl` request.
+2. Add generated parser tests from `soliloquy_bridge_schema.json` so future commands update schema and parser together.
+3. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
+4. Decide whether the Servo SDK sysroot shim belongs in CI, local docs only, or a target-specific upstream Servo build configuration.
