@@ -35,10 +35,15 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Added a dispatch-only V8 isolate owner stub behind the `v8-experimental` backend and exposed it through `engine.status`.
 - Added a shared bridge schema JSON and exposed it through `dom.capabilities` on both the Servo bridge and shell V8 mock.
 - Added an opt-in `soliloquy_v8` feature that initializes a real `rusty_v8` platform and thread-local isolate for the V8 owner status path.
+- Fixed the Servo bridge test compile path against Servo's composite `WebViewId`, Rust 2024 environment mutation rules, and the `HistoryChanged` WebView ownership path.
 - Kept the `rv8` dispatcher local-first, with fallback to Servo's existing `mozjs` path for unsupported operations.
 - Kept the shell-side JS engine status plumbing aligned with `SOLILOQUY_JS_ENGINE`.
 - Upgraded the desktop UI dependency stack and cleared the open `ui/desktop` Dependabot alerts locally.
 - Verified the current shell and UI paths with passing tests/builds.
+- Verified Servo-side bridge tests with explicit macOS SDK sysroot:
+  - `cargo test -p servo soliloquy_javascript --lib`
+  - `cargo test -p servo javascript_evaluator --lib`
+  - `cargo test -p servo soliloquy_javascript --lib --features soliloquy_v8`
 
 ## What Is Still Missing
 
@@ -130,14 +135,16 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 ## Current Blockers
 
-- Local Servo Rust validation is still blocked on the existing `mozangle` Apple / LLVM header failure on this machine.
-  - Reconfirmed with `cargo test -p servo soliloquy_javascript --lib` and `cargo test -p servo soliloquy_javascript --lib --no-default-features`; both fail in `mozangle v0.5.5` while generating shader bindings against Homebrew LLVM 21 libc++ headers.
+- Plain local Servo Rust validation still needs a toolchain env shim on this machine.
+  - Running without an explicit Xcode SDK sysroot still fails in `mozangle v0.5.5` while generating shader bindings against Homebrew LLVM 21 libc++ headers.
+  - Running with `SDKROOT` plus `BINDGEN_EXTRA_CLANG_ARGS=-isysroot .../MacOSX.sdk` clears that blocker and the targeted Servo bridge tests pass.
+  - The feature-gated `soliloquy_v8` test also needs the `rusty_v8` static archive available; the escalated run downloaded/built it and passed.
 - The current bridge is intentionally narrow and does not yet own general DOM execution.
 - The default branch still shows the historical Dependabot alerts until the `rv8` dependency updates are merged.
 
 ## Immediate Next Steps
 
-1. Add one end-to-end mutation test around the new navigation bridge path once Servo-side tests can run locally.
-2. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
-3. Fix the local `mozangle` toolchain issue so Servo-side unit tests can run in this environment.
-4. Add generated parser tests from `soliloquy_bridge_schema.json` so future commands update schema and parser together.
+1. Persist or script the Servo SDK sysroot env so plain local Cargo validation no longer rediscovers the `mozangle` Homebrew LLVM header mismatch.
+2. Broaden the navigation bridge test into an integration path that crosses `WebView::evaluate_javascript()` and observes the emitted `LoadUrl` request.
+3. Add generated parser tests from `soliloquy_bridge_schema.json` so future commands update schema and parser together.
+4. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
