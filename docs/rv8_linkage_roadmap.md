@@ -43,8 +43,10 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Verified Servo-side bridge tests with explicit macOS SDK sysroot:
   - `cargo test -p servo soliloquy_javascript --lib`
   - `cargo test -p servo javascript_evaluator --lib`
+  - `cargo test -p servo soliloquy_bridge --lib`
   - `cargo test -p servo soliloquy_javascript --lib --features soliloquy_v8`
 - Added `tools/rv8_servo_test.sh` so the targeted Servo bridge checks can run with the required macOS SDK sysroot env without hand-typing it.
+- Added schema-driven parser tests for `soliloquy_bridge_schema.json` so declared commands and DOM targets must parse through the typed Servo bridge boundary.
 
 ## What Is Still Missing
 
@@ -70,6 +72,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - resolved relative `location.href` writes against the live document URL
   - mirrored the typed bridge surface in the shell-side V8 mock
   - published the bridge command schema from Servo and included it from the shell-side V8 mock
+  - added schema-driven parser tests for declared commands, read targets, and write targets
 - Still to do:
   - add more result-envelope coverage for arrays and objects as bridge commands expand
 
@@ -147,6 +150,6 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 ## Immediate Next Steps
 
 1. Broaden the navigation bridge test into an integration path that crosses `WebView::evaluate_javascript()` and observes the emitted `LoadUrl` request.
-2. Add generated parser tests from `soliloquy_bridge_schema.json` so future commands update schema and parser together.
-3. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
-4. Decide whether the Servo SDK sysroot shim belongs in CI, local docs only, or a target-specific upstream Servo build configuration.
+2. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
+3. Decide whether the Servo SDK sysroot shim belongs in CI, local docs only, or a target-specific upstream Servo build configuration.
+4. Extend schema coverage to mutation definitions once the next mutation command is added.
