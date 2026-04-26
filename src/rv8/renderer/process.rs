@@ -55,6 +55,12 @@ impl RendererProcess {
                 }
                 else => break,
             }
+
+            // Perform V8 microtask checkpoint after handling messages
+            {
+                let mut engine = self.embedder.js_engine.lock().await;
+                engine.perform_microtask_checkpoint();
+            }
         }
 
         info!("Renderer {} shutting down", self.tab_id);

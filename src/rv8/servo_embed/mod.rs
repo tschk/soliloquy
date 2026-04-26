@@ -10,9 +10,11 @@
 
 use log::{debug, error, info};
 use std::sync::Arc;
+use parking_lot::RwLock;
 use tokio::sync::Mutex;
 
 use crate::js::JsEngine;
+use crate::js::bindings::V8ContextData;
 use crate::renderer::RenderFrame;
 
 pub mod dom;
@@ -20,6 +22,7 @@ pub mod parser;
 pub mod web_apis;
 
 use self::dom::DomTree;
+use self::web_apis::{ConsoleApi, TimerManager};
 
 /// Servo embedding configuration
 #[derive(Debug, Clone)]
@@ -59,9 +62,13 @@ pub struct ServoEmbedder {
     /// Configuration
     config: ServoConfig,
     /// V8 JavaScript engine
-    js_engine: Arc<Mutex<JsEngine>>,
+    pub js_engine: Arc<Mutex<JsEngine>>,
     /// DOM Tree
-    dom_tree: Arc<Mutex<DomTree>>,
+    dom_tree: Arc<RwLock<DomTree>>,
+    /// Console API
+    console_api: Arc<RwLock<ConsoleApi>>,
+    /// Timer Manager
+    timer_manager: Arc<RwLock<TimerManager>>,
     /// Current document URL
     current_url: String,
     /// Document title
@@ -77,15 +84,28 @@ impl ServoEmbedder {
     pub async fn new(config: ServoConfig) -> Result<Self, String> {
         info!("Initializing Servo embedder with V8");
 
-        let js_engine =
+        let mut js_engine =
             JsEngine::new().map_err(|e| format!("Failed to create V8 engine: {}", e))?;
 
         info!("V8 JavaScript engine version: {}", JsEngine::version());
 
+        let dom_tree = Arc::new(RwLock::new(DomTree::new()));
+        let console_api = Arc::new(RwLock::new(ConsoleApi::new()));
+        let timer_manager = Arc::new(RwLock::new(TimerManager::new()));
+
+        // Initialize JsEngine with DOM and Web APIs
+        js_engine.initialize(V8ContextData {
+            dom_tree: dom_tree.clone(),
+            console_api: console_api.clone(),
+            timer_manager: timer_manager.clone(),
+        });
+
         Ok(ServoEmbedder {
             config,
             js_engine: Arc::new(Mutex::new(js_engine)),
-            dom_tree: Arc::new(Mutex::new(DomTree::new())),
+            dom_tree,
+            console_api,
+            timer_manager,
             current_url: String::new(),
             title: String::new(),
             loading: false,
@@ -116,11 +136,13 @@ impl ServoEmbedder {
                         info!("Parsing HTML...");
                         self.load_progress = 50;
 
-                        let mut dom = self.dom_tree.lock().await;
-                        // Reset DOM tree
-                        *dom = DomTree::new();
+                        {
+                            let mut dom = self.dom_tree.write();
+                            // Reset DOM tree
+                            *dom = DomTree::new();
 
-                        parser::parse_html(&html, &mut *dom);
+                            parser::parse_html(&html, &mut *dom);
+                        }
                         info!("HTML parsing complete");
                     }
                     Err(e) => {
