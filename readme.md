@@ -29,6 +29,7 @@ Other important top-level areas:
 - `rv8` is the experimental browser/runtime engine crate with IPC, rendering, parsing, and JS execution paths
 - `sold` is a local Axum service that serves bundled UI assets and simple file/settings APIs
 - `system/alpine` packages the runtime into an appliance-style Alpine image and boots it under QEMU
+- `third_party/servo` is an in-tree Servo checkout with local `rv8` bridge patches and a typed snapshot bridge module
 
 ## Build And Run
 
@@ -76,15 +77,15 @@ Several build systems appear in the repo, but they are not in the same state:
 - `Bazel` files exist, but they look partial
 - older docs reference `GN/Ninja` and Zircon/Fuchsia-oriented layouts that are not represented by a root `BUILD.gn` in this checkout
 
-## Audit Notes
+## Current Bridge State
 
-During this pass, a few repo-level mismatches stood out:
-
-- the previous root README described the project more narrowly than the codebase now warrants
-- the previous `CLAUDE.md` claimed a 25-member workspace and a `backend/` tree that do not exist here
-- `scripts/build.sh` still references a removed `backend/` target
-- `docs/README.md` still links to missing translation/component-manifest material
-- the working tree is already dirty in `system/alpine/scripts/sol-servo-wrapper` and `third_party/servo`
+- Servo has a backend selection seam controlled by `SOLILOQUY_JS_ENGINE`
+- `v8-experimental` is a real mode, but unsupported work still falls back to Servo's existing `mozjs` path
+- the current bridge covers simple literals, `+` expressions, structured `window.__soliloquyEval(...)` calls, and live snapshot-backed reads/writes for a narrow DOM surface
+- the live snapshot bridge has been extracted into `third_party/servo/components/servo/soliloquy_bridge.rs`
+- `cargo test --manifest-path src/shell/Cargo.toml --lib` passes locally
+- `pnpm -C ui/desktop check` and `pnpm -C ui/desktop build` pass locally, with the same CSS compatibility warning as before
+- Servo-side Rust validation is still blocked in this environment by the existing `mozangle` / Apple LLVM header issue
 
 ## Where To Look Next
 
@@ -92,3 +93,4 @@ During this pass, a few repo-level mismatches stood out:
 - [system/alpine/README.md](system/alpine/README.md) for the appliance path
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/architecture/architecture.md](docs/architecture/architecture.md) for broader design context
 - [src/README.md](src/README.md) for the optimization library internals
+- [docs/rv8_linkage_roadmap.md](docs/rv8_linkage_roadmap.md) for the current bridge plan and remaining work

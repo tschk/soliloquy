@@ -22,6 +22,7 @@ There are also substantial adjacent projects in-tree, including:
 - `soliloquy-web/` - Crepuscularity-based web UI/runtime experiments
 - `crepuscularity/` and `equilibrium/` - separate subprojects with their own docs and manifests
 - `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
+- `third_party/servo/components/servo/soliloquy_bridge.rs` - typed snapshot bridge for the current `rv8` Servo/V8 work
 
 ## Architecture
 
@@ -34,6 +35,16 @@ At the top level, the repo currently breaks down like this:
 - `system/alpine/` - immutable-rootfs appliance assembly, service layout, artifact staging, and QEMU helpers
 - `bundle/` - static UI assets served by `sold`
 - `ui/desktop/` - Svelte frontend used by the dev flow and Alpine staging
+
+## Current Bridge State
+
+- Servo has a backend selection seam controlled by `SOLILOQUY_JS_ENGINE`
+- `v8-experimental` is a real mode selection, but unsupported work still falls back to Servo's existing `mozjs` path
+- the current bridge covers simple literals, `+` expressions, structured `window.__soliloquyEval(...)` calls, and live snapshot-backed reads/writes for a narrow DOM surface
+- the live snapshot bridge has been extracted into `third_party/servo/components/servo/soliloquy_bridge.rs`
+- `cargo test --manifest-path src/shell/Cargo.toml --lib` passes locally
+- `pnpm -C ui/desktop check` and `pnpm -C ui/desktop build` pass locally, with the same CSS compatibility warning as before
+- Servo-side Rust validation is still blocked in this environment by the existing `mozangle` / Apple LLVM header issue
 
 ## Build Systems
 
@@ -89,8 +100,8 @@ Alpine/QEMU flow:
 - The repo does not currently contain the `backend/` tree described in some older docs.
 - `scripts/build.sh` still references a removed `backend/` target and should be treated carefully.
 - `docs/README.md` still points at missing translation/component-manifest material.
-- `third_party/servo` is a nested repository and currently has local modifications; do not assume it is clean.
-- `system/alpine/scripts/sol-servo-wrapper` is also modified in the working tree.
+- `third_party/servo` is a nested repository and should be treated as an actively patched fork for `rv8`.
+- `system/alpine/scripts/sol-servo-wrapper` has had local work in this branch history; verify the current status before editing it.
 
 ## Working Assumptions
 

@@ -1,5 +1,6 @@
 //! Simple V8 integration test without platform dependencies
 
+mod js_engine;
 mod v8_runtime;
 
 use log::{info, error};

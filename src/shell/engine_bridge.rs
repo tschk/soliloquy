@@ -40,6 +40,7 @@ use soliloquy_browser_optimizations::runtime::{
     EngineRuntime, InputEvent, LifecycleEvent, RuntimeError, SurfaceDescriptor, SurfaceId,
 };
 
+use crate::js_engine::{JsEngineStatus, JsEngineSwapStage};
 use crate::v8_runtime::V8Runtime;
 
 /// DOM Node types matching Servo's internal representation
@@ -127,6 +128,9 @@ pub struct EngineBridge {
 
     /// Surfaces that have been presented most recently.
     presented_frames: Arc<Mutex<Vec<SurfaceId>>>,
+
+    /// Current JavaScript engine linkage status for the shell.
+    js_engine_status: Arc<RwLock<JsEngineStatus>>,
 }
 
 /// Native function type for V8 callbacks
@@ -145,6 +149,7 @@ impl EngineBridge {
     /// Create a new engine bridge with the given V8 runtime
     pub fn new(v8_runtime: V8Runtime) -> Result<Self, String> {
         info!("Creating engine bridge for Servo + V8 integration");
+        let js_engine_status = v8_runtime.status();
 
         let bridge = EngineBridge {
             v8_runtime: Arc::new(Mutex::new(v8_runtime)),
@@ -158,6 +163,7 @@ impl EngineBridge {
             last_input_event: Arc::new(RwLock::new(None)),
             last_lifecycle_event: Arc::new(RwLock::new(None)),
             presented_frames: Arc::new(Mutex::new(Vec::new())),
+            js_engine_status: Arc::new(RwLock::new(js_engine_status)),
         };
 
         Ok(bridge)
@@ -711,6 +717,23 @@ impl EngineBridge {
             .map_err(|e| format!("Failed to lock presented frames: {}", e))?;
         Ok(frames.clone())
     }
+
+    pub fn js_engine_status(&self) -> Result<JsEngineStatus, String> {
+        let status = self
+            .js_engine_status
+            .read()
+            .map_err(|e| format!("Failed to lock JS engine status: {}", e))?;
+        Ok(status.clone())
+    }
+
+    pub fn begin_v8_swap_preparation(&self) -> Result<JsEngineStatus, String> {
+        let mut status = self
+            .js_engine_status
+            .write()
+            .map_err(|e| format!("Failed to lock JS engine status: {}", e))?;
+        status.swap_stage = JsEngineSwapStage::DualRuntimePreparation;
+        Ok(status.clone())
+    }
 }
 
 impl EngineRuntime for EngineBridge {
@@ -858,5 +881,15 @@ mod tests {
             bridge.last_lifecycle_event().unwrap(),
             Some(LifecycleEvent::Suspended)
         );
+    }
+
+    #[test]
+    fn test_js_engine_status_reports_mock_v8_preparation() {
+        let runtime = V8Runtime::new().expect("Failed to create V8 runtime");
+        let bridge = EngineBridge::new(runtime).unwrap();
+
+        let status = bridge.js_engine_status().unwrap();
+        assert!(status.servo_controls_javascript);
+        assert_eq!(status.swap_stage, JsEngineSwapStage::DualRuntimePreparation);
     }
 }

@@ -13,6 +13,7 @@
 mod engine_bridge;
 #[cfg(feature = "gpui")]
 mod gpui_app;
+mod js_engine;
 mod optimizations;
 mod platform;
 mod servo_embedder;
