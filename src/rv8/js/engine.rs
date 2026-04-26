@@ -5,6 +5,7 @@
 use log::{debug, error, info};
 use rusty_v8 as v8;
 use std::sync::Once;
+use crate::js::bindings::{V8ContextData, initialize_context};
 
 static V8_INIT: Once = Once::new();
 
@@ -20,7 +21,8 @@ fn init_v8() {
 
 /// V8 JavaScript engine
 pub struct JsEngine {
-    isolate: Option<v8::OwnedIsolate>,
+    isolate: v8::OwnedIsolate,
+    context: v8::Global<v8::Context>,
 }
 
 impl JsEngine {
@@ -28,20 +30,44 @@ impl JsEngine {
     pub fn new() -> Result<Self, String> {
         init_v8();
 
-        let isolate = v8::Isolate::new(v8::CreateParams::default());
+        let mut isolate = v8::Isolate::new(v8::CreateParams::default());
         info!("Created new V8 isolate");
 
+        let context = {
+            let handle_scope = &mut v8::HandleScope::new(&mut isolate);
+            let context = v8::Context::new(handle_scope);
+            v8::Global::new(handle_scope, context)
+        };
+
         Ok(JsEngine {
-            isolate: Some(isolate),
+            isolate,
+            context,
         })
+    }
+
+    /// Initialize the engine with DOM and Web APIs
+    pub fn initialize(&mut self, data: V8ContextData) {
+        let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+
+        // Clean up old context data if it exists
+        let old_context = v8::Local::new(handle_scope, &self.context);
+        let ptr = old_context.get_aligned_pointer_in_embedder_data(0);
+        if !ptr.is_null() {
+            unsafe {
+                let _ = Box::from_raw(ptr as *mut V8ContextData);
+            }
+            old_context.set_aligned_pointer_in_embedder_data(0, std::ptr::null_mut());
+        }
+
+        let context = initialize_context(handle_scope, data);
+        self.context = v8::Global::new(handle_scope, context);
+        info!("JsEngine initialized with DOM and Web APIs");
     }
 
     /// Execute JavaScript code and return result
     pub fn execute(&mut self, script: &str) -> Result<super::JsValue, String> {
-        let isolate = self.isolate.as_mut().ok_or("Isolate not initialized")?;
-
-        let handle_scope = &mut v8::HandleScope::new(isolate);
-        let context = v8::Context::new(handle_scope);
+        let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+        let context = v8::Local::new(handle_scope, &self.context);
         let scope = &mut v8::ContextScope::new(handle_scope, context);
 
         let code = v8::String::new(scope, script).ok_or("Failed to create script string")?;
@@ -63,10 +89,8 @@ impl JsEngine {
 
     /// Execute JavaScript and return as string
     pub fn execute_to_string(&mut self, script: &str) -> Result<String, String> {
-        let isolate = self.isolate.as_mut().ok_or("Isolate not initialized")?;
-
-        let handle_scope = &mut v8::HandleScope::new(isolate);
-        let context = v8::Context::new(handle_scope);
+        let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+        let context = v8::Local::new(handle_scope, &self.context);
         let scope = &mut v8::ContextScope::new(handle_scope, context);
 
         let code = v8::String::new(scope, script).ok_or("Failed to create script string")?;
@@ -82,6 +106,35 @@ impl JsEngine {
                 Ok(result_str)
             }
             None => Err("Script execution failed".to_string()),
+        }
+    }
+
+    /// Perform microtask checkpoint
+    pub fn perform_microtask_checkpoint(&mut self) {
+        self.isolate.perform_microtask_checkpoint();
+    }
+
+    /// Call a timer callback by ID
+    pub fn call_timer_callback(&mut self, timer_id: u64) {
+        let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+        let context = v8::Local::new(handle_scope, &self.context);
+        let scope = &mut v8::ContextScope::new(handle_scope, context);
+
+        let ptr = context.get_aligned_pointer_in_embedder_data(0);
+        if ptr.is_null() {
+            return;
+        }
+        let data = unsafe { &*(ptr as *const V8ContextData) };
+
+        let callback_global = {
+            let callbacks = data.timer_callbacks.read();
+            callbacks.get(&timer_id).cloned()
+        };
+
+        if let Some(callback_global) = callback_global {
+            let callback = v8::Local::new(scope, callback_global);
+            let recv = context.global(scope).into();
+            callback.call(scope, recv, &[]);
         }
     }
 
@@ -126,7 +179,15 @@ impl Default for JsEngine {
 
 impl Drop for JsEngine {
     fn drop(&mut self) {
-        // Isolate is automatically dropped
+        // Embedder data needs to be cleaned up if we allocated it
+        let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+        let context = v8::Local::new(handle_scope, &self.context);
+        let ptr = context.get_aligned_pointer_in_embedder_data(0);
+        if !ptr.is_null() {
+            unsafe {
+                let _ = Box::from_raw(ptr as *mut V8ContextData);
+            }
+        }
         debug!("V8 isolate dropped");
     }
 }
@@ -147,5 +208,42 @@ mod tests {
         let mut engine = JsEngine::new().unwrap();
         let result = engine.execute_to_string("'hello' + ' world'").unwrap();
         assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_dom_bindings() {
+        use crate::servo_embed::dom::DomTree;
+        use crate::servo_embed::web_apis::{ConsoleApi, TimerManager, StorageApi};
+        use std::sync::Arc;
+        use parking_lot::RwLock;
+
+        let mut engine = JsEngine::new().unwrap();
+        let dom_tree = Arc::new(RwLock::new(DomTree::new()));
+        let console_api = Arc::new(RwLock::new(ConsoleApi::new()));
+        let timer_manager = Arc::new(RwLock::new(TimerManager::new()));
+        let local_storage = Arc::new(RwLock::new(StorageApi::new(1024)));
+        let session_storage = Arc::new(RwLock::new(StorageApi::new(1024)));
+
+        engine.initialize(V8ContextData::new(
+            dom_tree.clone(),
+            console_api.clone(),
+            timer_manager.clone(),
+            local_storage.clone(),
+            session_storage.clone(),
+        ));
+
+        // Test console.log
+        engine.execute("console.log('test log')").unwrap();
+        assert_eq!(console_api.read().get_logs().len(), 1);
+        assert_eq!(console_api.read().get_logs()[0].message, "test log");
+
+        // Test document.nodeType
+        let node_type = engine.execute_to_string("document.nodeType").unwrap();
+        assert_eq!(node_type, "9"); // Document
+
+        // Test document.createElement
+        engine.execute("var el = document.createElement('div')").unwrap();
+        let tag_name = engine.execute_to_string("el.tagName").unwrap();
+        assert_eq!(tag_name, "DIV");
     }
 }

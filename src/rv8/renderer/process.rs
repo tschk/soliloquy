@@ -48,12 +48,23 @@ impl RendererProcess {
     pub async fn run(&mut self, mut rx: mpsc::UnboundedReceiver<RendererMessage>) {
         info!("Renderer {} starting event loop", self.tab_id);
 
+        let mut timer_interval = tokio::time::interval(std::time::Duration::from_millis(10));
+
         while !self.shutting_down {
             tokio::select! {
                 Some(msg) = rx.recv() => {
                     self.handle_message(msg).await;
                 }
+                _ = timer_interval.tick() => {
+                    self.embedder.poll_timers().await;
+                }
                 else => break,
+            }
+
+            // Perform V8 microtask checkpoint after handling messages or timers
+            {
+                let mut engine = self.embedder.js_engine.lock().await;
+                engine.perform_microtask_checkpoint();
             }
         }
 
