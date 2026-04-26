@@ -48,6 +48,17 @@ impl JsEngine {
     /// Initialize the engine with DOM and Web APIs
     pub fn initialize(&mut self, data: V8ContextData) {
         let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+
+        // Clean up old context data if it exists
+        let old_context = v8::Local::new(handle_scope, &self.context);
+        let ptr = old_context.get_aligned_pointer_in_embedder_data(0);
+        if !ptr.is_null() {
+            unsafe {
+                let _ = Box::from_raw(ptr as *mut V8ContextData);
+            }
+            old_context.set_aligned_pointer_in_embedder_data(0, std::ptr::null_mut());
+        }
+
         let context = initialize_context(handle_scope, data);
         self.context = v8::Global::new(handle_scope, context);
         info!("JsEngine initialized with DOM and Web APIs");
@@ -101,6 +112,30 @@ impl JsEngine {
     /// Perform microtask checkpoint
     pub fn perform_microtask_checkpoint(&mut self) {
         self.isolate.perform_microtask_checkpoint();
+    }
+
+    /// Call a timer callback by ID
+    pub fn call_timer_callback(&mut self, timer_id: u64) {
+        let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+        let context = v8::Local::new(handle_scope, &self.context);
+        let scope = &mut v8::ContextScope::new(handle_scope, context);
+
+        let ptr = context.get_aligned_pointer_in_embedder_data(0);
+        if ptr.is_null() {
+            return;
+        }
+        let data = unsafe { &*(ptr as *const V8ContextData) };
+
+        let callback_global = {
+            let callbacks = data.timer_callbacks.read();
+            callbacks.get(&timer_id).cloned()
+        };
+
+        if let Some(callback_global) = callback_global {
+            let callback = v8::Local::new(scope, callback_global);
+            let recv = context.global(scope).into();
+            callback.call(scope, recv, &[]);
+        }
     }
 
     /// Convert V8 value to our JsValue type
@@ -173,5 +208,42 @@ mod tests {
         let mut engine = JsEngine::new().unwrap();
         let result = engine.execute_to_string("'hello' + ' world'").unwrap();
         assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_dom_bindings() {
+        use crate::servo_embed::dom::DomTree;
+        use crate::servo_embed::web_apis::{ConsoleApi, TimerManager, StorageApi};
+        use std::sync::Arc;
+        use parking_lot::RwLock;
+
+        let mut engine = JsEngine::new().unwrap();
+        let dom_tree = Arc::new(RwLock::new(DomTree::new()));
+        let console_api = Arc::new(RwLock::new(ConsoleApi::new()));
+        let timer_manager = Arc::new(RwLock::new(TimerManager::new()));
+        let local_storage = Arc::new(RwLock::new(StorageApi::new(1024)));
+        let session_storage = Arc::new(RwLock::new(StorageApi::new(1024)));
+
+        engine.initialize(V8ContextData::new(
+            dom_tree.clone(),
+            console_api.clone(),
+            timer_manager.clone(),
+            local_storage.clone(),
+            session_storage.clone(),
+        ));
+
+        // Test console.log
+        engine.execute("console.log('test log')").unwrap();
+        assert_eq!(console_api.read().get_logs().len(), 1);
+        assert_eq!(console_api.read().get_logs()[0].message, "test log");
+
+        // Test document.nodeType
+        let node_type = engine.execute_to_string("document.nodeType").unwrap();
+        assert_eq!(node_type, "9"); // Document
+
+        // Test document.createElement
+        engine.execute("var el = document.createElement('div')").unwrap();
+        let tag_name = engine.execute_to_string("el.tagName").unwrap();
+        assert_eq!(tag_name, "DIV");
     }
 }

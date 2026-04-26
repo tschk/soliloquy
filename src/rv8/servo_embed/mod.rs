@@ -22,7 +22,7 @@ pub mod parser;
 pub mod web_apis;
 
 use self::dom::DomTree;
-use self::web_apis::{ConsoleApi, TimerManager};
+use self::web_apis::{ConsoleApi, TimerManager, StorageApi};
 
 /// Servo embedding configuration
 #[derive(Debug, Clone)]
@@ -69,6 +69,10 @@ pub struct ServoEmbedder {
     console_api: Arc<RwLock<ConsoleApi>>,
     /// Timer Manager
     timer_manager: Arc<RwLock<TimerManager>>,
+    /// Local Storage
+    local_storage: Arc<RwLock<StorageApi>>,
+    /// Session Storage
+    session_storage: Arc<RwLock<StorageApi>>,
     /// Current document URL
     current_url: String,
     /// Document title
@@ -92,13 +96,17 @@ impl ServoEmbedder {
         let dom_tree = Arc::new(RwLock::new(DomTree::new()));
         let console_api = Arc::new(RwLock::new(ConsoleApi::new()));
         let timer_manager = Arc::new(RwLock::new(TimerManager::new()));
+        let local_storage = Arc::new(RwLock::new(StorageApi::new(5 * 1024 * 1024)));
+        let session_storage = Arc::new(RwLock::new(StorageApi::new(5 * 1024 * 1024)));
 
         // Initialize JsEngine with DOM and Web APIs
-        js_engine.initialize(V8ContextData {
-            dom_tree: dom_tree.clone(),
-            console_api: console_api.clone(),
-            timer_manager: timer_manager.clone(),
-        });
+        js_engine.initialize(V8ContextData::new(
+            dom_tree.clone(),
+            console_api.clone(),
+            timer_manager.clone(),
+            local_storage.clone(),
+            session_storage.clone(),
+        ));
 
         Ok(ServoEmbedder {
             config,
@@ -106,6 +114,8 @@ impl ServoEmbedder {
             dom_tree,
             console_api,
             timer_manager,
+            local_storage,
+            session_storage,
             current_url: String::new(),
             title: String::new(),
             loading: false,
@@ -209,6 +219,21 @@ impl ServoEmbedder {
     pub fn handle_scroll(&mut self, delta_x: f32, delta_y: f32) {
         // TODO: Forward to Servo's event handling
         debug!("Scroll: ({}, {})", delta_x, delta_y);
+    }
+
+    /// Poll and execute ready timers
+    pub async fn poll_timers(&self) {
+        let ready_timers = {
+            let mut manager = self.timer_manager.write();
+            manager.poll_ready_timers()
+        };
+
+        if !ready_timers.is_empty() {
+            let mut engine = self.js_engine.lock().await;
+            for timer in ready_timers {
+                engine.call_timer_callback(timer.id);
+            }
+        }
     }
 
     // Getters

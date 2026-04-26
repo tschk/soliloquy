@@ -5,17 +5,40 @@
 
 use rusty_v8 as v8;
 use std::sync::Arc;
+use std::collections::HashMap;
 use parking_lot::RwLock;
 use log::{debug, warn};
 
 use crate::servo_embed::dom::{DomTree, NodeId, NodeType};
-use crate::servo_embed::web_apis::{ConsoleApi, TimerManager};
+use crate::servo_embed::web_apis::{ConsoleApi, TimerManager, StorageApi};
 
 /// Data stored in V8 context embedder data
 pub struct V8ContextData {
     pub dom_tree: Arc<RwLock<DomTree>>,
     pub console_api: Arc<RwLock<ConsoleApi>>,
     pub timer_manager: Arc<RwLock<TimerManager>>,
+    pub local_storage: Arc<RwLock<StorageApi>>,
+    pub session_storage: Arc<RwLock<StorageApi>>,
+    pub timer_callbacks: RwLock<HashMap<u64, v8::Global<v8::Function>>>,
+}
+
+impl V8ContextData {
+    pub fn new(
+        dom_tree: Arc<RwLock<DomTree>>,
+        console_api: Arc<RwLock<ConsoleApi>>,
+        timer_manager: Arc<RwLock<TimerManager>>,
+        local_storage: Arc<RwLock<StorageApi>>,
+        session_storage: Arc<RwLock<StorageApi>>,
+    ) -> Self {
+        Self {
+            dom_tree,
+            console_api,
+            timer_manager,
+            local_storage,
+            session_storage,
+            timer_callbacks: RwLock::new(HashMap::new()),
+        }
+    }
 }
 
 /// Initialize a V8 context with DOM and Web APIs
@@ -36,8 +59,9 @@ pub fn initialize_context<'s>(
     let data_ptr = Box::into_raw(Box::new(data));
     context.set_aligned_pointer_in_embedder_data(0, data_ptr as *mut std::ffi::c_void);
 
-    // Set up DOM templates on the context
+    // Set up DOM and Storage on the context
     setup_dom(scope, context);
+    setup_storage(scope, context);
 
     context
 }
@@ -81,6 +105,38 @@ fn setup_timers<'s>(scope: &mut v8::HandleScope<'s>, global: v8::Local<v8::Objec
     let clear_interval = v8::FunctionTemplate::new(scope, clear_timer_callback);
     let clear_interval_name = v8::String::new(scope, "clearInterval").unwrap();
     global.set(clear_interval_name.into(), clear_interval.into());
+}
+
+fn setup_storage<'s>(scope: &mut v8::HandleScope<'s>, context: v8::Local<v8::Context>) {
+    let storage_tmpl = v8::FunctionTemplate::new(scope, |_, _, _| {});
+    storage_tmpl.set_class_name(v8::String::new(scope, "Storage").unwrap());
+    let storage_inst = storage_tmpl.instance_template(scope);
+    storage_inst.set_internal_field_count(1);
+
+    let get_item_fn = v8::FunctionTemplate::new(scope, storage_get_item);
+    storage_inst.set(v8::String::new(scope, "getItem").unwrap().into(), get_item_fn.into());
+
+    let set_item_fn = v8::FunctionTemplate::new(scope, storage_set_item);
+    storage_inst.set(v8::String::new(scope, "setItem").unwrap().into(), set_item_fn.into());
+
+    let remove_item_fn = v8::FunctionTemplate::new(scope, storage_remove_item);
+    storage_inst.set(v8::String::new(scope, "removeItem").unwrap().into(), remove_item_fn.into());
+
+    let clear_fn = v8::FunctionTemplate::new(scope, storage_clear);
+    storage_inst.set(v8::String::new(scope, "clear").unwrap().into(), clear_fn.into());
+
+    let global = context.global(scope);
+    let storage_ctor = storage_tmpl.get_function(scope).unwrap();
+
+    // Local Storage (type 0)
+    let local_storage_obj = storage_ctor.new_instance(scope, &[]).unwrap();
+    local_storage_obj.set_internal_field(0, v8::Integer::new(scope, 0).into());
+    global.set(scope, v8::String::new(scope, "localStorage").unwrap().into(), local_storage_obj.into()).unwrap();
+
+    // Session Storage (type 1)
+    let session_storage_obj = storage_ctor.new_instance(scope, &[]).unwrap();
+    session_storage_obj.set_internal_field(0, v8::Integer::new(scope, 1).into());
+    global.set(scope, v8::String::new(scope, "sessionStorage").unwrap().into(), session_storage_obj.into()).unwrap();
 }
 
 fn setup_dom<'s>(scope: &mut v8::HandleScope<'s>, context: v8::Local<v8::Context>) {
@@ -156,8 +212,7 @@ pub fn wrap_node<'s>(
     obj
 }
 
-// --- Callbacks (Console, Timers, DOM) ---
-// ... (omitting for brevity in this thought, but I will include them in the WriteFile)
+// --- Callbacks (Console, Timers, DOM, Storage) ---
 
 fn console_log(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, _rv: v8::ReturnValue) {
     let message = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
@@ -180,22 +235,36 @@ fn console_error(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArgument
 }
 
 fn set_timeout_callback(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, mut rv: v8::ReturnValue) {
-    let _callback = args.get(0); // In real impl, store this
+    let callback = v8::Local::<v8::Function>::try_from(args.get(0)).unwrap();
     let delay = args.get(1).integer_value(scope).unwrap_or(0) as u64;
-    let timer_id = get_context_data(scope).timer_manager.write().set_timeout(0, delay);
+    
+    let data = get_context_data(scope);
+    let timer_id = data.timer_manager.write().set_timeout(0, delay);
+    
+    // Store the callback
+    data.timer_callbacks.write().insert(timer_id, v8::Global::new(scope, callback));
+    
     rv.set(v8::Number::new(scope, timer_id as f64).into());
 }
 
 fn set_interval_callback(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, mut rv: v8::ReturnValue) {
-    let _callback = args.get(0);
+    let callback = v8::Local::<v8::Function>::try_from(args.get(0)).unwrap();
     let interval = args.get(1).integer_value(scope).unwrap_or(0) as u64;
-    let timer_id = get_context_data(scope).timer_manager.write().set_interval(0, interval);
+    
+    let data = get_context_data(scope);
+    let timer_id = data.timer_manager.write().set_interval(0, interval);
+    
+    // Store the callback
+    data.timer_callbacks.write().insert(timer_id, v8::Global::new(scope, callback));
+    
     rv.set(v8::Number::new(scope, timer_id as f64).into());
 }
 
 fn clear_timer_callback(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, _rv: v8::ReturnValue) {
     let timer_id = args.get(0).integer_value(scope).unwrap_or(0) as u64;
-    get_context_data(scope).timer_manager.write().clear_timer(timer_id);
+    let data = get_context_data(scope);
+    data.timer_manager.write().clear_timer(timer_id);
+    data.timer_callbacks.write().remove(&timer_id);
 }
 
 fn node_type_getter(scope: &mut v8::HandleScope, _name: v8::Local<v8::Name>, args: v8::PropertyCallbackArguments, mut rv: v8::ReturnValue) {
@@ -233,6 +302,44 @@ fn create_element_callback(scope: &mut v8::HandleScope, args: v8::FunctionCallba
     let tag = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
     let new_id = get_context_data(scope).dom_tree.write().create_element(&tag);
     rv.set(wrap_node(scope, new_id).into());
+}
+
+fn get_storage<'s>(scope: &mut v8::HandleScope<'s>, args: &v8::FunctionCallbackArguments<'s>) -> Arc<RwLock<StorageApi>> {
+    let data = get_context_data(scope);
+    let storage_type = args.this().get_internal_field(scope, 0).unwrap().integer_value(scope).unwrap_or(0);
+    if storage_type == 0 {
+        data.local_storage.clone()
+    } else {
+        data.session_storage.clone()
+    }
+}
+
+fn storage_get_item(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, mut rv: v8::ReturnValue) {
+    let key = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
+    let storage = get_storage(scope, &args);
+    if let Some(val) = storage.read().get_item(&key) {
+        rv.set(v8::String::new(scope, val).unwrap().into());
+    } else {
+        rv.set(v8::null(scope).into());
+    }
+}
+
+fn storage_set_item(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, _rv: v8::ReturnValue) {
+    let key = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
+    let value = args.get(1).to_string(scope).unwrap().to_rust_string_lossy(scope);
+    let storage = get_storage(scope, &args);
+    let _ = storage.write().set_item(&key, &value);
+}
+
+fn storage_remove_item(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, _rv: v8::ReturnValue) {
+    let key = args.get(0).to_string(scope).unwrap().to_rust_string_lossy(scope);
+    let storage = get_storage(scope, &args);
+    storage.write().remove_item(&key);
+}
+
+fn storage_clear(scope: &mut v8::HandleScope, args: v8::FunctionCallbackArguments, _rv: v8::ReturnValue) {
+    let storage = get_storage(scope, &args);
+    storage.write().clear();
 }
 
 fn get_context_data(scope: &mut v8::HandleScope) -> &'static V8ContextData {
