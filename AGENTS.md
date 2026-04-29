@@ -91,3 +91,12 @@ The shell test_flatland_present validates Flatland compositor integration.
     Predicted navigation: < 0.2s
     Per-tab memory:       < 20MB
     150 tabs total:       < 3GB RAM
+
+
+<claude-mem-context>
+# Memory Context
+
+# [soliloquy] recent context, 2026-04-26 2:36pm GMT+10
+
+No previous sessions found.
+</claude-mem-context>

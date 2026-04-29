@@ -157,6 +157,9 @@ build_servo_linux_from_source() {
       rm -rf /tmp/servo-src
       mkdir -p /tmp/servo-src
       rsync -a --delete /work/third_party/servo/ /tmp/servo-src/
+      rm -rf /src /examples
+      ln -s /work/src /src
+      ln -s /work/examples /examples
       cd /tmp/servo-src
       export CC=cc
       export CXX=c++
