@@ -4,7 +4,7 @@ use tokio::runtime::Runtime;
 
 fn js_execution_benchmark(c: &mut Criterion) {
     let rt = Runtime::new().unwrap();
-    
+
     c.bench_function("js_simple_arithmetic", |b| {
         b.to_async(&rt).iter(|| async {
             let mut engine = JsEngine::new().unwrap();
@@ -15,21 +15,33 @@ fn js_execution_benchmark(c: &mut Criterion) {
     c.bench_function("js_function_call", |b| {
         b.to_async(&rt).iter(|| async {
             let mut engine = JsEngine::new().unwrap();
-            black_box(engine.execute_to_string("
+            black_box(
+                engine
+                    .execute_to_string(
+                        "
                 function test() { return 42; }
                 test();
-            ").unwrap());
+            ",
+                    )
+                    .unwrap(),
+            );
         });
     });
 
     c.bench_function("js_dom_manipulation", |b| {
         b.to_async(&rt).iter(|| async {
             let mut engine = JsEngine::new().unwrap();
-            black_box(engine.execute_to_string("
+            black_box(
+                engine
+                    .execute_to_string(
+                        "
                 var div = { innerHTML: 'test' };
                 div.innerHTML = 'updated';
                 div.innerHTML;
-            ").unwrap());
+            ",
+                    )
+                    .unwrap(),
+            );
         });
     });
 }

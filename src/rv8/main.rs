@@ -7,9 +7,9 @@ use roverate::compositor;
 use roverate::networking;
 use std::env;
 
-use roverate::renderer;
 use roverate::core::{Browser, BrowserConfig};
 use roverate::ipc::{self, IpcSender, RendererMessage};
+use roverate::renderer;
 
 fn main() {
     // Initialize logging with tracing
@@ -150,10 +150,9 @@ fn run_renderer_process(args: &[String]) {
         };
 
         use std::process;
-        let mut renderer =
-            renderer::RendererProcess::new(process::id() as u64, browser_tx, config)
-                .await
-                .expect("Failed to create renderer process");
+        let mut renderer = renderer::RendererProcess::new(process::id() as u64, browser_tx, config)
+            .await
+            .expect("Failed to create renderer process");
 
         renderer.run(mpsc_rx).await;
     });

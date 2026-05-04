@@ -114,11 +114,9 @@ impl RendererProcess {
                 match event_type {
                     MouseEventType::Move => self.embedder.handle_mouse_move(x, y),
                     MouseEventType::Click => {
-                        self.embedder.handle_mouse_click(
-                            x,
-                            y,
-                            crate::servo_embed::MouseButton::Left,
-                        );
+                        self.embedder
+                            .handle_mouse_click(x, y, crate::servo_embed::MouseButton::Left)
+                            .await;
                     }
                     _ => {}
                 }
@@ -128,7 +126,7 @@ impl RendererProcess {
                 key,
                 modifiers: _,
             } => {
-                self.embedder.handle_key(&key, true);
+                self.embedder.handle_key(&key, true).await;
             }
             RendererMessage::Scroll { delta_x, delta_y } => {
                 self.embedder.handle_scroll(delta_x, delta_y);
@@ -176,15 +174,18 @@ impl RendererProcess {
     }
 
     /// Execute JavaScript
-    async fn execute_script(&self, script: &str, _callback_id: u64) {
-        match self.embedder.execute_script(script).await {
-            Ok(result) => {
-                debug!("Script result: {}", result);
-                // TODO: Send result back via callback
-            }
-            Err(e) => {
-                error!("Script execution failed: {}", e);
-            }
+    async fn execute_script(&self, script: &str, callback_id: u64) {
+        let result = self.embedder.execute_script_value(script).await;
+        match &result {
+            Ok(value) => debug!("Script result for callback {}: {:?}", callback_id, value),
+            Err(error) => error!(
+                "Script execution failed for callback {}: {}",
+                callback_id, error
+            ),
+        }
+
+        if let Err(error) = self.browser_channel.send_script_result(callback_id, result) {
+            error!("Failed to send script result: {}", error);
         }
     }
 

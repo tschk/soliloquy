@@ -1,14 +1,14 @@
 //! Process manager for Chrome-like multi-process architecture
 
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
-use std::process::{Child, Command};
-use tokio::sync::Mutex;
 #[cfg(target_os = "linux")]
 use nix::sched::sched_setaffinity;
 #[cfg(target_os = "linux")]
 use nix::sched::CpuSet;
 use num_cpus;
+use std::collections::HashMap;
+use std::process::{Child, Command};
+use tokio::sync::Mutex;
 
 use super::TabId;
 use crate::ipc::{
@@ -106,12 +106,18 @@ impl ProcessManager {
         #[cfg(target_os = "linux")]
         {
             let core_count = num_cpus::get();
-            let core = self.core_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) % core_count;
+            let core = self
+                .core_counter
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                % core_count;
             let pid = nix::unistd::Pid::from_raw(child.id() as i32);
             let mut cpuset = CpuSet::new();
             cpuset.set(core).unwrap();
             if let Err(e) = sched_setaffinity(pid, &cpuset) {
-                warn!("Failed to set CPU affinity for renderer {} to core {}: {}", tab_id.0, core, e);
+                warn!(
+                    "Failed to set CPU affinity for renderer {} to core {}: {}",
+                    tab_id.0, core, e
+                );
             }
         }
 
@@ -192,7 +198,9 @@ impl ProcessManager {
 
         std::thread::spawn(move || {
             while let Ok(msg) = rx_from_browser.recv() {
-                 if mpsc_tx.send(msg).is_err() { break; }
+                if mpsc_tx.send(msg).is_err() {
+                    break;
+                }
             }
         });
 

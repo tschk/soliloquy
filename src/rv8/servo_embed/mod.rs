@@ -9,20 +9,20 @@
 //! - This module bridges the two engines
 
 use log::{debug, error, info};
-use std::sync::Arc;
 use parking_lot::RwLock;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::js::JsEngine;
 use crate::js::bindings::V8ContextData;
+use crate::js::{JsEngine, JsValue};
 use crate::renderer::RenderFrame;
 
 pub mod dom;
 pub mod parser;
 pub mod web_apis;
 
-use self::dom::DomTree;
-use self::web_apis::{ConsoleApi, TimerManager, StorageApi};
+use self::dom::{DomEvent, DomTree};
+use self::web_apis::{ConsoleApi, StorageApi, TimerManager};
 
 /// Servo embedding configuration
 #[derive(Debug, Clone)]
@@ -136,9 +136,9 @@ impl ServoEmbedder {
         match reqwest::get(url).await {
             Ok(response) => {
                 if !response.status().is_success() {
-                     error!("Failed to fetch URL {}: Status {}", url, response.status());
-                     self.loading = false;
-                     return Err(format!("HTTP error: {}", response.status()));
+                    error!("Failed to fetch URL {}: Status {}", url, response.status());
+                    self.loading = false;
+                    return Err(format!("HTTP error: {}", response.status()));
                 }
 
                 match response.text().await {
@@ -184,6 +184,12 @@ impl ServoEmbedder {
         engine.execute_to_string(script)
     }
 
+    /// Execute JavaScript and return a typed transport value.
+    pub async fn execute_script_value(&self, script: &str) -> Result<JsValue, String> {
+        let mut engine = self.js_engine.lock().await;
+        engine.execute(script)
+    }
+
     /// Get the current render frame
     pub fn get_render_frame(&self) -> Option<RenderFrame> {
         // TODO: Get frame from Servo's compositor
@@ -204,15 +210,24 @@ impl ServoEmbedder {
     }
 
     /// Handle mouse click
-    pub fn handle_mouse_click(&mut self, x: f32, y: f32, button: MouseButton) {
-        // TODO: Forward to Servo's event handling
+    pub async fn handle_mouse_click(&mut self, x: f32, y: f32, button: MouseButton) {
         debug!("Mouse click: ({}, {}) button={:?}", x, y, button);
+        let target_id = self.dom_tree.read().document_id();
+        let event = DomEvent::mouse("click", target_id, x, y, button);
+        self.dom_tree.write().record_event(event.clone());
+        let mut engine = self.js_engine.lock().await;
+        engine.dispatch_event(&event);
     }
 
     /// Handle key event
-    pub fn handle_key(&mut self, key: &str, pressed: bool) {
-        // TODO: Forward to Servo's event handling
+    pub async fn handle_key(&mut self, key: &str, pressed: bool) {
         debug!("Key event: {} pressed={}", key, pressed);
+        let target_id = self.dom_tree.read().document_id();
+        let event_type = if pressed { "keydown" } else { "keyup" };
+        let event = DomEvent::key(event_type, target_id, key);
+        self.dom_tree.write().record_event(event.clone());
+        let mut engine = self.js_engine.lock().await;
+        engine.dispatch_event(&event);
     }
 
     /// Handle scroll event

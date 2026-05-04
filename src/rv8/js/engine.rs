@@ -3,6 +3,7 @@
 //! Provides a safe Rust interface to the V8 JavaScript engine.
 
 use crate::js::bindings::{initialize_context, take_context_data, V8ContextData};
+use crate::servo_embed::dom::DomEvent;
 use log::{debug, error, info};
 use rusty_v8 as v8;
 use std::sync::Once;
@@ -127,6 +128,15 @@ impl JsEngine {
         }
     }
 
+    /// Dispatch a host event to V8 DOM listeners.
+    pub fn dispatch_event(&mut self, event: &DomEvent) -> usize {
+        let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
+        let context = v8::Local::new(handle_scope, &self.context);
+        let scope = &mut v8::ContextScope::new(handle_scope, context);
+
+        crate::js::bindings::dispatch_event(scope, event)
+    }
+
     /// Convert V8 value to our JsValue type
     fn v8_to_js_value(scope: &mut v8::HandleScope, value: v8::Local<v8::Value>) -> super::JsValue {
         if value.is_undefined() {
@@ -231,5 +241,57 @@ mod tests {
             .unwrap();
         let tag_name = engine.execute_to_string("el.tagName").unwrap();
         assert_eq!(tag_name, "DIV");
+    }
+
+    #[test]
+    fn test_dom_mutation_and_event_bindings() {
+        use crate::servo_embed::dom::{DomEvent, DomTree};
+        use crate::servo_embed::web_apis::{ConsoleApi, StorageApi, TimerManager};
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let mut engine = JsEngine::new().unwrap();
+        let dom_tree = Arc::new(RwLock::new(DomTree::new()));
+        let console_api = Arc::new(RwLock::new(ConsoleApi::new()));
+        let timer_manager = Arc::new(RwLock::new(TimerManager::new()));
+        let local_storage = Arc::new(RwLock::new(StorageApi::new(1024)));
+        let session_storage = Arc::new(RwLock::new(StorageApi::new(1024)));
+
+        engine.initialize(V8ContextData::new(
+            dom_tree.clone(),
+            console_api,
+            timer_manager,
+            local_storage,
+            session_storage,
+        ));
+
+        engine
+            .execute(
+                "var el = document.createElement('section');
+                 el.setAttribute('id', 'root');
+                 el.textContent = 'ready';
+                 document.appendChild(el);
+                 var seen = '';
+                 document.addEventListener('click', function(event) {
+                   seen = event.type + ':' + event.clientX + ':' + event.target.nodeType;
+                 });",
+            )
+            .unwrap();
+
+        assert!(dom_tree.read().query_selector("#root").is_some());
+        assert_eq!(engine.execute_to_string("el.textContent").unwrap(), "ready");
+        assert!(!dom_tree.write().take_mutations().is_empty());
+
+        let event = DomEvent {
+            event_type: "click".to_string(),
+            target_id: dom_tree.read().document_id(),
+            client_x: Some(7.0),
+            client_y: Some(3.0),
+            button: Some(0),
+            key: None,
+        };
+
+        assert_eq!(engine.dispatch_event(&event), 1);
+        assert_eq!(engine.execute_to_string("seen").unwrap(), "click:7:9");
     }
 }

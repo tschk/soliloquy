@@ -10,6 +10,7 @@ use tokio::sync::{Mutex, Notify};
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const DAMAGE_HISTORY_LEN: usize = 3;
+const PRESENT_QUEUE_LEN: usize = 3;
 
 /// Compositor-space damage region.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +39,15 @@ pub struct CompositorStats {
     pub submitted_frames: u64,
     pub last_frame_id: Option<u64>,
     pub damage_history_len: usize,
+    pub present_queue_len: usize,
     pub last_present_ms: Option<u128>,
+}
+
+/// Queued render pass ready for platform presentation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderPass {
+    pub frame_id: u64,
+    pub damage: DamageRegion,
 }
 
 #[derive(Debug)]
@@ -48,6 +57,7 @@ struct CompositorState {
     last_frame_id: Option<u64>,
     last_present: Option<Instant>,
     damage_history: VecDeque<DamageRegion>,
+    present_queue: VecDeque<RenderPass>,
 }
 
 impl CompositorState {
@@ -58,6 +68,7 @@ impl CompositorState {
             last_frame_id: None,
             last_present: None,
             damage_history: VecDeque::with_capacity(DAMAGE_HISTORY_LEN),
+            present_queue: VecDeque::with_capacity(PRESENT_QUEUE_LEN),
         }
     }
 
@@ -75,10 +86,18 @@ impl CompositorState {
             submitted_frames: self.submitted_frames,
             last_frame_id: self.last_frame_id,
             damage_history_len: self.damage_history.len(),
+            present_queue_len: self.present_queue.len(),
             last_present_ms: self
                 .last_present
                 .map(|present| present.elapsed().as_millis()),
         }
+    }
+
+    fn push_present_pass(&mut self, render_pass: RenderPass) {
+        if self.present_queue.len() == PRESENT_QUEUE_LEN {
+            self.present_queue.pop_front();
+        }
+        self.present_queue.push_back(render_pass);
     }
 }
 
@@ -138,15 +157,25 @@ impl Compositor {
 
     pub async fn submit_frame(&self, frame: RenderFrame) {
         let mut state = self.state.lock().await;
+        let damage = DamageRegion::full_frame(frame.width, frame.height);
         state.submitted_frames += 1;
         state.last_frame_id = Some(frame.id);
         state.last_present = Some(Instant::now());
-        state.push_damage(DamageRegion::full_frame(frame.width, frame.height));
+        state.push_damage(damage);
+        state.push_present_pass(RenderPass {
+            frame_id: frame.id,
+            damage,
+        });
         state.pending_frame = false;
         debug!(
             "Submitted frame {} ({}x{})",
             frame.id, frame.width, frame.height
         );
+    }
+
+    pub async fn drain_present_queue(&self) -> Vec<RenderPass> {
+        let mut state = self.state.lock().await;
+        state.present_queue.drain(..).collect()
     }
 
     pub async fn stats(&self) -> CompositorStats {
@@ -212,5 +241,27 @@ mod tests {
         assert_eq!(stats.submitted_frames, 1);
         assert_eq!(stats.last_frame_id, Some(42));
         assert_eq!(stats.damage_history_len, 1);
+        assert_eq!(stats.present_queue_len, 1);
+    }
+
+    #[tokio::test]
+    async fn present_queue_should_be_bounded() {
+        let config = BrowserConfig::default();
+        let compositor = Compositor::new(&config)
+            .await
+            .expect("compositor should initialize");
+
+        for frame_id in 0..5 {
+            let mut frame = RenderFrame::new(10, 10);
+            frame.id = frame_id;
+            compositor.submit_frame(frame).await;
+        }
+
+        let stats = compositor.stats().await;
+        assert_eq!(stats.present_queue_len, PRESENT_QUEUE_LEN);
+
+        let passes = compositor.drain_present_queue().await;
+        assert_eq!(passes.len(), PRESENT_QUEUE_LEN);
+        assert_eq!(passes.first().map(|pass| pass.frame_id), Some(2));
     }
 }

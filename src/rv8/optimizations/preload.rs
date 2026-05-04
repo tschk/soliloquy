@@ -30,18 +30,18 @@ impl Preloader {
             completed: HashSet::new(),
         }
     }
-    
+
     /// Add a preload hint
     pub fn add_hint(&mut self, hint: PreloadHint) {
         if !self.completed.contains(&hint) {
             self.hints.insert(hint);
         }
     }
-    
+
     /// Process pending hints
     pub async fn process(&mut self) {
         let hints: Vec<_> = self.hints.drain().collect();
-        
+
         for hint in hints {
             match &hint {
                 PreloadHint::DnsPrefetch(domain) => {

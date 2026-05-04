@@ -1,7 +1,7 @@
 //! Storage subsystems module
 
-use std::path::Path;
 use log::info;
+use std::path::Path;
 
 /// Storage manager for profiles, cache, cookies
 pub struct StorageManager {
@@ -13,7 +13,7 @@ impl StorageManager {
         info!("Initializing storage at {:?}", data_dir);
         Ok(StorageManager {})
     }
-    
+
     pub async fn flush(&self) {
         info!("Flushing storage");
     }

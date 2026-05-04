@@ -52,8 +52,10 @@ impl<'a> TokenSink for DomBuilder<'a> {
 
                         // Push to stack unless it's a self-closing tag or void element
                         if !tag.self_closing {
-                            let void_tags = ["area", "base", "br", "col", "embed", "hr", "img", "input",
-                                             "link", "meta", "param", "source", "track", "wbr"];
+                            let void_tags = [
+                                "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+                                "meta", "param", "source", "track", "wbr",
+                            ];
                             if !void_tags.contains(&tag_name.as_str()) {
                                 self.stack.borrow_mut().push(node_id);
                             }

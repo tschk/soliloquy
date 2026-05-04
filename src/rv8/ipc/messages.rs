@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use soliloquy_browser_optimizations::runtime::{SurfaceDescriptor, SurfaceId, SurfaceSize};
 
+use crate::js::JsValue;
+
 /// Messages from renderer to browser process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BrowserMessage {
@@ -29,6 +31,12 @@ pub enum BrowserMessage {
         tab_id: u64,
         level: String,
         message: String,
+    },
+    /// Result of a browser-requested script evaluation
+    ScriptResult {
+        tab_id: u64,
+        callback_id: u64,
+        result: Result<JsValue, String>,
     },
     /// Request to close tab
     CloseTab { tab_id: u64 },
@@ -99,13 +107,24 @@ pub enum RendererMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GpuMessage {
     /// Create surface for tab
-    CreateSurface { tab_id: u64, surface: SurfaceDescriptor },
+    CreateSurface {
+        tab_id: u64,
+        surface: SurfaceDescriptor,
+    },
     /// Destroy surface
     DestroySurface { tab_id: u64, surface_id: SurfaceId },
     /// Resize surface
-    ResizeSurface { tab_id: u64, surface_id: SurfaceId, size: SurfaceSize },
+    ResizeSurface {
+        tab_id: u64,
+        surface_id: SurfaceId,
+        size: SurfaceSize,
+    },
     /// Submit frame for compositing
-    SubmitFrame { tab_id: u64, surface_id: SurfaceId, frame_id: u64 },
+    SubmitFrame {
+        tab_id: u64,
+        surface_id: SurfaceId,
+        frame_id: u64,
+    },
     /// Present composited frame
     Present { tab_id: u64, surface_id: SurfaceId },
     /// Update display list

@@ -1,8 +1,8 @@
 //! Network stack module
 
-use std::sync::Arc;
-use log::info;
 use crate::storage::StorageManager;
+use log::info;
+use std::sync::Arc;
 
 /// Network manager for HTTP requests
 pub struct NetworkManager {
@@ -40,7 +40,7 @@ impl NetworkProcess {
             channel_id: channel_id.to_string(),
         }
     }
-    
+
     pub async fn run(&self) {
         info!("Network process running...");
         loop {

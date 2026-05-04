@@ -22,6 +22,10 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - The local `surfman 0.11.0` patch remains pinned intentionally; upstream Servo currently points at `surfman 0.12.0`, but using that directly would bypass the Soliloquy QEMU/X11 boot fixes.
 - QEMU now boots into the Servo browser appliance path. This is still Servo-first boot, not full RV8 page-script ownership.
 - `os://terminal` is wired through Servo's `os:` protocol handler to the local sold terminal route.
+- `ghostty-vt.wasm` now builds locally with Homebrew `zig@0.15` without replacing the user's default `zig 0.16`.
+- RV8 now returns typed `ExecuteScript` results over renderer IPC instead of logging string-only callback placeholders.
+- RV8's local V8 DOM handles now support basic mutation/event behavior: `appendChild`, `removeChild`, `setAttribute`, `getAttribute`, `textContent`, `querySelector`, and `addEventListener`.
+- RV8's compositor now keeps a bounded present-pass queue alongside recent damage history.
 - Unsupported evaluation paths still fall back to Servo's existing `mozjs` path.
 
 ## What Has Been Done
@@ -55,14 +59,17 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Added Servo's `os:` protocol handler so `os://terminal` routes to the local terminal surface.
 - Merged the local Servo branch forward over the latest upstream Servo mainline and updated the root Soliloquy gitlink.
 - Removed the obsolete local `sea-query-rusqlite` patch from the active Servo dependency graph after the upstream merge; Servo now uses the pinned upstream crate release.
+- Aligned the local `surfman` patch to Servo's current `glow 0.17` dependency so targeted `soliloquy_v8` checks pass again.
+- Updated `scripts/build-ghostty-wasm.sh` to prefer `GHOSTTY_ZIG` or Homebrew's unlinked `zig@0.15` binary, then built `bundle/terminal/ghostty-vt.wasm`.
+- Added typed RV8 script-result IPC, DOM mutation/event tests, and a bounded compositor present-queue test.
 
 ## What Is Still Missing
 
 - A real V8 isolate running inside Servo-owned evaluation paths.
 - A typed host bridge between Servo script operations and the Soliloquy V8 runtime.
-- DOM object identity, handle lifetime, and cross-runtime serialization rules.
-- Mutation routing from V8-owned calls into the actual Servo script / DOM thread.
-- Event delivery from Servo into the V8 side for navigation, load, timers, and DOM changes.
+- Full DOM object identity, handle lifetime, and cross-runtime serialization rules beyond the local RV8 handle prototype.
+- Mutation routing from V8-owned calls into the actual Servo script / DOM thread beyond the local RV8 mutation log.
+- Event delivery from Servo into the V8 side for navigation, load, timers, and DOM changes beyond the local RV8 listener prototype.
 - A plan to remove or sharply reduce `mozjs` ownership without breaking Web IDL bindings.
 
 ## Compositor Reference Notes
@@ -110,13 +117,18 @@ RV8 should mirror those architecture choices in Rust / WGPU terms:
   - added an opt-in `soliloquy_v8` feature that bootstraps `rusty_v8` platform / thread-local isolate ownership
 - Still to do:
   - define isolate lifetime, value transport, and error propagation contracts
-  - route only the narrow bridge operations through V8 first
+  - route only the narrow Servo bridge operations through V8 first
   - keep direct DOM execution out of scope until value transport, error propagation, and isolate lifetime are stable
 
 ### Phase 3: Add DOM Handle Semantics
 
-- Introduce opaque node / window / document handles instead of string-only operations.
-- Define lookup, invalidation, and stale-handle behavior.
+- Completed in part:
+  - added local RV8 `NodeId`-backed JS objects with basic DOM methods and `textContent` accessors
+  - added mutation logging for append, remove, attribute, and text writes
+  - added local event listener registration and dispatch for host-routed events
+- Still to do:
+  - introduce opaque Servo node / window / document handles instead of local-only `NodeId` objects
+  - define lookup, invalidation, and stale-handle behavior across Servo and V8
 - Add explicit thread-affinity rules for script thread access.
 
 ### Phase 4: Expand Mutation Coverage
@@ -133,7 +145,7 @@ RV8 should mirror those architecture choices in Rust / WGPU terms:
 
 ### Phase 5: Move Evaluation Ownership
 
-- Route a bounded subset of `evaluate_javascript()` entirely through the V8 backend.
+- Route a bounded subset of Servo `evaluate_javascript()` entirely through the V8 backend.
 - Add feature-gated telemetry for:
   - backend chosen
   - fallback rate
@@ -163,9 +175,9 @@ RV8 should mirror those architecture choices in Rust / WGPU terms:
 
 ## Current Blockers
 
-- Plain local Servo Rust validation still needs toolchain cleanup on this machine after the upstream merge.
+- Plain local Servo Rust validation now works for the targeted Soliloquy path with the local SDK/toolchain shim.
   - Full locked Cargo metadata passes for `third_party/servo/Cargo.toml`.
-  - Targeted `cargo check -p servo --no-default-features --features soliloquy_v8` gets through dependency resolution, `rusty_v8`, and the active `sea-query-rusqlite` crate, then fails in `mozjs_sys` because the SpiderMonkey generated build directory is missing `Makefile` after configure.
+  - Targeted `cargo check -p servo --no-default-features --features soliloquy_v8` passes after cleaning `mozjs_sys` and aligning the local `surfman` patch to `glow 0.17`.
   - Running without `/usr/bin/python3` first in `PATH` also trips over Homebrew Python 3.14 `sitecustomize`; use Xcode's Python 3.9.6 for Servo checks.
   - The Xcode SDK / `libclang` env shim is still needed for local macOS checks.
 - The current bridge is intentionally narrow and does not yet own general DOM execution.
@@ -174,7 +186,7 @@ RV8 should mirror those architecture choices in Rust / WGPU terms:
 ## Immediate Next Steps
 
 1. Broaden the navigation bridge test into an integration path that crosses `WebView::evaluate_javascript()` and observes the emitted `LoadUrl` request.
-2. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
-3. Clean or regenerate the local `mozjs_sys` build output so full targeted Servo checks can complete after the upstream merge.
-4. Extend schema coverage to mutation definitions once the next mutation command is added.
-5. Continue replacing the RV8 compositor stub with a Hyprland-style damage-driven scheduler, damage ring, and explicit render-pass queue.
+2. Connect the local RV8 typed script-result path to Servo's `v8-experimental` dispatcher.
+3. Extend schema coverage to mutation definitions once the next Servo mutation command is added.
+4. Add stale-handle and multi-document tests for the local RV8 DOM handle prototype.
+5. Continue replacing the RV8 compositor stub with a Hyprland-style per-surface scheduler and occlusion-aware pass builder.

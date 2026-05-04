@@ -165,10 +165,7 @@ impl BrowserConfig {
             disable_web_security: false,
             incognito: false,
             headless: false,
-            v8_flags: vec![
-                "--turbofan".to_string(),
-                "--concurrent-marking".to_string(),
-            ],
+            v8_flags: vec!["--turbofan".to_string(), "--concurrent-marking".to_string()],
             cache_size_bytes: 128 * 1024 * 1024,
             enable_http3: true,
         }

@@ -9,6 +9,8 @@ use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::js::JsValue;
+
 pub mod messages;
 
 // Re-exports
@@ -199,6 +201,20 @@ impl RendererChannel {
             })
             .map_err(|e| e.to_string())
     }
+
+    pub fn send_script_result(
+        &self,
+        callback_id: u64,
+        result: Result<JsValue, String>,
+    ) -> Result<(), String> {
+        self.to_browser
+            .send(BrowserMessage::ScriptResult {
+                tab_id: self.tab_id,
+                callback_id,
+                result,
+            })
+            .map_err(|e| e.to_string())
+    }
 }
 
 /// Client for communicating with a renderer process (from Browser)
@@ -237,6 +253,15 @@ impl RendererClient {
             .send(RendererMessage::Shutdown)
             .map_err(|e| e.to_string())
     }
+
+    pub fn send_execute_script(&self, script: &str, callback_id: u64) -> Result<(), String> {
+        self.tx
+            .send(RendererMessage::ExecuteScript {
+                script: script.to_string(),
+                callback_id,
+            })
+            .map_err(|e| e.to_string())
+    }
 }
 
 /// IPC Server for managing channels to child processes
@@ -252,7 +277,8 @@ impl IpcServer {
     }
 
     /// Create a bootstrap server for a new process
-    pub fn create_bootstrap_server() -> Result<(String, IpcOneShotServer<IpcSender<RendererMessage>>), String> {
+    pub fn create_bootstrap_server(
+    ) -> Result<(String, IpcOneShotServer<IpcSender<RendererMessage>>), String> {
         let (server, name) = IpcOneShotServer::new()
             .map_err(|e| format!("Failed to create bootstrap server: {}", e))?;
         Ok((name, server))
@@ -260,7 +286,10 @@ impl IpcServer {
 
     /// Create a channel for in-process or manual connection
     /// Returns the renderer channel wrapper and the receiver for the browser
-    pub fn create_channel(&self, channel_id: &str) -> Result<(RendererChannel, IpcReceiver<BrowserMessage>), String> {
+    pub fn create_channel(
+        &self,
+        channel_id: &str,
+    ) -> Result<(RendererChannel, IpcReceiver<BrowserMessage>), String> {
         let (tx, rx) = ipc::channel().map_err(|e| e.to_string())?;
 
         {
