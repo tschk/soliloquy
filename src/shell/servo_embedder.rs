@@ -655,8 +655,11 @@ fn validate_url(url: &str) -> Result<(), String> {
     }
     
     let url_lower = url.to_lowercase();
-    if !url_lower.starts_with("http://") && !url_lower.starts_with("https://") {
-        return Err("URL must start with http:// or https://".to_string());
+    if !url_lower.starts_with("http://")
+        && !url_lower.starts_with("https://")
+        && !url_lower.starts_with("os://")
+    {
+        return Err("URL must start with http://, https://, or os://".to_string());
     }
     
     if url.len() < 10 {
@@ -696,7 +699,15 @@ mod tests {
         assert!(validate_url("example.com").is_err());
         assert!(validate_url("www.example.com").is_err());
         let err = validate_url("ftp://example.com").unwrap_err();
-        assert!(err.contains("http://") || err.contains("https://"));
+        assert!(err.contains("http://") || err.contains("https://") || err.contains("os://"));
+    }
+
+    #[test]
+    fn test_url_validation_os_scheme() {
+        assert!(validate_url("os://terminal").is_ok());
+        assert!(validate_url("os://files").is_ok());
+        assert!(validate_url("os://settings").is_ok());
+        assert!(validate_url("OS://TERMINAL").is_ok());
     }
 
     #[test]

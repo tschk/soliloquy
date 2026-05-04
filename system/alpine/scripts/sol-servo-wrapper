@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-START_URL="${SOL_START_URL:-http://127.0.0.1:8080/}"
+START_URL="${SOL_START_URL:-os://terminal}"
 SPLASH_URL="file:///usr/local/share/soliloquy/splash/index.html#${START_URL}"
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 SERVO_BIN="${SERVO_BIN:-/usr/local/bin/servo}"

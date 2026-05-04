@@ -87,4 +87,19 @@ if [ ! -d "${UI_BUILD_DIR}" ]; then
 fi
 rm -rf "${ROOTFS}/usr/local/share/soliloquy/ui"
 cp -R "${UI_BUILD_DIR}" "${ROOTFS}/usr/local/share/soliloquy/ui"
+
+# Stage sold bundle (includes os://terminal HTML + ghostty WASM)
+BUNDLE_DIR="${REPO_ROOT}/bundle"
+WASM_OUT="${BUNDLE_DIR}/terminal/ghostty-vt.wasm"
+if [ ! -f "${WASM_OUT}" ]; then
+  echo "ghostty-vt.wasm not found at ${WASM_OUT}; building now..."
+  if command -v zig >/dev/null 2>&1; then
+    "${REPO_ROOT}/scripts/build-ghostty-wasm.sh"
+  else
+    echo "WARNING: zig not found; os://terminal will load without WASM VT support" >&2
+    echo "  Install zig 0.14+ and re-run to enable ghostty-vt.wasm" >&2
+  fi
+fi
+cp -R "${BUNDLE_DIR}/." "${ROOTFS}/usr/local/share/soliloquy/bundle"
+
 echo "Staged servo into ${ROOTFS}"

@@ -47,3 +47,9 @@ tools/build_manager/build_manager_gui/node_modules/
 tools/build_manager/build_manager_gui/dist/
 tools/build_manager/build_manager_gui/src-tauri/target/
 tools/bootloader/
+
+# ghostty WASM build artifacts (large; built at image-assembly time)
+bundle/terminal/ghostty-vt.wasm
+# zig build cache (ghostty submodule)
+third_party/ghostty/.zig-cache/
+third_party/ghostty/zig-out/
