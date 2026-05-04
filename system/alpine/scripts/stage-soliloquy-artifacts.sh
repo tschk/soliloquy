@@ -90,14 +90,24 @@ cp -R "${UI_BUILD_DIR}" "${ROOTFS}/usr/local/share/soliloquy/ui"
 
 # Stage sold bundle (includes os://terminal HTML + ghostty WASM)
 BUNDLE_DIR="${REPO_ROOT}/bundle"
+GHOSTTY_WASM_REQUIRED="${GHOSTTY_WASM_REQUIRED:-0}"
 WASM_OUT="${BUNDLE_DIR}/terminal/ghostty-vt.wasm"
 if [ ! -f "${WASM_OUT}" ]; then
   echo "ghostty-vt.wasm not found at ${WASM_OUT}; building now..."
   if command -v zig >/dev/null 2>&1; then
-    "${REPO_ROOT}/scripts/build-ghostty-wasm.sh"
+    if ! "${REPO_ROOT}/scripts/build-ghostty-wasm.sh"; then
+      if [ "${GHOSTTY_WASM_REQUIRED}" = "1" ]; then
+        echo "ERROR: failed to build required ghostty-vt.wasm" >&2
+        exit 1
+      fi
+      echo "WARNING: ghostty-vt.wasm build failed; os://terminal will use JS fallback" >&2
+    fi
   else
-    echo "WARNING: zig not found; os://terminal will load without WASM VT support" >&2
-    echo "  Install zig 0.14+ and re-run to enable ghostty-vt.wasm" >&2
+    if [ "${GHOSTTY_WASM_REQUIRED}" = "1" ]; then
+      echo "ERROR: zig not found; cannot build required ghostty-vt.wasm" >&2
+      exit 1
+    fi
+    echo "WARNING: zig not found; os://terminal will use JS fallback" >&2
   fi
 fi
 cp -R "${BUNDLE_DIR}/." "${ROOTFS}/usr/local/share/soliloquy/bundle"

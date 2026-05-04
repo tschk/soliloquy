@@ -6,7 +6,8 @@ KERNEL="${QEMU_DIR}/vmlinuz-virt"
 INITRAMFS="${QEMU_DIR}/rootfs.cpio.gz"
 QEMU_HEADLESS="${QEMU_HEADLESS:-0}"
 QEMU_ACCEL="${QEMU_ACCEL:-tcg}"
-KERNEL_CMDLINE="${KERNEL_CMDLINE:-quiet loglevel=3 vt.global_cursor_default=0 console=tty0 console=ttyS0 rdinit=/init}"
+QEMU_RNG="${QEMU_RNG:-1}"
+KERNEL_CMDLINE="${KERNEL_CMDLINE:-quiet loglevel=3 vt.global_cursor_default=0 console=tty0 console=ttyS0 random.trust_cpu=on rng_core.default_quality=1000 rdinit=/init}"
 
 for bin in qemu-system-x86_64; do
   command -v "${bin}" >/dev/null 2>&1 || {
@@ -29,6 +30,10 @@ elif [ "$(uname -s)" = "Darwin" ]; then
 fi
 
 USE_VIRTIO_GPU="${USE_VIRTIO_GPU:-1}"
+RNG_FLAGS=""
+if [ "${QEMU_RNG}" = "1" ]; then
+  RNG_FLAGS="-object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0"
+fi
 
 GPU_DEVICE="-device virtio-gpu-pci"
 VGA="-vga none"
@@ -47,6 +52,7 @@ qemu-system-x86_64 \
   ${GPU_DEVICE} \
   -device virtio-keyboard-pci \
   -device virtio-mouse-pci \
+  ${RNG_FLAGS} \
   -device virtio-net-pci,netdev=n1 \
   -netdev user,id=n1 \
   -kernel "${KERNEL}" \

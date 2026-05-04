@@ -92,7 +92,9 @@ else
   export XDG_SESSION_TYPE="x11"
   export DISPLAY="${DISPLAY:-:0}"
   export SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-x11}"
+  export SOL_SERVO_HEADLESS="${SOL_SERVO_HEADLESS:-1}"
   log "SERVO_DISPLAY_BACKEND=${SERVO_DISPLAY_BACKEND}"
+  log "SOL_SERVO_HEADLESS=${SOL_SERVO_HEADLESS}"
   log "SOLILOQUY_JS_ENGINE=${SOLILOQUY_JS_ENGINE:-v8-experimental}"
   if command -v Xvfb >/dev/null 2>&1; then
     log "starting Xvfb on display ${DISPLAY}"

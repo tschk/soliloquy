@@ -8,6 +8,7 @@ xwayland
 xvfb
 mesa-egl
 mesa-gbm
+mesa-dri-gallium
 gcompat
 libstdc++
 font-noto

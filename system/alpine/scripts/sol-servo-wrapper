@@ -7,10 +7,14 @@ SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 SERVO_BIN="${SERVO_BIN:-/usr/local/bin/servo}"
 SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-x11}"
 SOLILOQUY_JS_ENGINE="${SOLILOQUY_JS_ENGINE:-v8-experimental}"
+SOL_SERVO_HEADLESS="${SOL_SERVO_HEADLESS:-0}"
+SOL_SERVO_DEBUG_DUMP="${SOL_SERVO_DEBUG_DUMP:-0}"
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
-export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-llvmpipe}"
+export LIBGL_DRI3_DISABLE="${LIBGL_DRI3_DISABLE:-1}"
+export LIBGL_DRIVERS_PATH="${LIBGL_DRIVERS_PATH:-/usr/lib/xorg/modules/dri:/usr/lib/dri}"
 export SOLILOQUY_SURFMAN_SOFTWARE="${SOLILOQUY_SURFMAN_SOFTWARE:-1}"
 export SOLILOQUY_SURFMAN_CONNECTION_NEW="${SOLILOQUY_SURFMAN_CONNECTION_NEW:-0}"
+export SOLILOQUY_SURFMAN_X11_LEGACY_EGL="${SOLILOQUY_SURFMAN_X11_LEGACY_EGL:-1}"
 export SOLILOQUY_JS_ENGINE
 
 case "${SERVO_DISPLAY_BACKEND}" in
@@ -25,6 +29,22 @@ case "${SERVO_DISPLAY_BACKEND}" in
     export WINIT_UNIX_BACKEND="wayland"
     export EGL_PLATFORM="wayland"
     unset DISPLAY
+    ;;
+esac
+export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-x11}"
+export WINIT_UNIX_BACKEND="${WINIT_UNIX_BACKEND:-x11}"
+export EGL_PLATFORM="${EGL_PLATFORM:-x11}"
+
+case "${SOL_SERVO_HEADLESS}" in
+  1|true|TRUE|yes|YES)
+    export EGL_PLATFORM="surfaceless"
+    export GALLIUM_DRIVER="${GALLIUM_DRIVER:-softpipe}"
+    export LP_NUM_THREADS="${LP_NUM_THREADS:-1}"
+    export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-swrast}"
+    ;;
+  *)
+    export GALLIUM_DRIVER="${GALLIUM_DRIVER:-llvmpipe}"
+    export MESA_LOADER_DRIVER_OVERRIDE="${MESA_LOADER_DRIVER_OVERRIDE:-swrast}"
     ;;
 esac
 export RUST_LOG="${RUST_LOG:-info,servoshell=trace,servoshell<winit@=trace,constellation=trace,script=info,net=debug,compositing=trace,fonts=info}"
@@ -52,6 +72,19 @@ dump_servo_process_state() {
     done || true
   fi
 
+  case "${SOL_SERVO_DEBUG_DUMP}" in
+    1|true|TRUE|yes|YES) ;;
+    *) return ;;
+  esac
+
+  for proc_file in wchan syscall stack; do
+    if [ -r "/proc/${pid}/${proc_file}" ]; then
+      while IFS= read -r line; do
+        log "proc ${proc_file}: ${line}"
+      done <"/proc/${pid}/${proc_file}" 2>/dev/null || true
+    fi
+  done
+
   if [ -d "/proc/${pid}/fd" ]; then
     ls -l "/proc/${pid}/fd" 2>&1 | while IFS= read -r line; do
       log "proc fd: ${line}"
@@ -59,7 +92,7 @@ dump_servo_process_state() {
   fi
 
   if [ -r "/proc/${pid}/maps" ]; then
-    grep -E 'libwayland|libEGL|libGLES|libGL|libxkbcommon|libdrm|libgbm' "/proc/${pid}/maps" 2>/dev/null | while IFS= read -r line; do
+    grep -E 'dri|gallium|swrast|libwayland|libEGL|libGLES|libGL|libxkbcommon|libdrm|libgbm|LLVM' "/proc/${pid}/maps" 2>/dev/null | while IFS= read -r line; do
       log "proc map: ${line}"
     done || true
   fi
@@ -75,9 +108,17 @@ log "WINIT_UNIX_BACKEND=${WINIT_UNIX_BACKEND}"
 log "EGL_PLATFORM=${EGL_PLATFORM:-<unset>}"
 log "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-<unset>}"
 log "DISPLAY=${DISPLAY:-<unset>}"
+log "GALLIUM_DRIVER=${GALLIUM_DRIVER}"
+log "LP_NUM_THREADS=${LP_NUM_THREADS:-<unset>}"
+log "MESA_LOADER_DRIVER_OVERRIDE=${MESA_LOADER_DRIVER_OVERRIDE:-<unset>}"
+log "LIBGL_DRI3_DISABLE=${LIBGL_DRI3_DISABLE}"
+log "LIBGL_DRIVERS_PATH=${LIBGL_DRIVERS_PATH}"
 log "SOLILOQUY_SURFMAN_SOFTWARE=${SOLILOQUY_SURFMAN_SOFTWARE}"
 log "SOLILOQUY_SURFMAN_CONNECTION_NEW=${SOLILOQUY_SURFMAN_CONNECTION_NEW}"
+log "SOLILOQUY_SURFMAN_X11_LEGACY_EGL=${SOLILOQUY_SURFMAN_X11_LEGACY_EGL}"
 log "SOLILOQUY_JS_ENGINE=${SOLILOQUY_JS_ENGINE}"
+log "SOL_SERVO_HEADLESS=${SOL_SERVO_HEADLESS}"
+log "SOL_SERVO_DEBUG_DUMP=${SOL_SERVO_DEBUG_DUMP}"
 
 if [ -f /etc/resolv.conf ]; then
   while IFS= read -r line; do
@@ -117,10 +158,16 @@ if [ ! -x "${SERVO_BIN}" ]; then
   exit 1
 fi
 
+set -- "${SERVO_BIN}"
+case "${SOL_SERVO_HEADLESS}" in
+  1|true|TRUE|yes|YES) set -- "$@" --headless ;;
+esac
+set -- "$@" "${SPLASH_URL}"
+
 if [ -c "${SERIAL_CONSOLE}" ]; then
-  "${SERVO_BIN}" "${SPLASH_URL}" >>"${SERIAL_CONSOLE}" 2>&1 &
+  "$@" >>"${SERIAL_CONSOLE}" 2>&1 &
 else
-  "${SERVO_BIN}" "${SPLASH_URL}" &
+  "$@" &
 fi
 servo_pid=$!
 log "servo pid=${servo_pid}"

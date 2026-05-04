@@ -28,6 +28,9 @@ fi
 if command -v modprobe >/dev/null 2>&1; then
   # Prefer the virtio DRM path in QEMU, but keep booting if modules are absent.
   modprobe virtio_pci >/dev/null 2>&1 || true
+  modprobe rng_core >/dev/null 2>&1 || true
+  modprobe virtio_rng >/dev/null 2>&1 || true
+  modprobe jitterentropy_rng >/dev/null 2>&1 || true
   modprobe virtio_net >/dev/null 2>&1 || true
   modprobe virtio_input >/dev/null 2>&1 || true
   modprobe virtio_gpu >/dev/null 2>&1 || true

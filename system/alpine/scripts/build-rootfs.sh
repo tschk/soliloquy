@@ -8,7 +8,18 @@ ROOTFS_TAR="${OUT_DIR}/rootfs.tar.gz"
 ROOTFS_DIR="${OUT_DIR}/rootfs"
 FORCE_ROOTFS_REBUILD="${FORCE_ROOTFS_REBUILD:-0}"
 
-if [ "${FORCE_ROOTFS_REBUILD}" = "1" ]; then
+rootfs_manifest_changed() {
+  [ ! -f "${ROOTFS_TAR}" ] && return 1
+  for manifest in \
+    "${ALPINE_DIR}/packages-v0.txt" \
+    "${ALPINE_DIR}/docker/rootfs.Dockerfile"
+  do
+    [ "${manifest}" -nt "${ROOTFS_TAR}" ] && return 0
+  done
+  return 1
+}
+
+if [ "${FORCE_ROOTFS_REBUILD}" = "1" ] || rootfs_manifest_changed; then
   rm -f "${ROOTFS_TAR}"
   rm -rf "${ROOTFS_DIR}"
 fi

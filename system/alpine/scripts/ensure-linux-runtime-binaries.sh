@@ -6,6 +6,7 @@ QEMU_ARCH="${QEMU_ARCH:-x86_64}"
 OUT_DIR="${ROOT_DIR}/build/alpine/artifacts/linux-${QEMU_ARCH}"
 SERVO_SRC_BIN="${ROOT_DIR}/third_party/servo/target/release/servoshell"
 SERVO_SOURCE_BUILD="${SERVO_SOURCE_BUILD:-1}"
+SERVO_FORCE_REBUILD="${SERVO_FORCE_REBUILD:-0}"
 SERVO_RELEASE_TAG="${SERVO_RELEASE_TAG:-v0.0.6}"
 SERVO_RUNTIME_DIR="${OUT_DIR}/servo-runtime-root"
 
@@ -37,6 +38,9 @@ file_matches_arch() {
 sold_matches_runtime() {
   bin_path="$1"
   file_info="$(file "${bin_path}")"
+  case "${file_info}" in
+    *"static-pie linked"*|*"statically linked"*) return 0 ;;
+  esac
   case "${QEMU_ARCH}" in
     x86_64)
       case "${file_info}" in
@@ -68,6 +72,22 @@ servo_needs_glibc_runtime() {
       ;;
   esac
   return 1
+}
+
+servo_runtime_bundle_ready() {
+  case "${QEMU_ARCH}" in
+    x86_64)
+      [ -f "${SERVO_RUNTIME_DIR}/lib64/ld-linux-x86-64.so.2" ] ||
+        [ -f "${SERVO_RUNTIME_DIR}/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2" ]
+      ;;
+    aarch64|arm64)
+      [ -f "${SERVO_RUNTIME_DIR}/lib/ld-linux-aarch64.so.1" ] ||
+        [ -f "${SERVO_RUNTIME_DIR}/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1" ]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 build_sold_linux() {
@@ -335,6 +355,8 @@ if [ -n "${SERVO_BIN_LINUX:-}" ]; then
     exit 1
   fi
   cp "${SERVO_BIN_LINUX}" "${OUT_DIR}/servo"
+elif [ "${SERVO_FORCE_REBUILD}" != "1" ] && [ -f "${OUT_DIR}/servo" ] && file_matches_arch "${OUT_DIR}/servo"; then
+  echo "Reusing Linux Servo binary: ${OUT_DIR}/servo" >&2
 elif [ -f "${SERVO_SRC_BIN}" ] && file_matches_arch "${SERVO_SRC_BIN}"; then
   echo "Using in-tree Linux Servo binary: ${SERVO_SRC_BIN}" >&2
   cp "${SERVO_SRC_BIN}" "${OUT_DIR}/servo"
@@ -345,7 +367,11 @@ else
 fi
 
 if servo_needs_glibc_runtime "${OUT_DIR}/servo"; then
-  SERVO_LOADER_PATH="${loader_path:-/lib64/ld-linux-x86-64.so.2}" QEMU_ARCH="${QEMU_ARCH}" build_servo_runtime_bundle
+  if [ "${SERVO_FORCE_REBUILD}" != "1" ] && servo_runtime_bundle_ready; then
+    echo "Reusing packaged Servo runtime bundle: ${SERVO_RUNTIME_DIR}" >&2
+  else
+    SERVO_LOADER_PATH="${loader_path:-/lib64/ld-linux-x86-64.so.2}" QEMU_ARCH="${QEMU_ARCH}" build_servo_runtime_bundle
+  fi
 fi
 
 chmod +x "${OUT_DIR}/servo" "${OUT_DIR}/sold"
