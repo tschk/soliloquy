@@ -2,10 +2,10 @@
 //!
 //! Provides a safe Rust interface to the V8 JavaScript engine.
 
+use crate::js::bindings::{initialize_context, take_context_data, V8ContextData};
 use log::{debug, error, info};
 use rusty_v8 as v8;
 use std::sync::Once;
-use crate::js::bindings::{V8ContextData, initialize_context};
 
 static V8_INIT: Once = Once::new();
 
@@ -39,24 +39,17 @@ impl JsEngine {
             v8::Global::new(handle_scope, context)
         };
 
-        Ok(JsEngine {
-            isolate,
-            context,
-        })
+        Ok(JsEngine { isolate, context })
     }
 
     /// Initialize the engine with DOM and Web APIs
     pub fn initialize(&mut self, data: V8ContextData) {
         let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
 
-        // Clean up old context data if it exists
-        let old_context = v8::Local::new(handle_scope, &self.context);
-        let ptr = old_context.get_aligned_pointer_in_embedder_data(0);
-        if !ptr.is_null() {
-            unsafe {
-                let _ = Box::from_raw(ptr as *mut V8ContextData);
-            }
-            old_context.set_aligned_pointer_in_embedder_data(0, std::ptr::null_mut());
+        {
+            let old_context = v8::Local::new(handle_scope, &self.context);
+            let scope = &mut v8::ContextScope::new(handle_scope, old_context);
+            let _ = take_context_data(scope);
         }
 
         let context = initialize_context(handle_scope, data);
@@ -120,11 +113,7 @@ impl JsEngine {
         let context = v8::Local::new(handle_scope, &self.context);
         let scope = &mut v8::ContextScope::new(handle_scope, context);
 
-        let ptr = context.get_aligned_pointer_in_embedder_data(0);
-        if ptr.is_null() {
-            return;
-        }
-        let data = unsafe { &*(ptr as *const V8ContextData) };
+        let data = crate::js::bindings::get_context_data(scope);
 
         let callback_global = {
             let callbacks = data.timer_callbacks.read();
@@ -132,7 +121,7 @@ impl JsEngine {
         };
 
         if let Some(callback_global) = callback_global {
-            let callback = v8::Local::new(scope, callback_global);
+            let callback: v8::Local<v8::Function> = v8::Local::new(scope, callback_global);
             let recv = context.global(scope).into();
             callback.call(scope, recv, &[]);
         }
@@ -179,15 +168,10 @@ impl Default for JsEngine {
 
 impl Drop for JsEngine {
     fn drop(&mut self) {
-        // Embedder data needs to be cleaned up if we allocated it
         let handle_scope = &mut v8::HandleScope::new(&mut self.isolate);
         let context = v8::Local::new(handle_scope, &self.context);
-        let ptr = context.get_aligned_pointer_in_embedder_data(0);
-        if !ptr.is_null() {
-            unsafe {
-                let _ = Box::from_raw(ptr as *mut V8ContextData);
-            }
-        }
+        let scope = &mut v8::ContextScope::new(handle_scope, context);
+        let _ = take_context_data(scope);
         debug!("V8 isolate dropped");
     }
 }
@@ -213,9 +197,9 @@ mod tests {
     #[test]
     fn test_dom_bindings() {
         use crate::servo_embed::dom::DomTree;
-        use crate::servo_embed::web_apis::{ConsoleApi, TimerManager, StorageApi};
-        use std::sync::Arc;
+        use crate::servo_embed::web_apis::{ConsoleApi, StorageApi, TimerManager};
         use parking_lot::RwLock;
+        use std::sync::Arc;
 
         let mut engine = JsEngine::new().unwrap();
         let dom_tree = Arc::new(RwLock::new(DomTree::new()));
@@ -242,7 +226,9 @@ mod tests {
         assert_eq!(node_type, "9"); // Document
 
         // Test document.createElement
-        engine.execute("var el = document.createElement('div')").unwrap();
+        engine
+            .execute("var el = document.createElement('div')")
+            .unwrap();
         let tag_name = engine.execute_to_string("el.tagName").unwrap();
         assert_eq!(tag_name, "DIV");
     }
