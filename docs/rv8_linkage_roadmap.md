@@ -18,6 +18,10 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Servo now publishes the bridge command schema from `soliloquy_bridge_schema.json`; the shell-side V8 mock includes the same file when reporting bridge capabilities.
 - Servo now has an opt-in `soliloquy_v8` feature that wires the V8 owner stub to `rusty_v8` platform and thread-local isolate initialization while leaving the default dispatch-only path unchanged.
 - The shell-side V8 mock now understands the same typed bridge command surface and keeps a small DOM snapshot in sync with shell navigations.
+- The local Servo `rv8` branch has been merged forward to upstream Servo `main` at `3949e2f46`, with the Soliloquy `rusty_v8`, bridge, `os://`, and QEMU boot patches retained.
+- The local `surfman 0.11.0` patch remains pinned intentionally; upstream Servo currently points at `surfman 0.12.0`, but using that directly would bypass the Soliloquy QEMU/X11 boot fixes.
+- QEMU now boots into the Servo browser appliance path. This is still Servo-first boot, not full RV8 page-script ownership.
+- `os://terminal` is wired through Servo's `os:` protocol handler to the local sold terminal route.
 - Unsupported evaluation paths still fall back to Servo's existing `mozjs` path.
 
 ## What Has Been Done
@@ -47,6 +51,10 @@ This document tracks the remaining work to move Soliloquy from the current hybri
   - `cargo test -p servo soliloquy_javascript --lib --features soliloquy_v8`
 - Added `tools/rv8_servo_test.sh` so the targeted Servo bridge checks can run with the required macOS SDK sysroot env without hand-typing it.
 - Added schema-driven parser tests for `soliloquy_bridge_schema.json` so declared commands and DOM targets must parse through the typed Servo bridge boundary.
+- Added `start.sh` at the repo root as a small launcher for the QEMU appliance path and the existing dev script.
+- Added Servo's `os:` protocol handler so `os://terminal` routes to the local terminal surface.
+- Merged the local Servo branch forward over the latest upstream Servo mainline and updated the root Soliloquy gitlink.
+- Removed the obsolete local `sea-query-rusqlite` patch from the active Servo dependency graph after the upstream merge; Servo now uses the pinned upstream crate release.
 
 ## What Is Still Missing
 
@@ -155,18 +163,18 @@ RV8 should mirror those architecture choices in Rust / WGPU terms:
 
 ## Current Blockers
 
-- Plain local Servo Rust validation still needs a toolchain env shim on this machine.
-  - Running without an explicit Xcode SDK sysroot still fails in `mozangle v0.5.5` while generating shader bindings against Homebrew LLVM 21 libc++ headers.
-  - `tools/rv8_servo_test.sh bridge` applies the env shim and runs the non-feature Servo bridge test groups.
-  - `tools/rv8_servo_test.sh v8` applies the env shim and runs the feature-gated `soliloquy_v8` bridge test group.
-  - The feature-gated `soliloquy_v8` test also needs the `rusty_v8` static archive available; the escalated run downloaded/built it and passed.
+- Plain local Servo Rust validation still needs toolchain cleanup on this machine after the upstream merge.
+  - Full locked Cargo metadata passes for `third_party/servo/Cargo.toml`.
+  - Targeted `cargo check -p servo --no-default-features --features soliloquy_v8` gets through dependency resolution, `rusty_v8`, and the active `sea-query-rusqlite` crate, then fails in `mozjs_sys` because the SpiderMonkey generated build directory is missing `Makefile` after configure.
+  - Running without `/usr/bin/python3` first in `PATH` also trips over Homebrew Python 3.14 `sitecustomize`; use Xcode's Python 3.9.6 for Servo checks.
+  - The Xcode SDK / `libclang` env shim is still needed for local macOS checks.
 - The current bridge is intentionally narrow and does not yet own general DOM execution.
-- The default branch still shows the historical Dependabot alerts until the `rv8` dependency updates are merged.
+- Browser boot currently lands in the Servo appliance surface. Full RV8 page-script ownership is still future work.
 
 ## Immediate Next Steps
 
 1. Broaden the navigation bridge test into an integration path that crosses `WebView::evaluate_javascript()` and observes the emitted `LoadUrl` request.
 2. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
-3. Decide whether the Servo SDK sysroot shim belongs in CI, local docs only, or a target-specific upstream Servo build configuration.
+3. Clean or regenerate the local `mozjs_sys` build output so full targeted Servo checks can complete after the upstream merge.
 4. Extend schema coverage to mutation definitions once the next mutation command is added.
 5. Continue replacing the RV8 compositor stub with a Hyprland-style damage-driven scheduler, damage ring, and explicit render-pass queue.
