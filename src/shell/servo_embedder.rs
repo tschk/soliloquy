@@ -270,46 +270,27 @@ impl ServoEmbedder {
         };
         self.webview = Some(Arc::new(Mutex::new(webview)));
         
-        // Execute JavaScript to initialize the page.
-        // The runtime is brought up only when a real navigation happens.
+        // Record navigation in the V8 runtime DOM snapshot bridge so that
+        // `document.readyState`, `location.href`, and `window.__soliloquyEval`
+        // bridge calls reflect the current page.
+        //
+        // Real Servo navigation call (requires servo crate path dep, blocked by
+        // mozangle on macOS until that build issue is resolved):
+        //
+        //   servo.webview(webview_id).navigate(ServoUrl::parse(url).unwrap());
         {
             let runtime = self.ensure_v8_runtime()?;
             runtime.record_navigation(url);
-            let init_script = format!(
-                r#"
-                console.log('Loading URL: {}');
-                // Simulate page load
-                var page = {{
-                    url: '{}',
-                    title: 'Soliloquy Page',
-                    ready: true
-                }};
-                page.title;
-                "#,
-                url, url
-            );
+            // Mark load complete immediately; Servo will push real load events
+            // via WebViewDelegate::notify_load_status() once wired.
+            runtime.record_load_complete();
+        }
 
-            match runtime.execute_script(&init_script) {
-                Ok(result) => {
-                    debug!("Page initialization script result: {}", result);
-                    runtime.record_load_complete();
-                    
-                    // Update webview title
-                    if let Some(ref webview_arc) = self.webview {
-                        if let Ok(mut webview) = webview_arc.lock() {
-                            webview.title = Some(result);
-                            webview.is_loading = false;
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to execute page initialization script: {}", e);
-                }
+        if let Some(ref webview_arc) = self.webview {
+            if let Ok(mut webview) = webview_arc.lock() {
+                webview.is_loading = false;
             }
         }
-        
-        // TODO: Call into actual Servo API
-        // servo::webview::load(url);
         
         self.state = EmbedderState::Running;
         info!("URL loaded successfully: {}", url);
@@ -852,7 +833,8 @@ mod tests {
         let status = embedder.js_engine_status();
 
         assert_eq!(result, "2");
-        assert_eq!(status.active_engine, crate::js_engine::JsEngineKind::V8Mock);
+        // Real V8 runtime: active engine is V8, not V8Mock.
+        assert_eq!(status.active_engine, crate::js_engine::JsEngineKind::V8);
         assert_eq!(
             status.swap_stage,
             crate::js_engine::JsEngineSwapStage::EmbedderV8Experiment

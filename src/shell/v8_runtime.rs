@@ -1,13 +1,11 @@
-//! V8 Runtime helper for Soliloquy Shell
-//!
-//! This module provides a thin wrapper around rusty_v8 to simplify
-//! V8 isolate creation and JavaScript execution.
-//!
-//! MOCK IMPLEMENTATION - rusty_v8 dependency missing in environment
+//! V8 Runtime for Soliloquy Shell — backed by rusty_v8 v0.32.
+
+use std::cell::RefCell;
+use std::sync::Once;
 
 use log::{debug, info};
+use rusty_v8 as v8;
 use serde_json::{json, Value};
-use std::sync::Mutex;
 use url::{ParseError, Url};
 
 use crate::js_engine::{JsEngineKind, JsEngineStatus, JsEngineSwapStage};
@@ -16,12 +14,25 @@ const SOLILOQUY_BRIDGE_SCHEMA: &str =
     include_str!("../../third_party/servo/components/servo/soliloquy_bridge_schema.json");
 const SOLILOQUY_BRIDGE_SCHEMA_VERSION: &str = "rv8-bridge-v1";
 
+const SOLILOQUY_JS_ENGINE_ENV: &str = "SOLILOQUY_JS_ENGINE";
+
+// ── V8 platform / isolate — process-global init, thread-local isolate ────────
+
+static V8_INIT: Once = Once::new();
+thread_local! {
+    static V8_ISOLATE: RefCell<Option<v8::OwnedIsolate>> = RefCell::new(None);
+}
+
+// ── shell-side DOM snapshot ───────────────────────────────────────────────────
+
 #[derive(Clone, Debug, Default)]
 struct ShellDomSnapshot {
     title: Option<String>,
     url: Option<String>,
     ready_state: Option<String>,
 }
+
+// ── bridge command model ──────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum ShellBridgeCommand {
@@ -83,22 +94,46 @@ impl ShellBridgeWrite {
     }
 }
 
-/// V8 Runtime context wrapper
+// ── V8Runtime ────────────────────────────────────────────────────────────────
+
+/// V8 Runtime context — real rusty_v8 isolate plus shell-side DOM bridge.
 pub struct V8Runtime {
-    _lock: Mutex<()>,
     engine_status: JsEngineStatus,
     dom_snapshot: ShellDomSnapshot,
 }
 
 impl V8Runtime {
-    /// Create a new V8 runtime
+    /// Initialize the V8 platform and create a per-thread isolate.
     pub fn new() -> Result<Self, String> {
-        info!("Initializing V8 runtime (MOCKED)");
-        debug!("V8 runtime initialized successfully");
+        V8_INIT.call_once(|| {
+            let platform = v8::new_default_platform(0, false).make_shared();
+            v8::V8::initialize_platform(platform);
+            v8::V8::initialize();
+        });
+
+        V8_ISOLATE.with(|cell| {
+            let mut guard = cell.borrow_mut();
+            if guard.is_none() {
+                *guard = Some(v8::Isolate::new(v8::CreateParams::default()));
+            }
+        });
+
+        info!("V8 runtime initialized ({})", v8::V8::get_version());
+
+        let engine_status = JsEngineStatus {
+            requested_engine: if env_requests_v8() {
+                JsEngineKind::V8
+            } else {
+                JsEngineKind::Mozjs
+            },
+            active_engine: JsEngineKind::V8,
+            swap_stage: JsEngineSwapStage::EmbedderV8Experiment,
+            dom_bridge_ready: true,
+            servo_controls_javascript: false,
+        };
 
         Ok(V8Runtime {
-            _lock: Mutex::new(()),
-            engine_status: JsEngineStatus::embedder_v8_mock_from_environment(),
+            engine_status,
             dom_snapshot: ShellDomSnapshot::default(),
         })
     }
@@ -114,60 +149,37 @@ impl V8Runtime {
         self.dom_snapshot.ready_state = Some("complete".to_string());
     }
 
-    /// Execute JavaScript code and return the result
+    /// Execute JavaScript and return its string result.
+    ///
+    /// The shell bridge intercepts structured commands and DOM property
+    /// reads/writes first; everything else is evaluated in the real V8 isolate.
     pub fn execute_script(&mut self, script: &str) -> Result<String, String> {
-        debug!("Would execute script: {}", script);
+        debug!("execute_script: {}", script);
 
         let normalized = script.replace(['\n', '\r', '\t'], " ");
         let compact = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
 
+        // Bridge intercepts dom.*, engine.*, __soliloquyEval, assignments to
+        // document.title / location.href, and bare property reads.
         if let Some(result) = self.execute_bridge_script(&compact)? {
             return Ok(result);
         }
 
-        if compact.contains("invalid javascript syntax") || compact.trim_end().ends_with('{') {
-            return Err("JavaScript syntax error".to_string());
-        }
-
-        if script == "1 + 1" {
-            return Ok("2".to_string());
-        }
-        if compact.contains("'Hello' + ' ' + 'World'") {
-            return Ok("Hello World".to_string());
-        }
-        if compact.contains("greet('Soliloquy')") {
-            return Ok("Hello, Soliloquy!".to_string());
-        }
-        if compact.contains("document.title = 'Test Page'") && compact.contains("'Updated'") {
-            return Ok("Updated".to_string());
-        }
-        if compact.contains("JSON.stringify(page)") && compact.contains("Soliloquy Test") {
-            return Ok(r#"{"title":"Soliloquy Test","ready":true,"version":"1.0.0"}"#.to_string());
-        }
-        if compact.contains("Workflow test completed") {
-            return Ok("Workflow test completed".to_string());
-        }
-        if compact.contains("V8 is ready") {
-            return Ok("V8 is ready".to_string());
-        }
-        if script.contains("Hello from V8!") {
-            return Ok("Hello from V8!".to_string());
-        }
-
-        Ok("undefined".to_string())
+        // Fall through to real V8 for arbitrary scripts.
+        self.eval_v8(script)
     }
 
-    /// Check if the runtime is initialized
+    /// Check if the runtime is initialized.
     pub fn is_initialized(&self) -> bool {
         true
     }
 
-    /// Report which engine is actually executing JavaScript for this runtime handle.
+    /// Report which engine is actually executing JavaScript.
     pub fn engine_kind(&self) -> JsEngineKind {
         self.engine_status.active_engine
     }
 
-    /// Report the current swap stage from the shell's point of view.
+    /// Report the current swap stage.
     pub fn swap_stage(&self) -> JsEngineSwapStage {
         self.engine_status.swap_stage
     }
@@ -182,10 +194,40 @@ impl V8Runtime {
         self.engine_status.swap_stage = JsEngineSwapStage::EmbedderV8Experiment;
     }
 
-    /// Get V8 version information
+    /// Return the V8 version string.
     pub fn get_version() -> String {
-        "mock-v8 placeholder".to_string()
+        v8::V8::get_version().to_string()
     }
+
+    // ── V8 evaluation ─────────────────────────────────────────────────────────
+
+    fn eval_v8(&self, script: &str) -> Result<String, String> {
+        V8_ISOLATE.with(|cell| {
+            let mut guard = cell
+                .borrow_mut();
+            let isolate = guard
+                .as_mut()
+                .ok_or_else(|| "V8 isolate not initialized".to_string())?;
+
+            let scope = &mut v8::HandleScope::new(isolate);
+            let context = v8::Context::new(scope);
+            let scope = &mut v8::ContextScope::new(scope, context);
+
+            let source = v8::String::new(scope, script)
+                .ok_or_else(|| "V8: failed to create script string".to_string())?;
+
+            let compiled = v8::Script::compile(scope, source, None)
+                .ok_or_else(|| "JavaScript syntax error".to_string())?;
+
+            let value = compiled
+                .run(scope)
+                .ok_or_else(|| "JavaScript evaluation failure".to_string())?;
+
+            Ok(v8_value_to_string(scope, value))
+        })
+    }
+
+    // ── bridge dispatch ───────────────────────────────────────────────────────
 
     fn execute_bridge_script(&mut self, script: &str) -> Result<Option<String>, String> {
         let trimmed = script.trim().trim_end_matches(';').trim();
@@ -327,14 +369,63 @@ impl V8Runtime {
                     "invalid location.href: relative URL without a base".to_string()
                 })?;
                 let base = Url::parse(base_url)
-                    .map_err(|error| format!("invalid base location.href: {error}"))?;
+                    .map_err(|e| format!("invalid base location.href: {e}"))?;
                 base.join(href)
                     .map(|url| url.to_string())
-                    .map_err(|error| format!("invalid location.href: {error}"))
+                    .map_err(|e| format!("invalid location.href: {e}"))
             }
-            Err(error) => Err(format!("invalid location.href: {error}")),
+            Err(e) => Err(format!("invalid location.href: {e}")),
         }
     }
+}
+
+impl Drop for V8Runtime {
+    fn drop(&mut self) {
+        info!("V8 runtime dropped");
+    }
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+/// Convert a V8 value to its JavaScript string representation.
+fn v8_value_to_string(scope: &mut v8::HandleScope, value: v8::Local<v8::Value>) -> String {
+    if value.is_undefined() {
+        "undefined".to_string()
+    } else if value.is_null() {
+        "null".to_string()
+    } else if value.is_boolean() {
+        value.boolean_value(scope).to_string()
+    } else if value.is_number() {
+        let n = value.number_value(scope).unwrap_or(f64::NAN);
+        if n.is_nan() {
+            return "NaN".to_string();
+        }
+        if n.is_infinite() {
+            return if n > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
+        }
+        // Integer values: omit the decimal point (matches JS `String(2)` → "2").
+        if n.fract() == 0.0 && n.abs() < 1e15 {
+            format!("{}", n as i64)
+        } else {
+            format!("{n}")
+        }
+    } else {
+        value
+            .to_string(scope)
+            .map(|s| s.to_rust_string_lossy(scope))
+            .unwrap_or_default()
+    }
+}
+
+fn env_requests_v8() -> bool {
+    matches!(
+        std::env::var(SOLILOQUY_JS_ENGINE_ENV),
+        Ok(v)
+            if matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "v8" | "v8-experimental" | "v8_experimental"
+            )
+    )
 }
 
 impl JsEngineKind {
@@ -377,16 +468,12 @@ fn parse_bridge_command(name: &str, args: &[String]) -> ShellBridgeCommand {
 }
 
 fn parse_dom_inspect(args: &[String]) -> Option<ShellBridgeTarget> {
-    let [target] = args else {
-        return None;
-    };
+    let [target] = args else { return None; };
     ShellBridgeTarget::parse(target)
 }
 
 fn parse_dom_set(args: &[String]) -> Option<ShellBridgeWrite> {
-    let [target, value] = args else {
-        return None;
-    };
+    let [target, value] = args else { return None; };
     ShellBridgeWrite::parse(target, value)
 }
 
@@ -415,11 +502,7 @@ fn parse_quoted_arguments(payload: &str) -> Option<Vec<String>> {
         cursor = cursor[1..].trim_start();
     }
 
-    if values.is_empty() {
-        None
-    } else {
-        Some(values)
-    }
+    if values.is_empty() { None } else { Some(values) }
 }
 
 fn split_assignment(script: &str) -> Option<(&str, &str)> {
@@ -439,7 +522,6 @@ fn split_assignment(script: &str) -> Option<(&str, &str)> {
             None => {}
         }
     }
-
     None
 }
 
@@ -448,7 +530,6 @@ fn parse_string_literal(script: &str) -> Option<String> {
     if (quote != '\'' && quote != '"') || !script.ends_with(quote) || script.len() < 2 {
         return None;
     }
-
     let inner = &script[1..script.len() - 1];
     if inner.contains(quote) {
         return None;
@@ -476,11 +557,7 @@ fn bridge_detail_envelope(status: &str, detail: Value) -> String {
     .to_string()
 }
 
-impl Drop for V8Runtime {
-    fn drop(&mut self) {
-        info!("Shutting down V8 runtime (MOCKED)");
-    }
-}
+// ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -490,15 +567,14 @@ mod tests {
     fn test_v8_runtime_creation() {
         let runtime = V8Runtime::new();
         assert!(runtime.is_ok());
-
         let runtime = runtime.unwrap();
         assert!(runtime.is_initialized());
+        assert_eq!(runtime.engine_kind(), JsEngineKind::V8);
     }
 
     #[test]
     fn test_simple_script_execution() {
         let mut runtime = V8Runtime::new().unwrap();
-
         let result = runtime.execute_script("1 + 1");
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "2");
@@ -507,15 +583,16 @@ mod tests {
     #[test]
     fn test_console_log() {
         let mut runtime = V8Runtime::new().unwrap();
-
-        let script = r#"
-        var message = "Hello from V8!";
-        message;
-        "#;
-
+        let script = r#"var message = "Hello from V8!"; message;"#;
         let result = runtime.execute_script(script);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Hello from V8!");
+    }
+
+    #[test]
+    fn test_v8_version_non_empty() {
+        let version = V8Runtime::get_version();
+        assert!(!version.is_empty());
     }
 
     #[test]

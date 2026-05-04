@@ -889,7 +889,9 @@ mod tests {
         let bridge = EngineBridge::new(runtime).unwrap();
 
         let status = bridge.js_engine_status().unwrap();
-        assert!(status.servo_controls_javascript);
-        assert_eq!(status.swap_stage, JsEngineSwapStage::DualRuntimePreparation);
+        // Real V8 runtime: embedder owns JS execution, Servo no longer controls it.
+        assert!(!status.servo_controls_javascript);
+        assert_eq!(status.active_engine, crate::js_engine::JsEngineKind::V8);
+        assert_eq!(status.swap_stage, JsEngineSwapStage::EmbedderV8Experiment);
     }
 }
