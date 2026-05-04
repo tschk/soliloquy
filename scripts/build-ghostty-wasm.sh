@@ -10,7 +10,7 @@
 #     calls this automatically when the .wasm is absent.
 #
 # Requirements:
-#   - zig 0.14+ (https://ziglang.org/download/)
+#   - zig 0.15.2 (https://ziglang.org/download/)
 #   - third_party/ghostty submodule initialised:
 #       git submodule update --init third_party/ghostty
 set -euo pipefail
@@ -18,15 +18,40 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GHOSTTY_DIR="${REPO_ROOT}/third_party/ghostty"
 OUT_DIR="${REPO_ROOT}/bundle/terminal"
+REQUIRED_ZIG_VERSION="0.15.2"
+
+pick_zig() {
+  if [ -n "${GHOSTTY_ZIG:-}" ]; then
+    printf '%s\n' "${GHOSTTY_ZIG}"
+    return
+  fi
+
+  if [ -x /opt/homebrew/opt/zig@0.15/bin/zig ]; then
+    printf '%s\n' /opt/homebrew/opt/zig@0.15/bin/zig
+    return
+  fi
+
+  if command -v zig &>/dev/null; then
+    command -v zig
+  fi
+}
 
 # ── checks ──────────────────────────────────────────────────────────────────
-if ! command -v zig &>/dev/null; then
-  echo "ERROR: zig not found. Install zig 0.14+ from https://ziglang.org/download/" >&2
+ZIG_BIN="$(pick_zig)"
+
+if [ -z "${ZIG_BIN}" ]; then
+  echo "ERROR: zig ${REQUIRED_ZIG_VERSION} not found. Install zig@0.15 or set GHOSTTY_ZIG." >&2
   exit 1
 fi
 
-ZIG_VERSION="$(zig version 2>/dev/null || true)"
-echo "zig: ${ZIG_VERSION}"
+ZIG_VERSION="$("${ZIG_BIN}" version 2>/dev/null || true)"
+echo "zig: ${ZIG_VERSION} (${ZIG_BIN})"
+
+if [ "${ZIG_VERSION}" != "${REQUIRED_ZIG_VERSION}" ]; then
+  echo "ERROR: ghostty requires zig ${REQUIRED_ZIG_VERSION}; found ${ZIG_VERSION} at ${ZIG_BIN}" >&2
+  echo "  Install Homebrew zig@0.15 or set GHOSTTY_ZIG=/path/to/zig-${REQUIRED_ZIG_VERSION}" >&2
+  exit 1
+fi
 
 if [ ! -f "${GHOSTTY_DIR}/build.zig" ]; then
   echo "ERROR: ${GHOSTTY_DIR}/build.zig not found." >&2
@@ -40,7 +65,7 @@ mkdir -p "${OUT_DIR}"
 
 cd "${GHOSTTY_DIR}"
 
-zig build \
+"${ZIG_BIN}" build \
   -Demit-lib-vt \
   -Dtarget=wasm32-freestanding \
   -Doptimize=ReleaseSmall
