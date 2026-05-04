@@ -57,6 +57,22 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Event delivery from Servo into the V8 side for navigation, load, timers, and DOM changes.
 - A plan to remove or sharply reduce `mozjs` ownership without breaking Web IDL bindings.
 
+## Compositor Reference Notes
+
+Hyprland is a useful reference for the RV8 compositor shape, not a code source to copy. Its optimized path centers on per-output frame scheduling, a damage ring retained across the swap chain depth, explicit damage entry points, a pass queue that is built before GPU execution, and visibility / occlusion checks before expensive rendering. See:
+
+- Hyprland rendering pipeline notes: <https://deepwiki.com/hyprwm/Hyprland/6.1-rendering-pipeline>
+- Hyprland repository: <https://github.com/hyprwm/Hyprland>
+
+RV8 should mirror those architecture choices in Rust / WGPU terms:
+
+- Frame production must be damage-driven; avoid a permanent 16 ms render loop when no visible content changed.
+- Track damage per output / surface and retain recent damage across the buffer queue so partial redraw is safe after swaps.
+- Build an explicit render pass list from tabs, layers, popups, cursor, overlays, and browser UI before submitting GPU commands.
+- Cull invisible or fully occluded layers before pass construction.
+- Keep presentation timing and frame statistics in the compositor boundary so QEMU and hardware tests can assert real frame flow.
+- Add snapshot textures for closing / animating tabs or surfaces so animations do not depend on a live renderer buffer.
+
 ## Recommended Phases
 
 ### Phase 1: Harden The Host Bridge
@@ -153,3 +169,4 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 2. Add the first real V8 evaluation call behind the thread-local owner, limited to literal / arithmetic smoke tests before DOM transport.
 3. Decide whether the Servo SDK sysroot shim belongs in CI, local docs only, or a target-specific upstream Servo build configuration.
 4. Extend schema coverage to mutation definitions once the next mutation command is added.
+5. Continue replacing the RV8 compositor stub with a Hyprland-style damage-driven scheduler, damage ring, and explicit render-pass queue.
