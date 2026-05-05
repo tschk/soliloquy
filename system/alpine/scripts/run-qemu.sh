@@ -7,7 +7,7 @@ INITRAMFS="${QEMU_DIR}/rootfs.cpio.gz"
 QEMU_HEADLESS="${QEMU_HEADLESS:-0}"
 QEMU_ACCEL="${QEMU_ACCEL:-tcg}"
 QEMU_RNG="${QEMU_RNG:-1}"
-KERNEL_CMDLINE="${KERNEL_CMDLINE:-quiet loglevel=3 vt.global_cursor_default=0 console=tty0 console=ttyS0 random.trust_cpu=on rng_core.default_quality=1000 rdinit=/init}"
+KERNEL_CMDLINE="${KERNEL_CMDLINE:-quiet loglevel=3 console=tty0 console=ttyS0 random.trust_cpu=on rng_core.default_quality=1000 rdinit=/init}"
 
 for bin in qemu-system-x86_64; do
   command -v "${bin}" >/dev/null 2>&1 || {

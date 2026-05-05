@@ -62,7 +62,7 @@ EOF
 echo "Applying security hardening..."
 
 # Disable VT switching
-echo "vt.global_cursor_default=0" >> etc/sysctl.conf
+echo "vt.global_cursor_default=1" >> etc/sysctl.conf
 echo "kernel.vt_switch=0" >> etc/sysctl.conf
 
 # Mount options

@@ -3,11 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Soliloquy Subspace</title>
+  <title>Soliloquy Browser</title>
   <style>
     :root {
       color-scheme: dark;
       --progress: 0;
+      --accent: #7cdaff;
+      --panel: rgba(12, 14, 18, 0.76);
+      --line: rgba(255, 255, 255, 0.14);
     }
 
     * {
@@ -19,9 +22,9 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #000;
+      background: #07080a;
       color: #fff;
-      font-family: "SF Mono", "IBM Plex Mono", "Cascadia Code", monospace;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     body {
@@ -32,22 +35,20 @@
     .wash {
       position: absolute;
       inset: 0;
-      background: #fff;
-      transform-origin: bottom center;
-      transform: scaleY(calc(var(--progress) / 100));
-      transition: transform 180ms linear;
+      background:
+        radial-gradient(circle at 18% 22%, rgba(124, 218, 255, 0.24), transparent 28%),
+        radial-gradient(circle at 82% 12%, rgba(186, 255, 146, 0.18), transparent 30%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 58%);
+      opacity: calc(0.62 + (var(--progress) / 260));
       z-index: 0;
     }
 
     .grid {
       position: absolute;
       inset: 0;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
-      background-size: 32px 32px;
-      opacity: 0.12;
-      mix-blend-mode: difference;
+      background-image: linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px);
+      background-size: 100% 42px;
+      opacity: 0.58;
       z-index: 1;
     }
 
@@ -56,11 +57,86 @@
       z-index: 2;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: center;
       width: 100%;
       height: 100%;
-      padding: 28px;
-      mix-blend-mode: difference;
+      padding: 34px;
+    }
+
+    .browser {
+      width: min(1180px, 100%);
+      min-height: min(760px, calc(100vh - 68px));
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: 0 30px 110px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      backdrop-filter: blur(22px);
+    }
+
+    .chrome {
+      height: 58px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 16px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.055);
+    }
+
+    .traffic {
+      display: flex;
+      gap: 8px;
+    }
+
+    .traffic span {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .address {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.26);
+      color: rgba(255, 255, 255, 0.76);
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .address::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 22px rgba(124, 218, 255, 0.8);
+      flex: 0 0 auto;
+    }
+
+    .status {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.58);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+    }
+
+    .viewport {
+      min-height: calc(min(760px, calc(100vh - 68px)) - 58px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: clamp(26px, 5vw, 60px);
     }
 
     .header {
@@ -68,26 +144,24 @@
     }
 
     .eyebrow {
-      font-size: 11px;
-      letter-spacing: 0.42em;
+      font-size: 12px;
+      letter-spacing: 0.28em;
       text-transform: uppercase;
       opacity: 0.72;
     }
 
     h1 {
-      margin: 18px 0 10px;
-      font-size: clamp(32px, 7vw, 88px);
-      line-height: 0.92;
-      font-weight: 600;
-      letter-spacing: -0.06em;
+      margin: 20px 0 14px;
+      font-size: clamp(42px, 7vw, 96px);
+      line-height: 0.94;
+      font-weight: 650;
+      letter-spacing: 0;
     }
 
     .subhead {
       max-width: 620px;
-      font-size: 13px;
-      line-height: 1.8;
-      text-transform: uppercase;
-      letter-spacing: 0.22em;
+      font-size: 15px;
+      line-height: 1.7;
       opacity: 0.78;
     }
 
@@ -96,6 +170,7 @@
       margin-top: 28px;
       display: grid;
       gap: 8px;
+      font-family: "SF Mono", "IBM Plex Mono", "Cascadia Code", monospace;
       font-size: 12px;
       line-height: 1.6;
     }
@@ -130,10 +205,10 @@
     }
 
     .progress {
-      font-size: clamp(32px, 10vw, 76px);
+      font-size: clamp(38px, 10vw, 82px);
       line-height: 0.9;
-      letter-spacing: -0.06em;
-      font-weight: 600;
+      letter-spacing: 0;
+      font-weight: 650;
     }
 
     .meta {
@@ -146,36 +221,54 @@
   <div class="wash" aria-hidden="true"></div>
   <div class="grid" aria-hidden="true"></div>
   <main class="frame">
-    <section class="header">
-      <div class="eyebrow">Soliloquy boot aperture</div>
-      <h1>Subspace handoff<br>in progress</h1>
-      <div class="subhead">Verbose surface trace for compositor, network path, and remote document acquisition.</div>
-      <div class="logs" id="logs"></div>
-    </section>
+    <section class="browser">
+      <div class="chrome">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <div class="address" id="address">os://terminal</div>
+        <div class="status">Boot</div>
+      </div>
+      <div class="viewport">
+        <section class="header">
+          <div class="eyebrow">Soliloquy Browser</div>
+          <h1>Starting local<br>workspace</h1>
+          <div class="subhead">Opening shell surface, local service route, input seat, and browser runtime.</div>
+          <div class="logs" id="logs"></div>
+        </section>
 
-    <footer class="footer">
-      <div class="progress" id="progress">000</div>
-      <div class="meta">Soliloquy subspace v0.1.x</div>
-    </footer>
+        <footer class="footer">
+          <div class="progress" id="progress">000</div>
+          <div class="meta">Runtime v0.1.x</div>
+        </footer>
+      </div>
+    </section>
   </main>
 
   <script>
     const progressNode = document.getElementById('progress');
     const logRoot = document.getElementById('logs');
+    const addressNode = document.getElementById('address');
     const target = window.location.hash.slice(1) || 'os://terminal';
+    const routes = {
+      'os://terminal': 'http://127.0.0.1:8080/terminal',
+      'os://files': 'http://127.0.0.1:8080/files.html',
+      'os://settings': 'http://127.0.0.1:8080/settings.html'
+    };
+    const handoffTarget = routes[target] || target;
     const start = performance.now();
     const durationMs = 3800;
     const handoffMs = 4200;
     const lines = [
-      'hypervisor link negotiated',
-      'framebuffer surface attached',
-      'seat broker active',
-      'packet route established',
-      'dns resolver primed',
-      'servo shell launch envelope open',
+      'display surface attached',
+      'pointer seat ready',
+      'local service route active',
+      'resolver ready',
+      'browser runtime online',
       `target queued ${target}`,
-      'subspace transfer authorized'
+      `handoff route ${handoffTarget}`,
+      'navigation authorized'
     ];
+
+    addressNode.textContent = target;
 
     lines.forEach((message, index) => {
       const row = document.createElement('div');
@@ -199,7 +292,7 @@
     requestAnimationFrame(tick);
 
     setTimeout(() => {
-      window.location.replace(target);
+      window.location.replace(handoffTarget);
     }, handoffMs);
   </script>
 </body>

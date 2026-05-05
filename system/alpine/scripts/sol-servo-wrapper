@@ -3,6 +3,12 @@ set -eu
 
 START_URL="${SOL_START_URL:-os://terminal}"
 SPLASH_URL="file:///usr/local/share/soliloquy/splash/index.html#${START_URL}"
+case "${START_URL}" in
+  os://terminal) PROBE_URL="http://127.0.0.1:8080/terminal" ;;
+  os://files) PROBE_URL="http://127.0.0.1:8080/files.html" ;;
+  os://settings) PROBE_URL="http://127.0.0.1:8080/settings.html" ;;
+  *) PROBE_URL="${START_URL}" ;;
+esac
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 SERVO_BIN="${SERVO_BIN:-/usr/local/bin/servo}"
 SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-x11}"
@@ -139,9 +145,9 @@ if [ -d "${XDG_RUNTIME_DIR:-}" ]; then
 fi
 
 if command -v wget >/dev/null 2>&1; then
-  log "starting background wget probe for ${START_URL}"
+  log "starting background wget probe for ${PROBE_URL}"
   (
-    if wget_output="$(wget -S -O /dev/null -T 5 -t 1 "${START_URL}" 2>&1)"; then
+    if wget_output="$(wget -S -O /dev/null -T 5 -t 1 "${PROBE_URL}" 2>&1)"; then
       printf '%s\n' "${wget_output}" | while IFS= read -r line; do log "wget: ${line}"; done
       log "wget probe succeeded"
     else
