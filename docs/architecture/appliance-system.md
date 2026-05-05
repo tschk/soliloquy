@@ -50,7 +50,7 @@ The target service architecture borrows from several operating system designs:
 - Redox and Plan 9: treat devices and services as named resources instead of hard-coded global subsystems.
 - MINIX 3: restartable critical services.
 - Haiku: strong separation between immutable system state and user state.
-- ToaruOS and Vinix: lean startup path, explicit boot sequencing, minimal runtime assumptions.
+- ToaruOS and Vinix: lean startup path, explicit boot sequencing, minimal runtime assumptions. Vinix is reference-only because it is GPL-2.0.
 
 The current appliance now carries a small declarative service registry in
 `/etc/soliloquy/services.json`. It is intentionally small, but it is the first

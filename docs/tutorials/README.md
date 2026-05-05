@@ -10,7 +10,8 @@ Step-by-step tutorials for learning Soliloquy development.
 Perfect for newcomers! This tutorial covers:
 - Setting up development environment
 - Installing prerequisites
-- Downloading Fuchsia SDK
+- Building the desktop bundle
+- Running local bridge checks
 - Building your first component
 - Running tests
 - Next steps for learning
@@ -62,14 +63,14 @@ Creating user interfaces with Servo and web technologies.
 
 ---
 
-### C-to-V Translation Tutorial (Planned)
-Translating C kernel code to V.
+### Runtime Bridge Tutorial (Planned)
+Extending the local bridge and Servo/RV8 runtime path.
 
 **Topics**:
-- Understanding V language
-- Translation patterns
-- Using c2v tools
-- Testing translations
+- Understanding `sold` API contracts
+- Servo/RV8 bridge patterns
+- Running targeted bridge checks
+- Testing runtime integration
 - Integration with build system
 - Performance optimization
 
@@ -168,7 +169,7 @@ Vote on or contribute tutorials for these topics:
 - [ ] Writing FIDL interfaces
 - [ ] Component testing strategies
 - [ ] Debugging components
-- [ ] Using Build Manager
+- [ ] Using runtime helper scripts
 
 ### Drivers
 - [ ] Porting a simple driver
@@ -176,11 +177,11 @@ Vote on or contribute tutorials for these topics:
 - [ ] DMA and interrupt handling
 - [ ] Platform-specific driver development
 
-### Translation
-- [ ] C to V translation basics
-- [ ] Translating a kernel module
-- [ ] Testing translated code
-- [ ] Performance tuning V code
+### Runtime
+- [ ] Local bridge basics
+- [ ] Extending a runtime endpoint
+- [ ] Testing bridge behavior
+- [ ] Performance tuning bridge code
 
 ### UI/Graphics
 - [ ] Building a simple UI component
@@ -209,7 +210,7 @@ Vote on or contribute tutorials for these topics:
 1. [Getting Started](./getting_started.md)
 2. [Architecture Overview](../architecture/README.md)
 3. [Driver Porting Guide](../guides/driver_porting.md)
-4. C-to-V Translation Tutorial (coming soon)
+4. Runtime Bridge Tutorial (coming soon)
 
 ### General Developer → Soliloquy Developer
 1. [Getting Started](./getting_started.md)

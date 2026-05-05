@@ -1,10 +1,10 @@
 # Soliloquy Developer Guide
 
 ## 1. Project Vision
-**Soliloquy** is a minimal, web-native operating system built on the **Zircon microkernel**. It aims to be what ChromeOS could have been: a pure web runtime without legacy baggage.
+**Soliloquy** is a minimal, web-native operating system appliance built on **Alpine Linux**. It aims to be what ChromeOS could have been: a pure web runtime without legacy baggage.
 
-- **Kernel**: Zircon (Fuchsia's microkernel)
-- **Userland**: Minimal drivers + Servo Browser Engine
+- **Base system**: Alpine Linux with OpenRC
+- **Userland**: Servo Browser Engine + `sold` local system bridge
 - **UI**: Svelte-based Web UI (Plates)
 - **Target Hardware (for now)**: Radxa Cubie A5E (Allwinner A527, ARM64)
 
@@ -12,11 +12,11 @@
 The system is layered as follows:
 
 1.  **Hardware**: Allwinner A527 (ARM64)
-2.  **Kernel**: Zircon (handles scheduling, memory, IPC)
-3.  **Drivers (DDK)**:
-    -   Written in C++ (mostly) or Rust.
-    -   Key drivers: UART, eMMC, Ethernet, AIC8800 WiFi, Mali GPU.
-4.  **System Services**: Minimal services for network and graphics (Magma).
+2.  **Base OS**: Alpine Linux with OpenRC service startup
+3.  **Drivers**:
+    -   Written in Rust or native Linux driver stacks where available.
+    -   Key targets: UART, eMMC, Ethernet, AIC8800 WiFi, Mali GPU.
+4.  **System Services**: Minimal services for network, display, and local system control through `sold`.
 5.  **Runtime**: **Servo** (Rust-based browser engine).
     -   **JS Engine**: `rusty_v8` (V8 bindings for Rust).
     -   **Rendering**: WebRender (GPU accelerated).
@@ -26,36 +26,33 @@ The system is layered as follows:
 
 ### Supported Platforms
 - **Linux**: Fedora, RHEL, Debian, Ubuntu (full source build supported)
-- **macOS**: macOS 10.15+ with Homebrew (SDK-only setup supported; full source build requires remote Linux instance)
+- **macOS**: macOS 10.15+ with Wax for package installation
 
 ### Primary Build System
-- **Build Tools**: `gn` (Generate Ninja) and `ninja`.
+- **Build Tools**: Alpine image scripts, Cargo, Bazel, and Bun for UI work.
 - **Language Toolchains**:
     -   **Rust**: Stable, with `aarch64-unknown-fuchsia` target.
-    -   **C++**: Clang/LLVM (provided by Fuchsia tree).
+    -   **C++**: Clang/LLVM where native components require it.
     -   **Python**: 3.8+ for build scripts.
 
 ### macOS vs Linux Build Options
 
-**Option 1: Full Source Build (Linux Only)**
-- Requires a Linux machine or VM (Fedora/Debian/Ubuntu)
-- Run `tools/soliloquy/setup.sh` to bootstrap the full Fuchsia source tree
-- More flexibility for kernel and driver development
-- Longer initial setup (~1-2 hours for initial clone and bootstrap)
+**Option 1: Appliance Image Work (Linux Only)**
+- Requires a Linux machine or VM (Fedora/Debian/Ubuntu/Alpine)
+- Use the Alpine image tooling under `system/alpine`
+- More flexibility for service, boot, and hardware integration work
 
-**Option 2: SDK-Only Setup (Linux and macOS)**
+**Option 2: Runtime and UI Work (Linux and macOS)**
 - Works on macOS or Linux
-- Run `tools/soliloquy/setup_sdk.sh` to download a pre-built Fuchsia SDK
-- Faster setup (~5-10 minutes for SDK download)
-- Suitable for application development and testing
-- Avoids Google Source rate limiting issues
+- Use Cargo, Bun, and the local tool scripts
+- Suitable for Servo/RV8 bridge work, `sold` API work, and desktop UI development
 
 ### macOS Remote Build Workflow
 
-If you are developing on macOS and need to build the full source:
+If you are developing on macOS and need to build the appliance image:
 1. Set up a Fedora or Linux VM/container (locally or in the cloud)
 2. Clone this repository on the Linux instance
-3. Run `tools/soliloquy/setup.sh` on the Linux instance
+3. Run the Alpine image workflow on the Linux instance
 4. Sync code changes to the Linux instance (e.g., via git, rsync, or SSH)
 5. Run build commands on the Linux instance via SSH
 6. Copy build artifacts back to macOS for testing (if needed)
@@ -68,64 +65,45 @@ If you are developing on macOS and need to build the full source:
 ├── drivers/              # Custom drivers
 │   └── wifi/aic8800/     # Ported WiFi driver
 ├── tools/soliloquy/      # Helper scripts (build, setup, flash)
-├── vendor/               # Third-party deps (Servo, etc.)
-└── ... (Standard Fuchsia tree)
+├── third_party/          # Third-party deps (Servo, etc.)
+├── sold/                 # Local system bridge
+├── system/alpine/        # Appliance image and service staging
+└── ...
 ```
 
 ## 4. Workflows for AI Agents & Developers
 
 ### Setting Up
 
-#### On Linux (Full Source Build)
-1. **Bootstrap**: Run `./tools/soliloquy/setup.sh`
-   - Installs dependencies (git, curl, unzip, build tools)
-   - Clones the Fuchsia repository
-   - Bootstraps the Fuchsia build system
-   - Links Soliloquy sources into the Fuchsia tree
-2. **Environment**: Always `source scripts/fx-env.sh` before running `fx` commands
+#### On Linux (Appliance Work)
+1. **Bootstrap dependencies**: Install native build tools and image tooling for the target distro.
+2. **Image workflow**: Use the scripts and manifests under `system/alpine`.
+3. **Runtime workflow**: Use Cargo for Rust checks and Bun for UI checks.
 
-#### On macOS (SDK-Only Setup)
-1. **Prerequisites**: Install Homebrew if not already installed:
+#### On macOS (Runtime Setup)
+1. **Prerequisites**: Install Wax if not already installed:
    ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   wax --version
    ```
-2. **SDK Setup**: Run `./tools/soliloquy/setup_sdk.sh`
-   - Detects macOS architecture (Intel x86_64 or Apple Silicon arm64)
-   - Downloads the appropriate Fuchsia SDK bundle (mac-amd64 or mac-arm64)
-   - Verifies curl and unzip are available
-   - Extracts the SDK to `./sdk`
-3. **Environment**: Source the environment helper script:
-   ```bash
-   source tools/soliloquy/env.sh
-   ```
-   This will automatically detect your OS and set:
-   - `FUCHSIA_DIR` to the SDK or Fuchsia source directory
-   - `CLANG_HOST_ARCH` to `mac-x64` (macOS) or `linux-x64` (Linux)
-   - Add SDK tools to your PATH
-
-#### SDK Version Pinning
-To use a specific SDK version instead of "latest":
-```bash
-export FUCHSIA_SDK_VERSION=20231115.2  # Example version
-./tools/soliloquy/setup_sdk.sh
-```
+2. **Runtime setup**: Install native build tools with Wax as needed.
+3. **Runtime workflow**: Use Cargo for Rust checks and Bun for UI checks.
 
 ### Building
 Use the helper script:
 ```bash
-./tools/soliloquy/build.sh
+./tools/soliloquy/build_ui.sh
 ```
 Or manually:
 ```bash
-fx set minimal.arm64 --board soliloquy
-fx build
+cd ui/desktop
+bun run build
 ```
 
 ### Remote Building (Fedora via SSH)
 If you are on macOS and using the Fedora instance (`undivisible@fedora@orb`):
 1.  Sync code to the remote instance.
 2.  Run build commands via SSH.
-3.  (Optional) Use `tools/soliloquy/ssh_build.sh` (if available).
+3.  Use SSH or rsync directly for appliance-image builds on the Linux host.
 
 ### Adding a Driver
 
@@ -193,23 +171,21 @@ The AIC8800 driver (`drivers/wifi/aic8800/`) demonstrates HAL usage for:
 - SDIO transactions with `SdioHelper`
 - Firmware download to hardware
 
-## 5. c2v Translation (Experimental)
+## 5. Runtime Integration
 
-Soliloquy includes experimental tooling for translating Zircon C subsystems to the V programming language using the c2v translator. This is part of a gradual migration effort to improve memory safety.
-
-📖 **For complete c2v workflow documentation, see the [Zircon C-to-V Translation Guide](docs/zircon_c2v.md)** - comprehensive documentation on the translation tooling, workflow, and subsystem priority list.
+Soliloquy currently centers on the Alpine appliance path, the fullscreen Servo surface, the `sold` local bridge, and the RV8/Servo linkage work.
 
 ### Quick Start
 
 ```bash
-# Install V toolchain
-./tools/soliloquy/c2v_pipeline.sh --bootstrap-only
+# Start the desktop UI development server
+./tools/soliloquy/dev_ui.sh
 
-# Translate a subsystem (dry-run)
-./tools/soliloquy/c2v_pipeline.sh --subsystem kernel/lib/libc --dry-run
+# Build the static bundle loaded by Servo
+./tools/soliloquy/build_ui.sh
 
-# Run smoke test
-bazel build //:c2v_tooling_smoke
+# Run targeted Servo/RV8 bridge checks
+./tools/rv8_servo_test.sh bridge
 ```
 
 ## 6. Testing
@@ -219,14 +195,15 @@ Soliloquy uses a comprehensive test framework with unit tests, integration tests
 ### Running Tests
 
 ```bash
-# Run all Rust tests
-./tools/soliloquy/test.sh
+# Run Rust tests
+cargo test
 
-# Run with coverage
-./tools/soliloquy/test.sh --coverage
+# Run targeted Servo/RV8 bridge checks
+./tools/rv8_servo_test.sh bridge
 
-# Run C++ tests (requires Fuchsia source)
-./tools/soliloquy/test.sh --fx-test
+# Run UI checks from the desktop workspace
+cd ui/desktop
+bun run build
 ```
 
 ### Test Structure
@@ -244,11 +221,12 @@ See [Testing Guide](docs/testing.md) for detailed documentation.
 - [x] **WiFi Driver**: AIC8800D80 driver refactored to use HAL.
 - [x] **GPIO Driver**: Generic GPIO driver using HAL as reference implementation.
 - [x] **Test Framework**: Unified test support crate with mock FIDL servers and coverage tools.
-- [x] **c2v Tooling**: Experimental C-to-V translation pipeline for Zircon subsystems.
-- [ ] **Servo Integration**: Needs platform abstraction layer for Zircon.
+- [x] **Alpine Appliance**: Base image and service staging path.
+- [x] **sold Bridge**: Local system bridge for authenticated system and terminal APIs.
+- [ ] **Servo/RV8 Integration**: Needs broader bridge coverage for page-script ownership.
 - [ ] **GPU Driver**: Mali-G57 integration needed (Magma).
 
 ## 8. Key Constraints
 - **No POSIX**: Do not assume standard libc/POSIX availability in kernel/driver space.
-- **Async First**: Use Zircon's async loop and FIDL for IPC.
+- **Async First**: Use async service boundaries and narrow local bridge APIs.
 - **Web Only**: No standalone terminal app, no X11/Wayland. The "display" is a full-screen browser.

@@ -514,7 +514,7 @@ Flash driver to device:
 ```bash
 fx set minimal.arm64 --board soliloquy
 fx build
-./tools/soliloquy/flash.sh
+./tools/soliloquy/debug.sh
 ```
 
 Monitor serial console:

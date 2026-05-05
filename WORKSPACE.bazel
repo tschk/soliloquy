@@ -20,9 +20,5 @@ rust_register_toolchains(
     versions = ["1.75.0"],
 )
 
-# V toolchain for c2v translation
-# V_HOME environment variable or .build-tools/v/ directory
-# Run tools/soliloquy/c2v_pipeline.sh --bootstrap-only to install
-
 # C++ toolchain for drivers
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")

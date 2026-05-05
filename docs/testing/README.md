@@ -199,7 +199,7 @@ genhtml bazel-out/_coverage/_coverage_report.dat -o coverage_html
 open coverage_html/index.html
 
 # Or use coverage tool
-./tools/soliloquy/test.sh --coverage
+./tools/rv8_servo_test.sh bridge
 ```
 
 ## Continuous Integration

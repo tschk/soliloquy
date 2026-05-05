@@ -58,7 +58,7 @@ A thin wrapper around rusty_v8 (`src/shell/v8_runtime.rs`) that:
 
 ### Prerequisites
 
-1. Fuchsia SDK (downloaded via setup script)
+1. Local Servo checkout and native toolchain
 2. Rust toolchain (1.75.0+)
 3. Servo source code (cloned to vendor/servo)
 4. rusty_v8 crate (via third_party/rust_crates)
@@ -74,7 +74,7 @@ A thin wrapper around rusty_v8 (`src/shell/v8_runtime.rs`) that:
 
 2. **Install dependencies:**
    ```bash
-   ./tools/soliloquy/setup.sh
+   ./tools/rv8_servo_test.sh bridge
    ```
 
 3. **Build with GN:**

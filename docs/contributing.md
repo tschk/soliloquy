@@ -5,9 +5,9 @@ Thank you for your interest in contributing to Soliloquy! This document provides
 ## Quick Start
 
 1. **Fork and clone** the repository
-2. **Install dependencies**: `./tools/soliloquy/setup_sdk.sh`
-3. **Build**: `bazel build //...`
-4. **Test**: `bazel test //...`
+2. **Install dependencies** with Wax or the native Linux package manager
+3. **Build UI**: `./tools/soliloquy/build_ui.sh`
+4. **Test bridge**: `./tools/rv8_servo_test.sh bridge`
 5. **Create a branch**: `git checkout -b feature/your-feature`
 6. **Make changes** and commit
 7. **Submit a PR** to `main` branch
@@ -18,6 +18,7 @@ Thank you for your interest in contributing to Soliloquy! This document provides
 - macOS or Linux (Fedora recommended)
 - Bazel 8.4.2+ (via Bazelisk)
 - Rust 1.70+
+- Bun
 - 10GB+ free disk space
 
 ### Setup
@@ -26,14 +27,11 @@ Thank you for your interest in contributing to Soliloquy! This document provides
 git clone https://github.com/atechnology-company/soliloquy.git
 cd soliloquy
 
-# Download Fuchsia SDK
-./tools/soliloquy/setup_sdk.sh
+# Build desktop bundle
+./tools/soliloquy/build_ui.sh
 
-# Build simple shell (quick test)
-bazel build //src/shell:soliloquy_shell_simple
-
-# Run tests
-bazel test //vendor/servo:servo_mock_test
+# Run targeted bridge checks
+./tools/rv8_servo_test.sh bridge
 ```
 
 ## Code Style
@@ -88,7 +86,7 @@ Closes #42
 2. **Make changes** with clear commits
 3. **Add tests** for new functionality
 4. **Update documentation** as needed
-5. **Run tests**: `bazel test //...`
+5. **Run tests**: `cargo test` and `./tools/rv8_servo_test.sh bridge`
 6. **Submit PR** with description of changes
 7. **Address review feedback**
 8. **Squash commits** if requested
@@ -106,23 +104,22 @@ Closes #42
 
 ### Unit Tests
 ```bash
-# Run all tests
-bazel test //...
+# Run Rust tests
+cargo test
 
-# Run specific test
-bazel test //vendor/servo:servo_mock_test
+# Run targeted bridge checks
+./tools/rv8_servo_test.sh bridge
 
-# Run with coverage
-bazel coverage //...
+# Build desktop bundle
+./tools/soliloquy/build_ui.sh
 ```
 
 ### Integration Tests
 ```bash
-# Build all components
-bazel build //...
+# Start local runtime
+./tools/soliloquy/start.sh
 
 # Test on hardware (if available)
-./tools/soliloquy/flash.sh
 ./tools/soliloquy/debug.sh
 ```
 
@@ -137,7 +134,7 @@ soliloquy/
 │   └── gpio/         # GPIO driver
 ├── boards/           # Board configurations
 │   └── arm64/        # ARM64 boards
-├── vendor/           # Third-party code
+├── third_party/      # Third-party code
 │   └── servo/        # Servo browser engine
 ├── tools/            # Build and development tools
 └── docs/             # Documentation

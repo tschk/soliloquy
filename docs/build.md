@@ -1,730 +1,79 @@
-# Soliloquy Build System Guide
+# Soliloquy Build Guide
 
-This guide covers the different build methods available for Soliloquy and helps you choose the right approach for your development environment.
+This page documents the active local build paths for the Alpine appliance, Servo desktop bundle, `sold` bridge, and RV8/Servo linkage work.
 
-## Build Method Decision Tree
+## Active Build Paths
 
-Use this flowchart to determine the best build method for your situation:
+| Area | Command | Notes |
+|------|---------|-------|
+| Desktop UI bundle | `./tools/soliloquy/build_ui.sh` | Builds the static bundle loaded by Servo |
+| UI development server | `./tools/soliloquy/dev_ui.sh` | Runs the SvelteKit dev server through Bun |
+| Local runtime | `./tools/soliloquy/start.sh` | Starts the local runtime path |
+| Servo/RV8 bridge checks | `./tools/rv8_servo_test.sh bridge` | Runs targeted bridge validation |
+| Rust workspace checks | `cargo test` | Runs Rust tests for the workspace |
 
-```
-Are you on macOS?
-├─ Yes → Use Remote Build (ssh_build.sh)
-│   ├─ Have Linux server with SSH access?
-│   │   ├─ Yes → ssh_build.sh user@server
-│   │   └─ No → Use SDK Build (requires Linux VM)
-│   └─ Want to avoid full Fuchsia checkout?
-│       └─ Yes → SDK Build (build_sdk.sh)
-│
-└─ No (Linux) → Can you checkout full Fuchsia source?
-    ├─ Yes → Full Source Build (build.sh)
-    │   ├─ Need custom product/board?
-    │   │   └─ Yes → build.sh --product X --board Y
-    │   └─ Standard Soliloquy build?
-    │       └─ Yes → build.sh (uses defaults)
-    └─ No → SDK Build (build_sdk.sh)
-        └─ Or Bazel Build (build_bazel.sh) for component development
-```
-
-## Build Methods Overview
-
-### 1. Full Source Build (`build.sh`)
-
-**Best for:** Linux users with full Fuchsia checkout
-
-**Pros:**
-- Complete access to Fuchsia build system
-- Full Soliloquy with all components
-- Supports custom products and boards
-- Native development experience
-
-**Cons:**
-- Requires ~100GB disk space
-- Longer initial setup
-- Linux-only
-
-**Usage:**
-```bash
-# Default build (minimal.arm64 + soliloquy board)
-./tools/soliloquy/build.sh
-
-# Custom product and board
-./tools/soliloquy/build.sh --product workbench_eng.arm64 --board boards/arm64/qemu
-
-# With additional build arguments
-./tools/soliloquy/build.sh --extra-args "--args=variant=eng"
-```
-
-**Output:** `fuchsia/fuchsia/out/default/`
-
----
-
-### 2. Remote Build (`ssh_build.sh`)
-
-**Best for:** macOS users with Linux server access
-
-**Pros:**
-- Develop from macOS, build on Linux
-- Uses full Fuchsia build system remotely
-- Real-time log streaming
-- Automatic path detection for common setups
-
-**Cons:**
-- Requires SSH access to Linux machine
-- Network dependency
-- Remote storage requirements
-
-**Usage:**
-```bash
-# Basic remote build (auto-detects paths)
-./tools/soliloquy/ssh_build.sh user@linux-server
-
-# Stream logs in real-time
-./tools/soliloquy/ssh_build.sh --stream-logs user@linux-server
-
-# Custom remote directory
-./tools/soliloquy/ssh_build.sh --remote-dir /path/to/soliloquy user@server
-
-# Use existing checkout, skip sync
-./tools/soliloquy/ssh_build.sh --no-sync user@server
-
-# Custom product/board
-./tools/soliloquy/ssh_build.sh --product workbench.arm64 user@server
-```
-
-**Output:** Available on remote machine at `fuchsia/fuchsia/out/default/`
-
----
-
-### 3. SDK Build (`build_sdk.sh`)
-
-**Best for:** Cross-platform development, smaller builds
-
-**Pros:**
-- Works on macOS and Linux
-- Smaller footprint (~10GB vs 100GB)
-- Faster setup
-- Good for component development
-
-**Cons:**
-- Limited to SDK components
-- Cannot build full OS images
-- May not include all Soliloquy-specific features
-
-**Usage:**
-```bash
-# Default debug build for arm64
-./tools/soliloquy/build_sdk.sh
-
-# Release build
-./tools/soliloquy/build_sdk.sh --release
-
-# Different CPU architecture
-./tools/soliloquy/build_sdk.sh --cpu x64
-```
-
-**Output:** `out/arm64/` or `out/x64/`
-
----
-
-### 4. Bazel Build (`build_bazel.sh`)
-
-**Best for:** Component development, CI/CD
-
-**Pros:**
-- Fast incremental builds
-- Excellent for component work
-- Cross-platform
-- Good integration with IDEs
-
-**Cons:**
-- Limited to Soliloquy components
-- Cannot build full Fuchsia system
-- Requires SDK setup
-
-**Usage:**
-```bash
-# Build all targets
-./tools/soliloquy/build_bazel.sh
-
-# Build specific target
-./tools/soliloquy/build_bazel.sh --target //src/shell:soliloquy_shell
-
-# With optimization flags
-./tools/soliloquy/build_bazel.sh --target //src/shell:soliloquy_shell -- -c opt
-```
-
-**Output:** `bazel-bin/`
-
-## Quick Start by Platform
-
-### macOS Development
-
-1. **Setup SDK for component work:**
-   ```bash
-   ./tools/soliloquy/setup_sdk.sh
-   ./tools/soliloquy/build_sdk.sh
-   ```
-
-2. **Remote full build (if you have Linux server):**
-   ```bash
-   ./tools/soliloquy/ssh_build.sh --stream-logs user@your-linux-server
-   ```
-
-3. **Bazel for component development:**
-   ```bash
-   ./tools/soliloquy/build_bazel.sh --target //src/shell:soliloquy_shell
-   ```
-
-### Linux Development
-
-1. **Full source build (recommended):**
-   ```bash
-   ./tools/soliloquy/setup.sh  # One-time setup
-   ./tools/soliloquy/build.sh  # Subsequent builds
-   ```
-
-2. **SDK build for faster iteration:**
-   ```bash
-   ./tools/soliloquy/setup_sdk.sh
-   ./tools/soliloquy/build_sdk.sh
-   ```
-
-## Build Artifacts
-
-All build methods provide a summary of generated artifacts:
-
-```
-=== Build Artifact Summary ===
-Build Type: Fuchsia Full Source Build
-Output Directory: fuchsia/fuchsia/out/default
-
-Key Artifacts:
-  soliloquy_shell.far (2457600 bytes)
-  zircon-a.zbi (8912896 bytes)
-  recovery.efi (786432 bytes)
-Total files: 1247
-```
-
-## Soliloquy Product Configuration
-
-Soliloquy provides a first-class product configuration that bundles the shell, WiFi driver, board drivers, and core services into a unified product target.
-
-### What is the Soliloquy Product?
-
-The Soliloquy product (`//product:soliloquy`) is a curated collection of packages that provides a complete, bootable system image. It includes:
-
-- **Base Packages** (always in the system image):
-  - Soliloquy Shell (`//src/shell:soliloquy_shell`)
-  - Board and platform drivers (`//boards/arm64/soliloquy`)
-  - GPIO drivers (`//drivers/gpio/soliloquy_gpio`)
-  - WiFi driver for AIC8800 (`//drivers/wifi/aic8800`)
-  - Hardware abstraction layer (`//drivers/common/soliloquy_hal`)
-
-- **Universe Packages** (available for dynamic installation):
-  - FIDL UI bindings (Flatland, Views, Input)
-  - Test infrastructure
-
-### Building with the Soliloquy Product
-
-#### Using fx (Fuchsia Build System)
-
-If you have a full Fuchsia checkout, use `fx set` to configure the build with the Soliloquy product:
+## Desktop UI Bundle
 
 ```bash
-# Configure the build for Soliloquy product on arm64
-cd fuchsia/fuchsia
-fx set core.arm64 --with //product:soliloquy
-
-# Build the product
-fx build
-
-# The product image will be at:
-# out/default/obj/build/images/soliloquy/soliloquy.zbi
+./tools/soliloquy/build_ui.sh
 ```
 
-#### Using the Build Script
+Use this before staging the desktop surface into the appliance image or testing the static bundle with Servo.
 
-For a streamlined experience, use the provided build scripts:
+The direct UI command is:
 
 ```bash
-# Full source build with Soliloquy product (Linux)
-./tools/soliloquy/build.sh --product core.arm64 --with //product:soliloquy
-
-# Remote build (macOS)
-./tools/soliloquy/ssh_build.sh --stream-logs user@linux-server
-# Then on the remote machine:
-cd fuchsia/fuchsia && fx set core.arm64 --with //product:soliloquy && fx build
+cd ui/desktop
+bun run build
 ```
 
-### Output Artifacts
-
-After building the Soliloquy product, you'll find the following artifacts:
-
-```
-fuchsia/fuchsia/out/default/
-├── obj/build/images/soliloquy/
-│   └── soliloquy.zbi          # Bootable Zircon Boot Image
-├── soliloquy_shell.far         # Shell component package
-└── aic8800.far                 # WiFi driver package
-```
-
-**Key artifact paths:**
-- **Product ZBI**: `out/default/obj/build/images/soliloquy/soliloquy.zbi`
-- **Legacy ZBI**: `out/default/fuchsia.zbi` (for backwards compatibility)
-
-### Flashing the Soliloquy Product
-
-The `flash.sh` script defaults to the Soliloquy product image:
+## UI Development
 
 ```bash
-# Flash using default product image
-./tools/soliloquy/flash.sh
-
-# Flash a custom image
-./tools/soliloquy/flash.sh /path/to/custom.zbi
-
-# Flash the legacy image
-./tools/soliloquy/flash.sh fuchsia/fuchsia/out/default/fuchsia.zbi
+./tools/soliloquy/dev_ui.sh
 ```
 
-The script will:
-1. Look for the product image at `obj/build/images/soliloquy/soliloquy.zbi`
-2. Fall back to the legacy `fuchsia.zbi` if the product image isn't found
-3. Provide helpful instructions if no image is found
+The dev server is the fastest path for desktop UI iteration.
 
-### Customizing the Product
-
-The product configuration is defined in two files:
-
-1. **`product/soliloquy.gni`** - Declares package lists:
-   ```gn
-   soliloquy_base_packages = [
-     "//src/shell:soliloquy_shell",
-     "//drivers/wifi/aic8800:aic8800",
-     # ... more packages
-   ]
-   
-   soliloquy_universe_packages = [
-     "//gen/fidl/fuchsia_ui_composition",
-     # ... more packages
-   ]
-   ```
-
-2. **`product/BUILD.gn`** - Exposes product targets:
-   ```gn
-   group("soliloquy") {
-     deps = soliloquy_base_packages + soliloquy_universe_packages
-   }
-   ```
-
-To add packages to the product:
-1. Add dependencies to `soliloquy_base_packages` (for system packages) or `soliloquy_universe_packages` (for optional packages)
-2. Rebuild: `fx build`
-3. Flash: `./tools/soliloquy/flash.sh`
-
-### Product Build Targets
-
-The product configuration provides several build targets:
-
-- `//product:soliloquy` - Complete product with all packages
-- `//product:soliloquy_base` - Base packages only
-- `//product:soliloquy_universe` - Universe packages only
-- `//build/packages:soliloquy_image` - Image-producing target
-
-### Dependencies and Prerequisites
-
-The Soliloquy product requires:
-- Full Fuchsia source checkout (via `./tools/soliloquy/setup.sh`)
-- GN build system configured (via `fx set`)
-- Ninja build tool (automatically invoked by `fx build`)
-
-For component-only development without the full product, see the SDK Build or Bazel Build methods above.
-
-## Manifest Validation
-
-Before building, you can validate component manifests to catch errors early:
+## Runtime Startup
 
 ```bash
-# Validate the shell manifest
-./tools/soliloquy/validate_manifest.sh
-
-# Validation runs automatically during build.sh
-./tools/soliloquy/build.sh
+./tools/soliloquy/start.sh
 ```
 
-The validation script checks that all protocol declarations, capability routing, and manifest syntax are correct using the Fuchsia `cmc` (Component Manifest Compiler) tool.
+This starts the local Soliloquy runtime path for the desktop appliance workflow.
 
-For more details on component manifests, see [Component Manifest Guide](component_manifest.md).
-
-## Common Workflows
-
-### First-time Setup
+## Servo/RV8 Bridge Checks
 
 ```bash
-# Linux - Full build setup
-./tools/soliloquy/setup.sh
-./tools/soliloquy/build.sh
-
-# macOS - Component development
-./tools/soliloquy/setup_sdk.sh
-./tools/soliloquy/build_sdk.sh
+./tools/rv8_servo_test.sh bridge
 ```
 
-### Iterative Development
+This is the targeted check for the Servo bridge and RV8 linkage surface.
+
+## Rust Checks
 
 ```bash
-# Component changes (fast)
-./tools/soliloquy/build_bazel.sh --target //src/shell:soliloquy_shell
-
-# Full system changes (Linux)
-./tools/soliloquy/build.sh
-
-# Full system changes (macOS)
-./tools/soliloquy/ssh_build.sh --no-sync --stream-logs user@server
+cargo test
 ```
 
-### Custom Configurations
+Use targeted Cargo package checks when working in a specific Rust component.
+
+## Appliance Image Work
+
+The active appliance image path lives under `system/alpine`. That tree owns Alpine package staging, service files, and image assembly details. Keep image-specific edits in that tree and use the local runtime commands above for UI and bridge validation.
+
+## macOS Packages
+
+Use Wax for host package installation:
 
 ```bash
-# Different hardware targets
-./tools/soliloquy/build.sh --board boards/arm64/qemu
-
-# Development vs production
-./tools/soliloquy/build.sh --product workbench_eng.arm64  # Development
-./tools/soliloquy/build.sh --product minimal.arm64        # Production
+wax install bazelisk
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-1. **"fx command not found"**
-   - Run `./tools/soliloquy/setup.sh` to bootstrap Fuchsia tooling
-   - Ensure you're in the project root directory
-
-2. **SSH connection failures**
-   - Verify SSH access: `ssh user@server echo "OK"`
-   - Check remote directory permissions
-   - Use `--remote-dir` to specify correct path
-
-3. **Build configuration conflicts**
-   - Use `fx_set_idempotent` in build.sh to avoid reconfiguration
-   - Clear build directory: `rm -rf fuchsia/fuchsia/out/default`
-
-4. **SDK not found**
-   - Run `./tools/soliloquy/setup_sdk.sh`
-   - Check `sdk/` directory exists and contains `tools/`
-
-### Getting Help
-
-All build scripts support `--help` for detailed usage information:
-
-```bash
-./tools/soliloquy/build.sh --help
-./tools/soliloquy/ssh_build.sh --help
-./tools/soliloquy/build_sdk.sh --help
-./tools/soliloquy/build_bazel.sh --help
-```
-
-## Performance Tips
-
-1. **Use incremental builds:** All scripts support incremental builds by default
-2. **Parallel builds:** Bazel and Ninja automatically use available CPU cores
-3. **Remote caching:** Configure Bazel remote cache for team development
-4. **SSD storage:** Full Fuchsia builds benefit greatly from fast storage
-
-## Bazel Build System (Advanced)
-
-Soliloquy uses **Bazel with Bzlmod** for component-level development. This section covers the Bazel build workflow, module management, and troubleshooting.
-
-### Understanding MODULE.bazel
-
-The `MODULE.bazel` file defines external dependencies using Bazel's new module system (Bzlmod):
-
-```python
-# MODULE.bazel
-module(
-    name = "soliloquy",
-    version = "0.1.0",
-)
-
-# Rust rules for building Rust targets
-bazel_dep(name = "rules_rust", version = "0.56.0")
-
-# C++ rules for driver development
-bazel_dep(name = "rules_cc", version = "0.0.16")
-
-# TODO: Add Fuchsia SDK integration via registry or local_path_override
-```
-
-**Key concepts:**
-- `bazel_dep()`: Declares a dependency on a ruleset from the Bazel Central Registry
-- Version resolution handled automatically by Bzlmod (no manual `WORKSPACE` maintenance)
-- Module lock file (`MODULE.bazel.lock`) ensures reproducible builds
-
-### Bazel Sync and Dependency Resolution
-
-When you modify `MODULE.bazel` or first clone the repository:
-
-```bash
-# Fetch all external dependencies defined in MODULE.bazel
-bazel sync --configure
-
-# Or implicitly during first build
-bazel build //...
-```
-
-**What happens during sync:**
-1. Bazel reads `MODULE.bazel` and resolves the dependency graph
-2. Downloads rulesets from the Bazel Central Registry (or local overrides)
-3. Generates `MODULE.bazel.lock` with pinned versions and checksums
-4. Caches artifacts in `~/.cache/bazel/` (Linux/macOS)
-
-**MODULE.bazel.lock:**
-- Tracks exact resolved versions of all transitive dependencies
-- Should be committed to version control for reproducibility
-- Regenerate with `bazel sync` after MODULE.bazel changes
-
-### Building Specific Targets
-
-#### Build the Soliloquy Shell
-
-```bash
-# Build the main shell component
-bazel build //src/shell:soliloquy_shell
-
-# Build with optimizations
-bazel build //src/shell:soliloquy_shell -c opt
-
-# Build for specific architecture
-bazel build //src/shell:soliloquy_shell --cpu=arm64
-```
-
-#### Build All Targets
-
-```bash
-# Build everything in the repository
-bazel build //...
-
-# Build and run tests
-bazel test //...
-
-# Clean build (forces rebuild)
-bazel clean --expunge
-bazel build //src/shell:soliloquy_shell
-```
-
-#### Query Available Targets
-
-```bash
-# List all targets in the project
-bazel query //...
-
-# List targets in a specific package
-bazel query //src/shell:all
-
-# Show dependencies of a target
-bazel query 'deps(//src/shell:soliloquy_shell)'
-```
-
-### Using the Build Script
-
-For convenience, use the provided wrapper script:
-
-```bash
-# Build default targets
-./tools/soliloquy/build_bazel.sh
-
-# Build specific target
-./tools/soliloquy/build_bazel.sh --target //src/shell:soliloquy_shell
-
-# Pass additional Bazel flags
-./tools/soliloquy/build_bazel.sh --target //src/shell:soliloquy_shell -- -c opt
-
-# Run tests
-./tools/soliloquy/build_bazel.sh --target //src/shell:all --test
-```
-
-### Troubleshooting Bazel Builds
-
-#### 1. Missing SDK Repository
-
-**Error:**
-```
-ERROR: no such package '@fuchsia_sdk//': The repository '@fuchsia_sdk' could not be resolved
-```
-
-**Solution:**
-Ensure the Fuchsia SDK is set up and the repository rule is configured:
-```bash
-# Download SDK first
-./tools/soliloquy/setup_sdk.sh
-
-# Verify SDK directory exists
-ls -la sdk/
-
-# Rebuild
-bazel clean
-bazel build //src/shell:soliloquy_shell
-```
-
-If using local SDK override, ensure `MODULE.bazel` or `WORKSPACE.bazel` includes:
-```python
-# WORKSPACE.bazel
-local_repository(
-    name = "fuchsia_sdk",
-    path = "sdk",
-)
-```
-
-#### 2. Toolchain Download Issues
-
-**Error:**
-```
-ERROR: Failed to download https://github.com/bazelbuild/rules_rust/releases/...
-```
-
-**Solution:**
-Check network connectivity and retry with verbose output:
-```bash
-bazel sync --configure --verbose_failures
-
-# If behind a proxy, configure Bazel:
-bazel sync --configure \
-  --http_proxy=http://proxy.example.com:8080 \
-  --https_proxy=http://proxy.example.com:8080
-```
-
-**Alternative:** Use offline mode if artifacts are cached:
-```bash
-bazel build //src/shell:soliloquy_shell --offline
-```
-
-#### 3. Version Conflicts
-
-**Error:**
-```
-ERROR: Module extension rules_rust~0.56.0~rust_toolchains conflicts with...
-```
-
-**Solution:**
-Clear the module resolution cache and re-sync:
-```bash
-bazel shutdown
-rm -rf $(bazel info output_base)
-bazel sync --configure
-```
-
-#### 4. Stale MODULE.bazel.lock
-
-**Error:**
-```
-ERROR: Lock file is out of date. Run 'bazel mod deps --lockfile_mode=update'
-```
-
-**Solution:**
-Regenerate the lock file after MODULE.bazel changes:
-```bash
-bazel mod deps --lockfile_mode=update
-git add MODULE.bazel.lock
-```
-
-#### 5. Compilation Errors in Rust Code
-
-**Error:**
-```
-error[E0433]: failed to resolve: use of undeclared crate or module `fuchsia_async`
-```
-
-**Solution:**
-Ensure the Rust target's `BUILD.bazel` declares all dependencies:
-```python
-rust_library(
-    name = "soliloquy_shell",
-    srcs = ["src/lib.rs"],
-    deps = [
-        "//sdk/rust:fuchsia-async",
-        "//sdk/rust:fuchsia-component",
-    ],
-)
-```
-
-Verify Rust toolchain is correctly configured:
-```bash
-bazel query @rules_rust//rust:toolchains
-```
-
-#### 6. Missing Header Files (C++ Drivers)
-
-**Error:**
-```
-fatal error: 'lib/ddk/device.h' file not found
-```
-
-**Solution:**
-Add Fuchsia SDK includes to the `cc_library` or `cc_binary` target:
-```python
-cc_library(
-    name = "my_driver",
-    srcs = ["driver.cc"],
-    deps = [
-        "//sdk/c:ddk",
-        "//drivers/common/soliloquy_hal",
-    ],
-    includes = ["sdk/include"],
-)
-```
-
-### Bazel Performance Tips
-
-1. **Remote Caching (Team Development):**
-   ```bash
-   # Configure remote cache in .bazelrc
-   build --remote_cache=https://bazel-cache.example.com
-   ```
-
-2. **Local Disk Cache:**
-   ```bash
-   # Increase disk cache size (default 5GB)
-   bazel build //... --disk_cache=~/.cache/bazel-disk --disk_cache_size=20GB
-   ```
-
-3. **Parallel Jobs:**
-   ```bash
-   # Limit concurrent jobs (useful on low-memory systems)
-   bazel build //... --jobs=4
-   ```
-
-4. **Incremental Builds:**
-   Bazel automatically caches intermediate artifacts. For best performance:
-   - Don't use `--expunge` unless necessary
-   - Keep `bazel-*` symlinks intact (don't `.gitignore` them)
-   - Use `bazel build` (not `bazel run`) for repeated builds
-
-### Bazel vs Other Build Methods
-
-| Feature | Bazel | SDK Build (`build_sdk.sh`) | Full Build (`build.sh`) |
-|---------|-------|---------------------------|-------------------------|
-| **Speed** | Fast incremental | Moderate | Slow (full system) |
-| **Scope** | Components only | Components + SDK libs | Entire Fuchsia OS |
-| **Cache** | Excellent | Good | Limited |
-| **Cross-platform** | Yes (Linux/macOS) | Yes | Linux only |
-| **Use case** | Development iteration | SDK testing | System integration |
-
-**When to use Bazel:**
-- Iterating on Rust/C++ components
-- Unit testing individual modules
-- CI/CD pipelines for component validation
-- Working without full Fuchsia source tree
-
-**When to use full build:**
-- Kernel modifications
-- Driver integration testing
-- Board-level configuration changes
-- Creating flashable system images
-
-## Integration with IDEs
-
-- **VS Code:** Use Bazel extension for `build_bazel.sh`
-- **CLion:** Configure CMake to use SDK build outputs
-- **Vim/Emacs:** Use build scripts with `makeprg` configuration
+## See Also
+
+- [V0 Architecture](./v0-architecture.md)
+- [Appliance System Architecture](./architecture/appliance-system.md)
+- [RV8 Linkage Roadmap](./rv8_linkage_roadmap.md)
+- [Tools Reference](./guides/tools_reference.md)

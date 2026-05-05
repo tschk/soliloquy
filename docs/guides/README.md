@@ -63,7 +63,7 @@ Comprehensive documentation for:
 - Build tools (`build.sh`, `build_bazel.sh`, etc.)
 - Development tools (`setup_sdk.sh`, `gen_fidl_bindings.sh`)
 - Verification scripts
-- Build Manager (GUI + CLI)
+- Runtime and bridge checks
 - Troubleshooting
 
 **Use this as your command reference.**
@@ -86,7 +86,7 @@ Comprehensive documentation for:
 
 **Advanced** 🔧
 1. [Driver Porting Guide](./driver_porting.md)
-2. [C2V Translation Guide](../translations/c2v_translations.md)
+2. [RV8 Linkage Roadmap](../rv8_linkage_roadmap.md)
 3. [Build System Deep Dive](../build.md)
 
 ### By Task
@@ -109,8 +109,8 @@ Comprehensive documentation for:
 **Understanding architecture**
 → [Architecture Documentation](../architecture/README.md)
 
-**Translating C to V**
-→ [C2V Translation Guide](../translations/c2v_translations.md)
+**Working on Servo/RV8 linkage**
+→ [RV8 Linkage Roadmap](../rv8_linkage_roadmap.md)
 
 ---
 

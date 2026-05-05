@@ -32,24 +32,20 @@ Testing strategies, frameworks, and best practices:
 - **[Testing Guide](./testing/testing.md)** - Comprehensive testing documentation
 - **[Test Coverage Expansion](./testing/test_coverage_broadening.md)** - Expanding test coverage
 
-## 🔄 C-to-V Translation
+## Runtime and Appliance
 
-Documentation for translating Zircon kernel from C to V:
+Current runtime and operating-system appliance documentation:
 
-- **[C-to-V Translation Guide](./translations/c2v_translations.md)** - Comprehensive translation guide
-- **[Zircon C2V Workflow](./translations/zircon_c2v.md)** - Detailed workflow and tooling
-- **[C2V Tooling Summary](./translations/C2V_TOOLING_SUMMARY.md)** - Tooling setup and usage
-- **[HAL Translation](./translations/HAL_TRANSLATION_SUMMARY.md)** - HAL subsystem translation
-- **[IPC Translation](./translations/IPC_TRANSLATION_SUMMARY.md)** - IPC subsystem translation
-- **[VM Integration Guide](./translations/VM_INTEGRATION_GUIDE.md)** - Virtual memory subsystem
-- **[VM Translation Files](./translations/VM_TRANSLATION_FILES.md)** - VM translation file listing
-- **[VM Translation Report](./translations/VM_TRANSLATION_REPORT.md)** - VM translation status
+- **[V0 Architecture](./v0-architecture.md)** - Alpine/OpenRC boot path, Servo surface, and `sold` system bridge
+- **[Appliance System Architecture](./architecture/appliance-system.md)** - Immutable image, service policy, plugins, updates, and package management
+- **[RV8 Linkage Roadmap](./rv8_linkage_roadmap.md)** - Servo/RV8 bridge status and remaining work
+- **[API Contract](./api_contract.md)** - Local `sold` API contract
 
 ## 📊 Project Reports
 
 Historical reports and completion summaries:
 
-- **[Ticket Completion Report](./reports/TICKET_COMPLETION_REPORT.md)** - c2v tooling implementation
+- **[Ticket Completion Report](./reports/TICKET_COMPLETION_REPORT.md)** - Historical completion tracking
 - **[VM Ticket Summary](./reports/TICKET_VM_SUMMARY.md)** - VM subsystem ticket details
 
 ## 🎨 UI and Graphics
@@ -70,19 +66,13 @@ Step-by-step tutorials for getting started:
 Documentation for development tools and utilities:
 
 - **[Tools Reference](./guides/tools_reference.md)** - Complete reference for all Soliloquy tools
-- **[Build Manager](../tools/build_manager/README.md)** - Advanced build management system (GUI + CLI)
-- **[Verification Scripts](../tools/scripts/README.md)** - Setup and subsystem verification tools
+- **[RV8/Servo Check](../tools/rv8_servo_test.sh)** - Targeted bridge validation helper
 
 ## 📦 Build System
 
-- **[Build System Guide](./build.md)** - Comprehensive build documentation (GN, Bazel, Cargo)
-- **[Build Manager](../tools/build_manager/README.md)** - Build management and automation
-- **[C VM README](../third_party/zircon_c/vm/README.md)** - Original C sources
-
-### Inter-Process Communication (IPC)
-- **Location**: `third_party/zircon_v/ipc/`
-- **[IPC README](../third_party/zircon_v/ipc/README.md)** - V translation of IPC subsystem
-- **[C IPC README](../third_party/zircon_c/ipc/README.md)** - Original C sources
+- **[Build System Guide](./build.md)** - Comprehensive build documentation
+- **[V0 Architecture](./v0-architecture.md)** - Alpine appliance boot and session architecture
+- **[RV8 Linkage Roadmap](./rv8_linkage_roadmap.md)** - Servo/RV8 bridge work
 
 ## Project Reports
 
@@ -90,24 +80,13 @@ Documentation for development tools and utilities:
 
 ## Tools and Scripts
 
-### Build Tools
-- `tools/soliloquy/setup.sh` - Full Fuchsia source bootstrap
-- `tools/soliloquy/setup_sdk.sh` - SDK-only setup
-- `tools/soliloquy/env.sh` - Environment setup helper
+### Runtime Tools
+- `tools/soliloquy/start.sh` - Start the local Soliloquy UI and bridge services
+- `tools/soliloquy/dev_ui.sh` - Start the desktop UI development server
+- `tools/soliloquy/build_ui.sh` - Build the static desktop bundle for Servo
 
-### C-to-V Translation Tools
-- `tools/soliloquy/c2v_pipeline.sh` - C-to-V translation pipeline
-- `build/v_compile.py` - V compilation wrapper
-- `build/v_translate.py` - C-to-V translation wrapper
-
-### FIDL Tools
-- `tools/soliloquy/gen_fidl_bindings.sh` - Generate Rust FIDL bindings
-
-### Verification Scripts
-- `verify_hal_v_translation.sh` - Verify HAL V translation
-- `verify_vm_translation.sh` - Verify VM V translation  
-- `verify_c2v_setup.sh` - Verify c2v tooling setup
-- `verify_test_framework.sh` - Verify test framework
+### Bridge Tools
+- `tools/rv8_servo_test.sh` - Run targeted Servo/RV8 bridge checks
 
 ## Quick Command Reference
 
@@ -119,8 +98,8 @@ bazel build //target/path:target_name
 # Build HAL
 bazel build //drivers/common/soliloquy_hal:soliloquy_hal
 
-# Build V translations
-bazel build //third_party/zircon_v:zircon_v_hal
+# Build UI bundle
+./tools/soliloquy/build_ui.sh
 ```
 
 ### Test Commands
@@ -133,33 +112,28 @@ bazel test //drivers/common/soliloquy_hal/tests:all
 bazel test //src/shell:soliloquy_shell_tests
 ```
 
-### C-to-V Translation
+### Runtime Development
 ```bash
-# Bootstrap V toolchain
-./tools/soliloquy/c2v_pipeline.sh --bootstrap-only
+# Start local UI and bridge services
+./tools/soliloquy/start.sh
 
-# Translate subsystem
-./tools/soliloquy/c2v_pipeline.sh \
-  --subsystem <name> \
-  --sources third_party/zircon_c/<name> \
-  --out-dir third_party/zircon_v/<name>
+# Build the static desktop bundle
+./tools/soliloquy/build_ui.sh
 
-# Verify translation
-./verify_hal_v_translation.sh
+# Run targeted Servo/RV8 bridge checks
+./tools/rv8_servo_test.sh bridge
 ```
 
 ### Development Workflow
 ```bash
-# Setup environment
-./tools/soliloquy/setup_sdk.sh
-source tools/soliloquy/env.sh
+# Start local runtime
+./tools/soliloquy/start.sh
 
-# Build and test
-bazel build //...
-bazel test //...
+# Build desktop bundle
+./tools/soliloquy/build_ui.sh
 
-# Generate FIDL bindings
-./tools/soliloquy/gen_fidl_bindings.sh
+# Run bridge checks
+./tools/rv8_servo_test.sh bridge
 ```
 
 ## Documentation Structure
@@ -167,12 +141,10 @@ bazel test //...
 ```
 docs/
 ├── INDEX.md                          # This file
-├── c2v_translations.md               # C-to-V translation guide
-├── zircon_c2v.md                     # Zircon c2v workflow
-├── C2V_TOOLING_SUMMARY.md            # C2V tooling summary
-├── HAL_TRANSLATION_SUMMARY.md        # HAL translation details
-├── TICKET_COMPLETION_REPORT.md       # Project tracking
 ├── ARCHITECTURE.md                   # System architecture
+├── v0-architecture.md                # Alpine appliance architecture
+├── rv8_linkage_roadmap.md            # Servo/RV8 bridge roadmap
+├── api_contract.md                   # Local bridge API contract
 ├── dev_guide.md                      # Developer guide
 ├── build.md                          # Build documentation
 ├── TESTING.md                        # Testing overview
@@ -214,4 +186,3 @@ When adding new documentation:
 3. Follow the existing documentation style
 4. Include code examples where helpful
 5. Add cross-references to related docs
-

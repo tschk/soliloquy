@@ -8,9 +8,9 @@ This directory contains architecture documentation for Soliloquy OS.
 High-level system architecture, component organization, and design principles.
 
 **Key Topics**:
-- Microkernel architecture (Zircon)
-- Component model
-- Inter-process communication
+- Alpine appliance architecture
+- Servo desktop surface
+- Local `sold` bridge APIs
 - System services
 - Hardware abstraction
 
@@ -36,10 +36,10 @@ Quick reference guide for common commands and manifest patterns.
 
 ```
 ┌─────────────────────────────────────────┐
-│         User Applications               │
+│         Desktop Bundle                  │
 │  ┌──────────┬──────────┬──────────┐    │
-│  │ Browser  │  Shell   │ Browser  │    │
-│  │ Surface  │  APIs    │ Apps     │    │
+│  │ Browser  │  Shell   │ Terminal │    │
+│  │ Surface  │  APIs    │ Surface  │    │
 │  └────┬─────┴──────────┴────┬─────┘    │
 │       │ WebRender/WGPU      │          │
 └───────┼─────────────────────┼───────────┘
@@ -47,13 +47,13 @@ Quick reference guide for common commands and manifest patterns.
 ┌───────▼─────────────────────▼───────────┐
 │         Soliloquy Services              │
 │  ┌──────────────────────────────────┐  │
-│  │   Flatland (Compositor)          │  │
+│  │   Servo Fullscreen Session       │  │
 │  └──────────────────────────────────┘  │
 │  ┌──────────────────────────────────┐  │
-│  │   Component Manager              │  │
+│  │   sold Local Bridge              │  │
 │  └──────────────────────────────────┘  │
 └─────────────────┬───────────────────────┘
-                  │ FIDL
+                  │ Linux services
 ┌─────────────────▼───────────────────────┐
 │      Hardware Abstraction Layer         │
 │  ┌──────┐ ┌──────┐ ┌────────┐          │
@@ -66,33 +66,31 @@ Quick reference guide for common commands and manifest patterns.
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│        Zircon Microkernel               │
+│        Alpine Linux Base                │
 │  ┌──────────────────────────────────┐  │
-│  │  Syscalls, IPC, Scheduling       │  │
+│  │  Kernel, OpenRC, Filesystems     │  │
 │  └──────────────────────────────────┘  │
 └─────────────────────────────────────────┘
 ```
 
 ## Key Concepts
 
-### Microkernel Design
-Soliloquy is built on Zircon, a capability-based microkernel:
-- Minimal kernel (syscalls, IPC, memory management)
-- System services run in user space
-- Capability-based security model
+### Appliance Design
+Soliloquy currently boots as an Alpine-based appliance:
+- Immutable base image
+- OpenRC-managed service startup
+- Local system bridge for narrow privileged operations
 
-### Component Model
-Everything is a component:
-- Isolated execution environments
-- Capability routing for permissions
-- Declarative manifests
-- Dynamic lifecycle management
+### Service Model
+System behavior is split across explicit services:
+- Servo owns the fullscreen browser surface
+- `sold` owns local system and terminal APIs
+- Service policy is declared in system-owned configuration
 
-### FIDL (Fuchsia Interface Definition Language)
-- Interface description language
-- Cross-language IPC
-- Type-safe communication
-- Versioned protocols
+### Local Bridge
+- HTTP APIs are bound to local runtime origins
+- Terminal and system calls require local bearer-token authentication
+- Browser UI talks to `sold` instead of directly mutating the base image
 
 ### Web-Native Architecture
 Soliloquy brings web technologies to system level:
@@ -110,7 +108,7 @@ Soliloquy brings web technologies to system level:
 
 2. **Modularity**
    - Components are independent
-   - Clear interfaces (FIDL)
+   - Clear local bridge interfaces
    - Pluggable implementations
 
 3. **Web Standards**
@@ -120,9 +118,9 @@ Soliloquy brings web technologies to system level:
    - Standard web APIs
 
 4. **Type Safety**
-   - V language for kernel translations
-   - Rust for system components
-   - FIDL for IPC type safety
+   - Rust for browser runtime components
+   - Typed `sold` API contracts
+   - Explicit bridge schemas for Servo/RV8 boundaries
 
 5. **Modern Hardware Support**
    - ARM64 first-class support
@@ -134,14 +132,14 @@ Soliloquy brings web technologies to system level:
 ### Shell (`src/shell/`)
 Browser runtime and host bridge integrating Servo.
 
-### Hardware Abstraction (`third_party/zircon_v/hal/`)
-V translation of Zircon HAL providing hardware access primitives.
+### Appliance System (`system/alpine/`)
+Image staging, OpenRC service files, and runtime policy.
 
-### Virtual Memory (`third_party/zircon_v/vm/`)
-V translation of Zircon VM subsystem for memory management.
+### Runtime Bridge (`sold/`)
+Local bridge service for system APIs and terminal sessions.
 
-### IPC (`third_party/zircon_v/ipc/`)
-Inter-process communication mechanisms.
+### RV8 and Servo (`src/rv8/`, `third_party/servo/`)
+Browser runtime and Servo/V8 linkage work.
 
 ### Drivers (`drivers/`)
 Hardware drivers:
@@ -150,28 +148,28 @@ Hardware drivers:
 - Display (Mali GPU)
 
 ### UI Framework (`ui/`)
-UI components and Flatland integration for the single browser surface.
+UI components for the single browser surface.
 
 ## Build System
 
 Hybrid build system supporting multiple workflows:
 
-- **GN + Ninja**: Full Fuchsia build (Linux)
+- **Alpine staging**: Full appliance image workflow
 - **Bazel**: Component-level builds (cross-platform)
 - **Cargo**: Rust component builds
 
 See [Build Guide](../build.md) for details.
 
-## Translation Strategy
+## Runtime Strategy
 
-Gradual translation of Zircon from C to V:
+Servo boots the desktop appliance first while RV8 linkage moves toward real page-script ownership:
 
-1. **Phase 1**: HAL subsystem
-2. **Phase 2**: VM subsystem
-3. **Phase 3**: IPC subsystem
-4. **Phase 4**: Scheduler and remaining subsystems
+1. **Phase 1**: Alpine/OpenRC appliance boots Servo fullscreen
+2. **Phase 2**: UI talks to `sold` over local authenticated APIs
+3. **Phase 3**: Servo/RV8 bridge owns a bounded script and DOM command surface
+4. **Phase 4**: RV8 replaces remaining fallback paths as bridge coverage expands
 
-See [C2V Translation Guide](../translations/c2v_translations.md) for details.
+See [RV8 Linkage Roadmap](../rv8_linkage_roadmap.md) for details.
 
 ## Target Hardware
 
@@ -190,15 +188,15 @@ See [C2V Translation Guide](../translations/c2v_translations.md) for details.
 
 ## Security Model
 
-- Capability-based access control
-- Component sandboxing
-- No setuid/root model
-- Explicit permission grants via manifests
+- Local bearer-token authentication for privileged bridge APIs
+- Immutable base image with narrow writable state paths
+- No browser-managed system writes
+- Explicit service policy
 
 ## Development Model
 
-- Component-based development
-- FIDL-first design
+- Service-based development
+- Local API-first design
 - Test-driven development
 - Continuous integration
 
@@ -207,4 +205,5 @@ See [C2V Translation Guide](../translations/c2v_translations.md) for details.
 - [Developer Guide](../guides/dev_guide.md) - Development workflow
 - [Build Guide](../build.md) - Build system documentation
 - [Testing Guide](../testing/testing.md) - Testing strategies
-- [C2V Translation](../translations/c2v_translations.md) - Translation guide
+- [V0 Architecture](../v0-architecture.md) - Alpine appliance boot path
+- [RV8 Linkage Roadmap](../rv8_linkage_roadmap.md) - Servo/RV8 bridge roadmap

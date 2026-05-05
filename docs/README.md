@@ -34,13 +34,12 @@ Testing documentation and strategies.
 - **[Testing Overview](./testing/testing.md)** - Testing strategy
 - **[Test Coverage](./testing/test_coverage_broadening.md)** - Coverage expansion
 
-### [Translations](./translations/) 🔄
-C-to-V kernel translation documentation.
-- **[C2V Guide](./translations/c2v_translations.md)** - Translation guide
-- **[C2V Workflow](./translations/zircon_c2v.md)** - Translation workflow
-- **[HAL Translation](./translations/HAL_TRANSLATION_SUMMARY.md)** - HAL subsystem
-- **[VM Translation](./translations/VM_TRANSLATION_REPORT.md)** - VM subsystem
-- **[IPC Translation](./translations/IPC_TRANSLATION_SUMMARY.md)** - IPC subsystem
+### Runtime and Appliance
+Current appliance and browser-runtime documentation.
+- **[V0 Architecture](./v0-architecture.md)** - Alpine/OpenRC boot path, Servo surface, and `sold` bridge
+- **[Appliance System Architecture](./architecture/appliance-system.md)** - Immutable image, service policy, plugins, updates, and package management
+- **[RV8 Linkage Roadmap](./rv8_linkage_roadmap.md)** - Servo/RV8 bridge status and remaining work
+- **[API Contract](./api_contract.md)** - Local `sold` API contract
 
 ### [UI Documentation](./ui/) 🎨
 User interface and graphics documentation.
@@ -69,8 +68,8 @@ User interface and graphics documentation.
 ### I'm Working on Drivers
 1. [Driver Porting Guide](./guides/driver_porting.md)
 2. [Architecture Documentation](./architecture/README.md)
-3. [HAL Translation Docs](./translations/HAL_TRANSLATION_SUMMARY.md)
-4. [Testing Guide](./testing/testing.md)
+3. [Testing Guide](./testing/testing.md)
+4. [Tools Reference](./guides/tools_reference.md)
 
 ### I'm Working on UI
 1. [Servo Integration Guide](./guides/servo_integration.md)
@@ -78,10 +77,10 @@ User interface and graphics documentation.
 3. [Architecture - Component Model](./architecture/architecture.md)
 4. [Component Manifests](./architecture/component_manifest.md)
 
-### I'm Working on C2V Translation
-1. [C2V Translation Guide](./translations/c2v_translations.md)
-2. [C2V Workflow](./translations/zircon_c2v.md)
-3. [Subsystem-specific Docs](./translations/README.md)
+### I'm Working on Runtime Integration
+1. [V0 Architecture](./v0-architecture.md)
+2. [RV8 Linkage Roadmap](./rv8_linkage_roadmap.md)
+3. [Servo Integration Guide](./guides/servo_integration.md)
 4. [Tools Reference](./guides/tools_reference.md)
 
 ### I'm Setting Up Build System
@@ -100,10 +99,10 @@ User interface and graphics documentation.
 | **Building** | [Build Guide](./build.md), [Tools Reference](./guides/tools_reference.md) |
 | **Testing** | [Testing Overview](./testing/testing.md), [Getting Started with Testing](./guides/getting_started_with_testing.md) |
 | **Architecture** | [System Architecture](./architecture/architecture.md), [Components](./architecture/component_manifest.md) |
-| **Drivers** | [Driver Porting](./guides/driver_porting.md), [HAL Docs](./translations/HAL_TRANSLATION_SUMMARY.md) |
+| **Drivers** | [Driver Porting](./guides/driver_porting.md), [Architecture Docs](./architecture/README.md) |
 | **UI** | [Servo Integration](./guides/servo_integration.md), [UI Docs](./ui/) |
-| **Translation** | [C2V Guide](./translations/c2v_translations.md), [Translation Docs](./translations/README.md) |
-| **Tools** | [Tools Reference](./guides/tools_reference.md), [Build Manager](../tools/build_manager/README.md) |
+| **Runtime** | [V0 Architecture](./v0-architecture.md), [RV8 Linkage Roadmap](./rv8_linkage_roadmap.md), [API Contract](./api_contract.md) |
+| **Tools** | [Tools Reference](./guides/tools_reference.md), [RV8/Servo Check](../tools/rv8_servo_test.sh) |
 
 ### By Question
 
@@ -116,7 +115,7 @@ User interface and graphics documentation.
 | How does it work? | [Architecture](./architecture/architecture.md) |
 | How do I contribute? | [Contributing Guide](./contributing.md) |
 | How do I port a driver? | [Driver Porting Guide](./guides/driver_porting.md) |
-| How do I translate C to V? | [C2V Guide](./translations/c2v_translations.md) |
+| How does the local system bridge work? | [API Contract](./api_contract.md) |
 
 ## 📝 Documentation Standards
 
@@ -184,15 +183,10 @@ See [Contributing Guide](./contributing.md) for complete process.
 
 ## 🔧 Documentation Tools
 
-### Build Manager
-Comprehensive build management with GUI and CLI.
-- **Location**: `../tools/build_manager/`
-- **Docs**: [Build Manager README](../tools/build_manager/README.md)
-
-### Verification Scripts
-Validate setup and translations.
-- **Location**: `../tools/scripts/`
-- **Docs**: [Scripts README](../tools/scripts/README.md)
+### Runtime Checks
+Validate targeted Servo/RV8 bridge behavior.
+- **Location**: `../tools/rv8_servo_test.sh`
+- **Docs**: [Tools Reference](./guides/tools_reference.md)
 
 ### Development Tools
 Build, test, and deploy tools.
@@ -204,10 +198,6 @@ Build, test, and deploy tools.
 ### Fuchsia Documentation
 - [Fuchsia.dev](https://fuchsia.dev/) - Official Fuchsia documentation
 - [Zircon Concepts](https://fuchsia.dev/fuchsia-src/concepts/kernel) - Kernel documentation
-
-### V Language
-- [V Language](https://vlang.io/) - V language documentation
-- [V by Example](https://github.com/vlang/v/blob/master/examples/) - V examples
 
 ### Servo
 - [Servo.org](https://servo.org/) - Servo project
@@ -242,7 +232,7 @@ Build, test, and deploy tools.
 | Guides | 🟢 Good | 5 guides |
 | Architecture | 🟢 Good | Complete |
 | Testing | 🟢 Good | Complete |
-| Translations | 🟢 Excellent | Comprehensive |
+| Runtime | 🟢 Good | Active roadmap |
 | API Reference | 🔴 Missing | Planned |
 | Tools | 🟢 Excellent | Complete |
 

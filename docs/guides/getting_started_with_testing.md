@@ -17,7 +17,7 @@ Expected output: `✓ All checks passed! Test framework is properly installed.`
 ### Run All Tests
 
 ```bash
-./tools/soliloquy/test.sh
+cargo test
 ```
 
 This runs:
@@ -28,7 +28,7 @@ This runs:
 ### Run Tests with Coverage
 
 ```bash
-./tools/soliloquy/test.sh --coverage
+./tools/rv8_servo_test.sh bridge
 ```
 
 View the HTML coverage report:
@@ -45,7 +45,8 @@ export FUCHSIA_DIR=/path/to/fuchsia
 source ${FUCHSIA_DIR}/scripts/fx-env.sh
 
 # Run all tests including GN
-./tools/soliloquy/test.sh --fx-test
+cd ui/desktop
+bun run build
 ```
 
 ## Writing Your First Test
@@ -229,7 +230,7 @@ src/*/*_tests.rs        # Rust integration tests
 
 Check current coverage:
 ```bash
-./tools/soliloquy/test.sh --coverage
+./tools/rv8_servo_test.sh bridge
 ```
 
 ## Test Results
@@ -244,13 +245,14 @@ Current status:
 
 ```bash
 # Run all tests
-./tools/soliloquy/test.sh
+cargo test
 
 # Run with coverage
-./tools/soliloquy/test.sh --coverage
+./tools/rv8_servo_test.sh bridge
 
 # Run GN tests
-./tools/soliloquy/test.sh --fx-test
+cd ui/desktop
+bun run build
 
 # Run specific test
 cd test/support
@@ -260,7 +262,7 @@ cargo test --target x86_64-unknown-linux-gnu test_name
 ./verify_test_framework.sh
 
 # Get help
-./tools/soliloquy/test.sh --help
+./tools/rv8_servo_test.sh bridge
 ```
 
 ## Troubleshooting
@@ -287,11 +289,11 @@ source ${FUCHSIA_DIR}/scripts/fx-env.sh
 ## Next Steps
 
 1. ✅ Verify installation: `./verify_test_framework.sh`
-2. ✅ Run existing tests: `./tools/soliloquy/test.sh`
+2. ✅ Run existing tests: `cargo test`
 3. 📖 Read the documentation: `docs/testing.md`
 4. 💡 Study examples: `test/EXAMPLES.md`
 5. ✍️ Write your first test
-6. 📊 Check coverage: `./tools/soliloquy/test.sh --coverage`
+6. 📊 Check bridge behavior: `./tools/rv8_servo_test.sh bridge`
 
 ## Getting Help
 

@@ -102,7 +102,7 @@ For driver testing on actual hardware:
 
 ```bash
 # Flash device
-./tools/soliloquy/flash.sh
+./tools/soliloquy/debug.sh
 
 # Connect serial console
 ./tools/soliloquy/debug.sh

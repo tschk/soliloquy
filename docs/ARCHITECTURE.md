@@ -1,6 +1,6 @@
 # Soliloquy Architecture
 
-Soliloquy is a Servo + V8 desktop environment with integrated search, memory storage, and Zircon IPC bridge.
+Soliloquy is a Servo + RV8/V8 desktop environment with integrated search, memory storage, and a local `sold` system bridge.
 
 ## Overview
 
@@ -17,8 +17,8 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 │  ┌─────────────────▼─────────────────────────────────────┐  │
 │  │  V Backend (backend/)                                  │  │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐  │  │
-│  │  │ search.v │ │cupboard.v│ │zircon.v │ │ sold     │  │  │
-│  │  │ (Unified)│ │(Memories)│ │  (IPC)  │ │(bridge)  │  │  │
+│  │  │ search.v │ │cupboard.v│ │system.rs│ │ sold     │  │  │
+│  │  │ (Unified)│ │(Memories)│ │ (APIs)  │ │(bridge)  │  │  │
 │  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬────┘  │  │
 │  │       │            │            │            │         │  │
 │  │       └────────────┴────────────┴────────────┘         │  │
@@ -31,9 +31,9 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
         │               │               │
         ▼               ▼               ▼
   ┌─────────┐    ┌──────────┐    ┌──────────────┐
-  │ Plates  │    │Perplexity│    │   Zircon     │
+  │ Plates  │    │Perplexity│    │ Alpine/sold  │
   │Tableware│    │   API    │    │  Services    │
-  └─────────┘    └──────────┘    │ (Fuchsia)    │
+  └─────────┘    └──────────┘    │ (Local)      │
                                   └──────────────┘
 ```
 
@@ -62,7 +62,7 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 
 #### `main.v`
 - Entry point and vweb app setup
-- Initializes Cupboard and Zircon subsystems
+- Initializes Cupboard and local system bridge clients
 - Health check endpoint
 
 #### `search.v`
@@ -77,13 +77,13 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 - Stores: user memories, search history, clipboard, pickups
 - Tag-based organization
 - Vector embeddings (TODO)
-- Zircon persistence on Fuchsia
+- System-owned persistence through `sold`
 
-#### `zircon.v`
-- IPC bridge to Fuchsia system services
-- Channel creation, read, write
-- Conditional compilation (`$if fuchsia`)
-- Services: Scenic (UI), Audio, Input, Storage
+#### `sold`
+- Local bridge to system services
+- Terminal session creation and I/O
+- Policy, plugin, and service registry endpoints
+- Services: terminal, policy, plugins, updates, service state
 
 #### `tableware.v`
 - Proxy to Plates Tableware MCP server
@@ -113,17 +113,17 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 
 1. User interaction generates memory
 2. `POST /api/cupboard/store` with content + metadata
-3. Backend stores in-memory (dev) or Zircon (Fuchsia)
+3. Backend stores in-memory (dev) or through `sold` system-owned storage
 4. Returns memory ID
 5. Memory available for future retrieval via search
 
-### Zircon IPC Flow (Fuchsia only)
+### Local Bridge Flow
 
-1. Backend initializes Zircon channels on startup
-2. Frontend calls `POST /api/zircon/channel/create`
-3. Backend creates channel pair via `third_party/zircon_v/ipc/`
-4. Frontend writes messages via `POST /api/zircon/channel/write`
-5. System services respond via channel read
+1. `sold` starts as a local authenticated service
+2. Frontend calls local API routes through the desktop runtime
+3. Backend validates the bearer token and requested operation
+4. System service state is read or updated through narrow endpoint handlers
+5. UI receives typed JSON responses
 
 ## Integration Points
 
@@ -138,22 +138,22 @@ Soliloquy is a Servo + V8 desktop environment with integrated search, memory sto
 - Carousel card generation
 - Follow-up questions
 
-### Zircon Services (Fuchsia)
-- Scenic: UI composition
-- Audio: System audio I/O
-- Input: Keyboard/mouse/touch
-- Storage: Persistent file system
+### Local System Services
+- Terminal: PTY-backed sessions
+- Policy: system and browser storage policy
+- Plugins: install and runtime state
+- Updates: generation state and rollback metadata
 
 ## Security
 
 - **Authentication**: none in the desktop shell; terminal/API calls use a local bearer token
 - **CORS**: restricted to the local desktop/runtime origins
-- **Zircon**: Channel-based IPC with handle validation
+- **sold**: Local bridge APIs with token validation
 
 ## Performance
 
 - **In-memory caching**: Sessions and memories cached in V maps
-- **Lazy initialization**: Zircon only initializes on Fuchsia
+- **Lazy initialization**: System endpoints initialize only when requested
 - **Conditional compilation**: Platform-specific code excluded via `$if`
 - **Carousel rendering**: Virtual scrolling for large result sets (TODO)
 
@@ -164,7 +164,7 @@ When no display is detected, Soliloquy automatically runs as a **headless Cupboa
 - Servo + V8 desktop **does not start**
 - Backend runs on port 3030 as a sync endpoint
 - Devices can push/pull memories via `/api/sync/push` and `/api/sync/pull`
-- Display detection: Passively queries Zircon scenic service for connected displays via `/dev/class/display/`
+- Display detection: Uses local display/session availability from the appliance runtime
 
 **Sync Endpoints**:
 - `POST /api/sync/push` - Device pushes memories to server
@@ -173,8 +173,8 @@ When no display is detected, Soliloquy automatically runs as a **headless Cupboa
 - `GET /api/sync/status` - Server mode and stats
 
 **Use Cases**:
-- Fuchsia device as headless Cupboard server (no monitor connected)
-- Zircon-based SBC running as home sync hub
+- Appliance device as headless Cupboard server (no monitor connected)
+- Alpine-based SBC running as home sync hub
 - Development boards for IoT data collection
 
 ## Development Workflow
@@ -194,11 +194,11 @@ When no display is detected, Soliloquy automatically runs as a **headless Cupboa
 - Starts backend + UI (if display present)
 - Starts backend only (if headless)
 
-## Deployment (Fuchsia)
+## Deployment
 
-1. Build backend with Zircon: `v -os fuchsia -prod .`
-2. Build UI bundle: `cd ui/desktop && pnpm build`
-3. Package as Fuchsia component
+1. Build the `sold` bridge with Cargo.
+2. Build UI bundle: `cd ui/desktop && bun run build`
+3. Stage the Alpine appliance artifacts.
 4. Deploy to target device
 
 ## Future Enhancements
@@ -207,7 +207,7 @@ When no display is detected, Soliloquy automatically runs as a **headless Cupboa
 - [ ] Vector similarity search in Cupboard
 - [ ] SurrealDB persistence layer
 - [ ] WebRTC tunneling for remote access
-- [ ] Native Zircon service integrations (Scenic, Audio)
+- [ ] Native appliance service integrations (Audio, Display)
 - [ ] Command palette with fuzzy search
 - [ ] File browser integration
 - [ ] Tab management
