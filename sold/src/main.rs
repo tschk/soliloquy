@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::os::unix::io::{AsRawFd, BorrowedFd, IntoRawFd};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -9,10 +10,10 @@ use axum::response::{Html, Json};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use dashmap::DashMap;
-use nix::fcntl::{FcntlArg, OFlag, fcntl};
-use nix::pty::{OpenptyResult, Winsize, openpty};
+use nix::fcntl::{fcntl, FcntlArg, OFlag};
+use nix::pty::{openpty, OpenptyResult, Winsize};
 use nix::sys::signal::Signal;
-use nix::unistd::{ForkResult, Pid, close, dup2, execvp, fork, setsid};
+use nix::unistd::{close, dup2, execvp, fork, setsid, ForkResult, Pid};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tower_http::services::ServeDir;
@@ -24,7 +25,7 @@ nix::ioctl_write_int_bad!(pty_set_ctty, nix::libc::TIOCSCTTY);
 
 // ── constants ────────────────────────────────────────────────────────────────
 
-const FILES_DIR: &str = "/var/lib/soliloquy/files";
+const DEFAULT_FILES_DIR: &str = "/var/lib/soliloquy/files";
 /// Shell search order on Alpine.
 const SHELLS: &[&str] = &["/usr/bin/zellij", "/bin/ash", "/bin/sh"];
 
@@ -88,16 +89,21 @@ struct WsQuery {
 #[derive(Clone)]
 struct AppState {
     sessions: SessionMap,
+    files_dir: PathBuf,
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
 
 #[tokio::main]
 async fn main() {
-    fs::create_dir_all(FILES_DIR).await.unwrap();
+    let files_dir = std::env::var_os("SOLILOQUY_FILES_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_FILES_DIR));
+    fs::create_dir_all(&files_dir).await.unwrap();
 
     let state = AppState {
         sessions: Arc::new(DashMap::new()),
+        files_dir,
     };
 
     let app = Router::new()
@@ -115,7 +121,7 @@ async fn main() {
         .route("/api/settings", get(get_settings))
         .route("/api/settings", put(put_settings))
         // Static bundle (index.html, terminal/*, etc.)
-        .nest_service("/", ServeDir::new("bundle"))
+        .fallback_service(ServeDir::new("bundle"))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -141,7 +147,12 @@ async fn create_term_session(
         .copied()
         .unwrap_or("/bin/sh");
 
-    let win = Winsize { ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0 };
+    let win = Winsize {
+        ws_row: 24,
+        ws_col: 80,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
 
     let OpenptyResult { master, slave } =
         openpty(Some(&win), None).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -166,13 +177,17 @@ async fn create_term_session(
 
             // Make slave the controlling terminal.
             #[cfg(target_os = "linux")]
-            unsafe { let _ = pty_set_ctty(slave_raw, 0); }
+            unsafe {
+                let _ = pty_set_ctty(slave_raw, 0);
+            }
 
             // Redirect stdin/stdout/stderr to slave PTY.
             let _ = dup2(slave_raw, 0);
             let _ = dup2(slave_raw, 1);
             let _ = dup2(slave_raw, 2);
-            if slave_raw > 2 { let _ = close(slave_raw); }
+            if slave_raw > 2 {
+                let _ = close(slave_raw);
+            }
 
             // Set TERM so shell/programs render correctly.
             std::env::set_var("TERM", "xterm-256color");
@@ -196,12 +211,15 @@ async fn create_term_session(
             }
 
             let id = uuid::Uuid::new_v4().to_string();
-            state.sessions.insert(id.clone(), PtySession {
-                master_fd: master_raw,
-                child_pid: child,
-                cols: 80,
-                rows: 24,
-            });
+            state.sessions.insert(
+                id.clone(),
+                PtySession {
+                    master_fd: master_raw,
+                    child_pid: child,
+                    cols: 80,
+                    rows: 24,
+                },
+            );
 
             Ok(Json(serde_json::json!({ "session_id": id })))
         }
@@ -315,8 +333,8 @@ async fn handle_term_ws(mut socket: WebSocket, id: String, master_fd: i32, state
 
 // ── files API ────────────────────────────────────────────────────────────────
 
-async fn list_files() -> Result<Json<Vec<FileInfo>>, StatusCode> {
-    let mut entries = fs::read_dir(FILES_DIR)
+async fn list_files(State(state): State<AppState>) -> Result<Json<Vec<FileInfo>>, StatusCode> {
+    let mut entries = fs::read_dir(&state.files_dir)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut files = Vec::new();
@@ -338,41 +356,51 @@ async fn list_files() -> Result<Json<Vec<FileInfo>>, StatusCode> {
     Ok(Json(files))
 }
 
-async fn read_file(Path(name): Path<String>) -> Result<String, StatusCode> {
-    fs::read_to_string(format!("{}/{}", FILES_DIR, name))
+async fn read_file(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<String, StatusCode> {
+    fs::read_to_string(state.files_dir.join(name))
         .await
         .map_err(|_| StatusCode::NOT_FOUND)
 }
 
 async fn write_file(
+    State(state): State<AppState>,
     Path(name): Path<String>,
     Json(payload): Json<FileContent>,
 ) -> Result<(), StatusCode> {
-    fs::write(format!("{}/{}", FILES_DIR, name), payload.content)
+    fs::write(state.files_dir.join(name), payload.content)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-async fn delete_file(Path(name): Path<String>) -> Result<(), StatusCode> {
-    fs::remove_file(format!("{}/{}", FILES_DIR, name))
+async fn delete_file(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<(), StatusCode> {
+    fs::remove_file(state.files_dir.join(name))
         .await
         .map_err(|_| StatusCode::NOT_FOUND)
 }
 
 // ── settings API ─────────────────────────────────────────────────────────────
 
-async fn get_settings() -> Result<Json<Settings>, StatusCode> {
-    let path = format!("{}/settings.json", FILES_DIR);
+async fn get_settings(State(state): State<AppState>) -> Result<Json<Settings>, StatusCode> {
+    let path = state.files_dir.join("settings.json");
     match fs::read_to_string(&path).await {
         Ok(content) => Ok(Json(serde_json::from_str(&content).unwrap_or_default())),
         Err(_) => Ok(Json(Settings::default())),
     }
 }
 
-async fn put_settings(Json(settings): Json<Settings>) -> Result<(), StatusCode> {
+async fn put_settings(
+    State(state): State<AppState>,
+    Json(settings): Json<Settings>,
+) -> Result<(), StatusCode> {
     let content =
         serde_json::to_string(&settings).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    fs::write(format!("{}/settings.json", FILES_DIR), content)
+    fs::write(state.files_dir.join("settings.json"), content)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }

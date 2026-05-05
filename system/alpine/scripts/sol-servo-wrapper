@@ -4,9 +4,7 @@ set -eu
 START_URL="${SOL_START_URL:-os://terminal}"
 SPLASH_URL="file:///usr/local/share/soliloquy/splash/index.html#${START_URL}"
 case "${START_URL}" in
-  os://terminal) PROBE_URL="http://127.0.0.1:8080/terminal" ;;
-  os://files) PROBE_URL="http://127.0.0.1:8080/files.html" ;;
-  os://settings) PROBE_URL="http://127.0.0.1:8080/settings.html" ;;
+  os://*) PROBE_URL="http://127.0.0.1:8080/" ;;
   *) PROBE_URL="${START_URL}" ;;
 esac
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"

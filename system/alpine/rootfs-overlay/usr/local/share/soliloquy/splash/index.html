@@ -248,12 +248,7 @@
     const logRoot = document.getElementById('logs');
     const addressNode = document.getElementById('address');
     const target = window.location.hash.slice(1) || 'os://terminal';
-    const routes = {
-      'os://terminal': 'http://127.0.0.1:8080/terminal',
-      'os://files': 'http://127.0.0.1:8080/files.html',
-      'os://settings': 'http://127.0.0.1:8080/settings.html'
-    };
-    const handoffTarget = routes[target] || target;
+    const handoffTarget = `http://127.0.0.1:8080/?url=${encodeURIComponent(target)}`;
     const start = performance.now();
     const durationMs = 3800;
     const handoffMs = 4200;

@@ -1,132 +1,331 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Files - Soliloquy</title>
-    <style>
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #ffffff;
-        }
-        .file-item {
-            padding: 0.5rem 1rem;
-            border-bottom: 1px solid #f0f0f0;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-        }
-        .file-item:hover {
-            background: #f8f8f8;
-        }
-        .hidden {
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Files - Soliloquy</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090d;
+      --panel: rgba(255, 255, 255, 0.06);
+      --panel-strong: rgba(255, 255, 255, 0.1);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f4f7fb;
+      --muted: rgba(244, 247, 251, 0.62);
+      --accent: #7cdaff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    button, textarea {
+      font: inherit;
+    }
+
+    button {
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 14px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--panel-strong);
+    }
+
+    .layout {
+      height: 100%;
+      display: grid;
+      grid-template-columns: minmax(230px, 300px) 1fr;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(124, 218, 255, 0.11), transparent 30%),
+        var(--bg);
+    }
+
+    .sidebar {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      border-right: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .header {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .subhead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .file-list {
+      min-height: 0;
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .file-item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 11px 12px;
+      border-radius: 12px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .file-item:hover,
+    .file-item.active {
+      background: rgba(124, 218, 255, 0.12);
+    }
+
+    .file-name {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 13px;
+    }
+
+    .file-size {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .editor-header {
+      min-height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .current-file {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .editor,
+    .pdf-viewer,
+    .empty-state {
+      min-height: 0;
+      height: 100%;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      outline: 0;
+      resize: none;
+      padding: 22px;
+      background: transparent;
+      color: var(--text);
+      font: 13px/1.7 "SF Mono", "IBM Plex Mono", "Cascadia Code", monospace;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+    }
+
+    .empty-state {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 760px) {
+      .layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: 260px 1fr;
+      }
+
+      .sidebar {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="w-full h-screen flex"><div class="w-1/4 border-r border-gray-300 flex flex-col"><div class="p-4 border-b"><button class="bg-blue-500 text-white px-4 py-2 rounded mr-2" onclick="newFile()">New File</button><button class="bg-gray-500 text-white px-4 py-2 rounded" onclick="refreshFiles()">Refresh</button></div><div id="file-list" class="flex-1 overflow-y-auto"></div></div><div class="flex-1 flex flex-col"><div id="editor-header" class="p-4 bg-gray-100 border-b hidden"><span id="current-file">No file selected</span><button class="ml-auto" onclick="saveFile()">Save</button></div><div id="editor" class="flex-1 hidden"><textarea id="file-content" class="w-full h-full p-4 border-none resize-none" placeholder="Select a file to edit..."></textarea></div><div id="pdf-viewer" class="w-full h-full hidden"><iframe id="pdf-frame" class="w-full h-full"></iframe></div></div></div>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="header">
+        <h1>Files</h1>
+        <p class="subhead">Local workspace files</p>
+      </div>
+      <div class="actions">
+        <button type="button" onclick="newFile()">New</button>
+        <button type="button" onclick="loadFiles()">Refresh</button>
+      </div>
+      <div id="file-list" class="file-list"></div>
+    </aside>
 
-    <script>
-        let currentFile = null;
+    <main class="workspace">
+      <div class="editor-header">
+        <span id="current-file" class="current-file">No file selected</span>
+        <button type="button" onclick="saveFile()">Save</button>
+      </div>
+      <div id="empty-state" class="empty-state">Select a file to inspect or edit.</div>
+      <div id="editor" class="editor hidden">
+        <textarea id="file-content" placeholder="Select a file to edit..."></textarea>
+      </div>
+      <div id="pdf-viewer" class="pdf-viewer hidden">
+        <iframe id="pdf-frame" title="PDF preview"></iframe>
+      </div>
+    </main>
+  </div>
 
-        async function loadFiles() {
-            try {
-                const response = await fetch('/api/files');
-                const files = await response.json();
-                const fileList = document.getElementById('file-list');
-                fileList.innerHTML = '';
+  <script>
+    let currentFile = null;
 
-                files.forEach(file => {
-                    const div = document.createElement('div');
-                    div.className = 'file-item';
-                    div.innerHTML = `
-                        <span>${file.name}</span>
-                        <span>${file.size} bytes</span>
-                    `;
-                    div.onclick = () => openFile(file.name);
-                    fileList.appendChild(div);
-                });
-            } catch (error) {
-                console.error('Failed to load files:', error);
-            }
+    async function loadFiles() {
+      try {
+        const response = await fetch('/api/files');
+        const files = await response.json();
+        const fileList = document.getElementById('file-list');
+        fileList.innerHTML = '';
+
+        files.forEach((file) => {
+          const div = document.createElement('div');
+          div.className = `file-item${file.name === currentFile ? ' active' : ''}`;
+          div.innerHTML = '<span class="file-name"></span><span class="file-size"></span>';
+          div.querySelector('.file-name').textContent = file.name;
+          div.querySelector('.file-size').textContent = `${file.size} bytes`;
+          div.onclick = () => openFile(file.name);
+          fileList.appendChild(div);
+        });
+      } catch (error) {
+        console.error('Failed to load files:', error);
+      }
+    }
+
+    async function openFile(filename) {
+      currentFile = filename;
+      document.getElementById('current-file').textContent = filename;
+
+      try {
+        const response = await fetch(`/api/files/${filename}`);
+        if (response.ok) {
+          if (filename.toLowerCase().endsWith('.pdf')) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            showPdfViewer(url);
+          } else {
+            const content = await response.text();
+            document.getElementById('file-content').value = content;
+            showEditor();
+          }
+          loadFiles();
+        } else {
+          alert('Failed to load file');
         }
+      } catch (error) {
+        console.error('Failed to open file:', error);
+      }
+    }
 
-        async function openFile(filename) {
-            currentFile = filename;
-            document.getElementById('current-file').textContent = filename;
+    function showEditor() {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('editor').classList.remove('hidden');
+      document.getElementById('pdf-viewer').classList.add('hidden');
+    }
 
-            try {
-                const response = await fetch(`/api/files/${filename}`);
-                if (response.ok) {
-                    // Check if PDF
-                    if (filename.toLowerCase().endsWith('.pdf')) {
-                        const blob = await response.blob();
-                        const url = URL.createObjectURL(blob);
-                        showPdfViewer(url);
-                    } else {
-                        const content = await response.text();
-                        document.getElementById('file-content').value = content;
-                        showEditor();
-                    }
-                } else {
-                    alert('Failed to load file');
-                }
-            } catch (error) {
-                console.error('Failed to open file:', error);
-            }
+    function showPdfViewer(url) {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('editor').classList.add('hidden');
+      document.getElementById('pdf-viewer').classList.remove('hidden');
+      document.getElementById('pdf-frame').src = url;
+    }
+
+    async function saveFile() {
+      if (!currentFile) return;
+
+      const content = document.getElementById('file-content').value;
+      try {
+        const response = await fetch(`/api/files/${currentFile}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+        if (response.ok) {
+          loadFiles();
+        } else {
+          alert('Failed to save file');
         }
+      } catch (error) {
+        console.error('Failed to save file:', error);
+      }
+    }
 
-        function showEditor() {
-            document.getElementById('editor').classList.remove('hidden');
-            document.getElementById('editor-header').classList.remove('hidden');
-            document.getElementById('pdf-viewer').classList.add('hidden');
-        }
-
-        function showPdfViewer(url) {
-            document.getElementById('editor').classList.add('hidden');
-            document.getElementById('editor-header').classList.add('hidden');
-            document.getElementById('pdf-viewer').classList.remove('hidden');
-            document.getElementById('pdf-frame').src = url;
-        }
-
-        async function saveFile() {
-            if (!currentFile) return;
-
-            const content = document.getElementById('file-content').value;
-            try {
-                const response = await fetch(`/api/files/${currentFile}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content })
-                });
-                if (response.ok) {
-                    alert('File saved!');
-                } else {
-                    alert('Failed to save file');
-                }
-            } catch (error) {
-                console.error('Failed to save file:', error);
-            }
-        }
-
-        function newFile() {
-            const filename = prompt('Enter filename:');
-            if (filename) {
-                currentFile = filename;
-                document.getElementById('current-file').textContent = filename;
-                document.getElementById('file-content').value = '';
-                showEditor();
-            }
-        }
-
-        function refreshFiles() {
-            loadFiles();
-        }
-
-        // Load files on startup
+    function newFile() {
+      const filename = prompt('Enter filename:');
+      if (filename) {
+        currentFile = filename;
+        document.getElementById('current-file').textContent = filename;
+        document.getElementById('file-content').value = '';
+        showEditor();
         loadFiles();
-    </script>
+      }
+    }
+
+    loadFiles();
+  </script>
 </body>
 </html>

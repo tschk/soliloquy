@@ -7,12 +7,18 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #08090d;
-      --panel: rgba(18, 21, 28, 0.78);
+      --bg: #07080b;
+      --panel: rgba(16, 19, 25, 0.84);
+      --panel-strong: rgba(7, 9, 13, 0.92);
       --line: rgba(255, 255, 255, 0.12);
+      --line-strong: rgba(255, 255, 255, 0.2);
       --text: #f4f7fb;
       --muted: rgba(244, 247, 251, 0.62);
+      --subtle: rgba(244, 247, 251, 0.42);
       --accent: #7cdaff;
+      --good: #baff92;
+      --warn: #ffd36c;
+      --shadow: 0 30px 110px rgba(0, 0, 0, 0.48);
     }
 
     * {
@@ -23,44 +29,55 @@
       height: 100%;
       margin: 0;
       background:
-        radial-gradient(circle at 18% 4%, rgba(124, 218, 255, 0.16), transparent 28%),
-        radial-gradient(circle at 80% 0%, rgba(186, 255, 146, 0.12), transparent 30%),
-        var(--bg);
+        radial-gradient(circle at 12% -8%, rgba(124, 218, 255, 0.18), transparent 32%),
+        radial-gradient(circle at 86% -10%, rgba(186, 255, 146, 0.13), transparent 30%),
+        linear-gradient(180deg, #0d1016 0%, var(--bg) 48%);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       overflow: hidden;
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
     }
 
     main {
       height: 100%;
-      padding: 28px;
+      padding: 22px;
     }
 
     .browser {
       height: 100%;
+      min-height: 520px;
       border: 1px solid var(--line);
-      border-radius: 22px;
+      border-radius: 20px;
       background: var(--panel);
-      box-shadow: 0 30px 110px rgba(0, 0, 0, 0.45);
+      box-shadow: var(--shadow);
       overflow: hidden;
-      backdrop-filter: blur(22px);
+      backdrop-filter: blur(24px);
       display: grid;
-      grid-template-rows: 58px 1fr;
+      grid-template-rows: 46px 56px 1fr 30px;
     }
 
-    .chrome {
+    .tab-strip {
       display: grid;
       grid-template-columns: auto 1fr auto;
-      align-items: center;
-      gap: 16px;
-      padding: 0 18px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.055);
+      align-items: end;
+      gap: 14px;
+      padding: 8px 14px 0;
+      background: rgba(255, 255, 255, 0.045);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .traffic {
       display: flex;
       gap: 8px;
+      padding-bottom: 12px;
     }
 
     .traffic span {
@@ -70,48 +87,212 @@
       background: rgba(255, 255, 255, 0.28);
     }
 
-    .address {
-      height: 36px;
+    .tabs {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 14px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 999px;
-      background: rgba(0, 0, 0, 0.26);
-      color: rgba(255, 255, 255, 0.76);
-      font-size: 13px;
+      min-width: 0;
+      height: 38px;
+      gap: 6px;
+      overflow: hidden;
     }
 
-    .address::before {
-      content: "";
+    .tab {
+      min-width: 0;
+      width: min(240px, 32vw);
+      display: grid;
+      grid-template-columns: 10px 1fr auto;
+      align-items: center;
+      gap: 9px;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-bottom: 0;
+      border-radius: 12px 12px 0 0;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tab.active {
+      background: var(--panel-strong);
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .tab-dot {
       width: 8px;
       height: 8px;
       border-radius: 999px;
       background: var(--accent);
-      box-shadow: 0 0 22px rgba(124, 218, 255, 0.8);
+      box-shadow: 0 0 18px rgba(124, 218, 255, 0.7);
     }
 
-    nav {
+    .tab-title {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .tab-close {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: transparent;
+      color: var(--subtle);
+    }
+
+    .tab-close:hover {
+      background: rgba(255, 255, 255, 0.09);
+      color: var(--text);
+    }
+
+    .new-tab {
+      width: 30px;
+      height: 30px;
+      margin-bottom: 6px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: auto auto auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      background: var(--panel-strong);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tool-button {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .tool-button:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text);
+    }
+
+    .tool-button:disabled {
+      opacity: 0.34;
+      cursor: default;
+    }
+
+    .address-form {
+      height: 38px;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.065);
+    }
+
+    .security-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--good);
+      box-shadow: 0 0 18px rgba(186, 255, 146, 0.7);
+    }
+
+    .address-input {
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .address-input::selection {
+      background: rgba(124, 218, 255, 0.25);
+    }
+
+    .go-button {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(124, 218, 255, 0.14);
+      color: var(--accent);
+      font-size: 15px;
+    }
+
+    .quick-nav {
       display: flex;
       gap: 8px;
     }
 
-    button {
+    .quick-nav button {
       height: 34px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.07);
-      color: rgba(255, 255, 255, 0.78);
-      padding: 0 14px;
-      font: inherit;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      padding: 0 13px;
       font-size: 12px;
-      cursor: pointer;
     }
 
-    button:hover {
-      background: rgba(255, 255, 255, 0.12);
-      color: #fff;
+    .quick-nav button:hover,
+    .quick-nav button.active {
+      background: rgba(124, 218, 255, 0.13);
+      border-color: rgba(124, 218, 255, 0.24);
+      color: var(--text);
+    }
+
+    .content {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      background: #050607;
+    }
+
+    .rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 10px;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .rail button {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .rail button:hover,
+    .rail button.active {
+      background: rgba(124, 218, 255, 0.12);
+      color: var(--text);
+    }
+
+    .viewport {
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+      background:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        #050607;
+      background-size: 100% 40px;
     }
 
     iframe {
@@ -119,39 +300,306 @@
       height: 100%;
       border: none;
       background: #050607;
+      display: block;
+    }
+
+    .load-bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 2px;
+      background: transparent;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .load-bar.loading::before {
+      content: "";
+      display: block;
+      width: 34%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation: load 860ms ease-in-out infinite;
+    }
+
+    .status-bar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 16px;
+      padding: 0 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--panel-strong);
+      color: var(--subtle);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+
+    .status-right {
+      color: var(--muted);
+    }
+
+    @keyframes load {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(300%);
+      }
+    }
+
+    @media (max-width: 820px) {
+      main {
+        padding: 0;
+      }
+
+      .browser {
+        border: 0;
+        border-radius: 0;
+      }
+
+      .toolbar {
+        grid-template-columns: auto auto auto 1fr;
+      }
+
+      .quick-nav {
+        display: none;
+      }
+
+      .content {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
   <main>
     <section class="browser">
-      <div class="chrome">
+      <div class="tab-strip">
         <div class="traffic"><span></span><span></span><span></span></div>
-        <div class="address" id="address">os://terminal</div>
-        <nav>
-          <button onclick="loadApp('terminal')">Terminal</button>
-          <button onclick="loadApp('files')">Files</button>
-          <button onclick="loadApp('settings')">Settings</button>
+        <div class="tabs" id="tabs"></div>
+        <button class="new-tab" id="new-tab" type="button" aria-label="New tab">+</button>
+      </div>
+
+      <div class="toolbar">
+        <button class="tool-button" id="back" type="button" aria-label="Back">‹</button>
+        <button class="tool-button" id="forward" type="button" aria-label="Forward">›</button>
+        <button class="tool-button" id="reload" type="button" aria-label="Reload">↻</button>
+        <form class="address-form" id="address-form">
+          <span class="security-dot" id="security-dot"></span>
+          <input class="address-input" id="address" autocomplete="off" spellcheck="false" value="os://terminal">
+          <button class="go-button" type="submit" aria-label="Go">↵</button>
+        </form>
+        <nav class="quick-nav" id="quick-nav">
+          <button type="button" data-url="os://terminal">Terminal</button>
+          <button type="button" data-url="os://files">Files</button>
+          <button type="button" data-url="os://settings">Settings</button>
         </nav>
       </div>
-      <iframe id="app-frame" src="/terminal"></iframe>
+
+      <div class="content">
+        <aside class="rail" id="rail">
+          <button type="button" data-url="os://terminal" aria-label="Terminal">⌁</button>
+          <button type="button" data-url="os://files" aria-label="Files">▦</button>
+          <button type="button" data-url="os://settings" aria-label="Settings">◌</button>
+        </aside>
+        <section class="viewport">
+          <div class="load-bar" id="load-bar"></div>
+          <iframe id="app-frame" title="Soliloquy page"></iframe>
+        </section>
+      </div>
+
+      <div class="status-bar">
+        <span id="status-left">ready</span>
+        <span class="status-right" id="status-right">web chrome active</span>
+      </div>
     </section>
   </main>
 
   <script>
     const frame = document.getElementById('app-frame');
     const address = document.getElementById('address');
+    const tabsNode = document.getElementById('tabs');
+    const backButton = document.getElementById('back');
+    const forwardButton = document.getElementById('forward');
+    const reloadButton = document.getElementById('reload');
+    const addressForm = document.getElementById('address-form');
+    const statusLeft = document.getElementById('status-left');
+    const statusRight = document.getElementById('status-right');
+    const loadBar = document.getElementById('load-bar');
+    const securityDot = document.getElementById('security-dot');
     const routes = {
-      terminal: ['/terminal', 'os://terminal'],
-      files: ['/files.html', 'os://files'],
-      settings: ['/settings.html', 'os://settings']
+      'os://terminal': '/terminal',
+      'os://files': '/files.html',
+      'os://settings': '/settings.html'
     };
 
-    function loadApp(app) {
-      const route = routes[app] || routes.terminal;
-      frame.src = route[0];
-      address.textContent = route[1];
+    let tabs = [];
+    let activeTabId = null;
+
+    function createTab(url) {
+      const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+      tabs.push({
+        id,
+        title: titleFor(url),
+        url,
+        history: [],
+        index: -1
+      });
+      activeTabId = id;
+      navigate(url);
     }
+
+    function activeTab() {
+      return tabs.find((tab) => tab.id === activeTabId);
+    }
+
+    function titleFor(url) {
+      if (url === 'os://terminal') return 'Terminal';
+      if (url === 'os://files') return 'Files';
+      if (url === 'os://settings') return 'Settings';
+      try {
+        return new URL(url).hostname || url;
+      } catch {
+        return url;
+      }
+    }
+
+    function normalizeUrl(value) {
+      const trimmed = value.trim();
+      if (!trimmed) return 'os://terminal';
+      if (routes[trimmed]) return trimmed;
+      if (/^https?:\/\//i.test(trimmed)) return trimmed;
+      if (/^[a-z]+:\/\//i.test(trimmed)) return trimmed;
+      if (trimmed.includes('.') && !trimmed.includes(' ')) return `https://${trimmed}`;
+      return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed)}`;
+    }
+
+    function resolveUrl(url) {
+      return routes[url] || url;
+    }
+
+    function navigate(rawUrl, options = {}) {
+      const tab = activeTab();
+      if (!tab) return;
+      const url = normalizeUrl(rawUrl);
+      if (!options.replaceHistory) {
+        tab.history = tab.history.slice(0, tab.index + 1);
+        tab.history.push(url);
+        tab.index = tab.history.length - 1;
+      } else if (tab.index >= 0) {
+        tab.history[tab.index] = url;
+      }
+      tab.url = url;
+      tab.title = titleFor(url);
+      address.value = url;
+      statusLeft.textContent = `loading ${url}`;
+      statusRight.textContent = routes[url] ? 'local route' : 'remote page';
+      securityDot.style.background = /^https:|^os:/i.test(url) ? 'var(--good)' : 'var(--warn)';
+      loadBar.classList.add('loading');
+      frame.src = resolveUrl(url);
+      render();
+    }
+
+    function goBack() {
+      const tab = activeTab();
+      if (!tab || tab.index <= 0) return;
+      tab.index -= 1;
+      navigate(tab.history[tab.index], { replaceHistory: true });
+    }
+
+    function goForward() {
+      const tab = activeTab();
+      if (!tab || tab.index >= tab.history.length - 1) return;
+      tab.index += 1;
+      navigate(tab.history[tab.index], { replaceHistory: true });
+    }
+
+    function reload() {
+      const tab = activeTab();
+      if (tab) navigate(tab.url, { replaceHistory: true });
+    }
+
+    function closeTab(id) {
+      if (tabs.length === 1) {
+        navigate('os://terminal', { replaceHistory: true });
+        return;
+      }
+      const index = tabs.findIndex((tab) => tab.id === id);
+      tabs = tabs.filter((tab) => tab.id !== id);
+      if (activeTabId === id) {
+        activeTabId = tabs[Math.max(0, index - 1)].id;
+        const tab = activeTab();
+        navigate(tab.url, { replaceHistory: true });
+      }
+      render();
+    }
+
+    function setActive(id) {
+      activeTabId = id;
+      const tab = activeTab();
+      if (tab) navigate(tab.url, { replaceHistory: true });
+    }
+
+    function render() {
+      const tab = activeTab();
+      tabsNode.innerHTML = '';
+      for (const item of tabs) {
+        const node = document.createElement('button');
+        node.type = 'button';
+        node.className = `tab${item.id === activeTabId ? ' active' : ''}`;
+        node.innerHTML = `<span class="tab-dot"></span><span class="tab-title"></span><span class="tab-close">×</span>`;
+        node.querySelector('.tab-title').textContent = item.title;
+        node.addEventListener('click', () => setActive(item.id));
+        node.querySelector('.tab-close').addEventListener('click', (event) => {
+          event.stopPropagation();
+          closeTab(item.id);
+        });
+        tabsNode.appendChild(node);
+      }
+      if (tab) {
+        address.value = tab.url;
+        backButton.disabled = tab.index <= 0;
+        forwardButton.disabled = tab.index >= tab.history.length - 1;
+        document.querySelectorAll('[data-url]').forEach((node) => {
+          node.classList.toggle('active', node.dataset.url === tab.url);
+        });
+      }
+    }
+
+    addressForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      navigate(address.value);
+    });
+
+    address.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        navigate(address.value);
+      }
+    });
+
+    backButton.addEventListener('click', goBack);
+    forwardButton.addEventListener('click', goForward);
+    reloadButton.addEventListener('click', reload);
+    document.getElementById('new-tab').addEventListener('click', () => createTab('os://terminal'));
+    document.querySelectorAll('[data-url]').forEach((node) => {
+      node.addEventListener('click', () => navigate(node.dataset.url));
+    });
+
+    frame.addEventListener('load', () => {
+      const tab = activeTab();
+      loadBar.classList.remove('loading');
+      statusLeft.textContent = tab ? `loaded ${tab.url}` : 'ready';
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    createTab(params.get('url') || 'os://terminal');
   </script>
 </body>
 </html>

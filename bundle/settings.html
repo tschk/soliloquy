@@ -1,62 +1,332 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - Soliloquy</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Soliloquy</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07090d;
+      --panel: rgba(255, 255, 255, 0.06);
+      --panel-strong: rgba(255, 255, 255, 0.1);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f4f7fb;
+      --muted: rgba(244, 247, 251, 0.62);
+      --accent: #7cdaff;
+      --good: #baff92;
+      --danger: #ff8f8f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at 92% 0%, rgba(124, 218, 255, 0.12), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input, select {
+      font: inherit;
+    }
+
+    .page {
+      min-height: 100vh;
+      padding: clamp(22px, 4vw, 46px);
+    }
+
+    .header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 22px;
+      margin-bottom: 26px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 5vw, 58px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .subhead {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status {
+      min-width: 150px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    .section.wide {
+      grid-column: 1 / -1;
+    }
+
+    .section-title {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 650;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+      padding: 18px;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    input, select {
+      width: 100%;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.22);
+      color: var(--text);
+      padding: 0 12px;
+      outline: 0;
+    }
+
+    input:focus, select:focus {
+      border-color: rgba(124, 218, 255, 0.42);
+      box-shadow: 0 0 0 3px rgba(124, 218, 255, 0.12);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .toggle-copy {
+      min-width: 0;
+    }
+
+    .toggle-copy strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .toggle-copy span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .switch {
+      position: relative;
+      width: 52px;
+      height: 30px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .switch span {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.14);
+      transition: background 160ms ease;
+    }
+
+    .switch span::after {
+      content: "";
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      top: 3px;
+      left: 3px;
+      border-radius: 999px;
+      background: #fff;
+      transition: transform 160ms ease;
+    }
+
+    .switch input:checked + span {
+      background: rgba(124, 218, 255, 0.44);
+    }
+
+    .switch input:checked + span::after {
+      transform: translateX(22px);
+    }
+
+    .footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+
+    .save {
+      height: 42px;
+      border: 1px solid rgba(124, 218, 255, 0.28);
+      border-radius: 999px;
+      background: rgba(124, 218, 255, 0.14);
+      color: var(--text);
+      padding: 0 18px;
+      cursor: pointer;
+    }
+
+    .save:hover {
+      background: rgba(124, 218, 255, 0.2);
+    }
+
+    @media (max-width: 760px) {
+      .header {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
-<body class="bg-gray-50">
-    <div class="max-w-2xl mx-auto py-8"><h1 class="text-3xl font-bold mb-8">Browser Settings</h1><div class="mb-8"><h3 class="text-xl font-semibold mb-4">Appearance</h3><div class="mb-4"><label class="block mb-2 font-medium">Theme:</label><select id="theme" class="w-full p-2 border border-gray-300 rounded"><option value="light">Light</option><option value="dark">Dark</option><option value="auto">Auto</option></select></div></div><div class="mb-8"><h3 class="text-xl font-semibold mb-4">Performance</h3><div class="mb-4"><label class="block mb-2 font-medium">Cache Size (MB):</label><input id="cache-size" class="w-full p-2 border border-gray-300 rounded" type="number" min="10" max="1000"></input></div></div><div class="mb-8"><h3 class="text-xl font-semibold mb-4">Security</h3><div class="mb-4"><label><input id="enable-js" class="mr-2" type="checkbox"></input>Enable JavaScript</label></div></div><div class="mb-8"><h3 class="text-xl font-semibold mb-4">General</h3><div class="mb-4"><label class="block mb-2 font-medium">Homepage:</label><input id="homepage" class="w-full p-2 border border-gray-300 rounded" type="url" placeholder="https://example.com"></input></div></div><button class="bg-blue-500 text-white px-6 py-3 rounded font-medium" onclick="saveSettings()">Save Settings</button><div id="message" class="mt-4"></div></div>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1>Settings</h1>
+        <p class="subhead">Browser runtime preferences for this Soliloquy image.</p>
+      </div>
+      <div id="message" class="status">ready</div>
+    </header>
 
-    <script>
-        async function loadSettings() {
-            try {
-                const response = await fetch('/api/settings');
-                const settings = await response.json();
-                document.getElementById('theme').value = settings.theme || 'light';
-                document.getElementById('cache-size').value = settings.cache_size_mb || 100;
-                document.getElementById('enable-js').checked = settings.enable_javascript !== false;
-                document.getElementById('homepage').value = settings.homepage || '';
-            } catch (error) {
-                console.error('Failed to load settings:', error);
-            }
-        }
+    <section class="grid">
+      <div class="section">
+        <div class="section-title">Appearance</div>
+        <div class="field">
+          <label for="theme">Theme</label>
+          <select id="theme">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="auto">Auto</option>
+          </select>
+        </div>
+      </div>
 
-        async function saveSettings() {
-            const settings = {
-                theme: document.getElementById('theme').value,
-                cache_size_mb: parseInt(document.getElementById('cache-size').value) || 100,
-                enable_javascript: document.getElementById('enable-js').checked,
-                homepage: document.getElementById('homepage').value,
-            };
+      <div class="section">
+        <div class="section-title">Performance</div>
+        <div class="field">
+          <label for="cache-size">Cache Size MB</label>
+          <input id="cache-size" type="number" min="10" max="1000">
+        </div>
+      </div>
 
-            try {
-                const response = await fetch('/api/settings', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(settings)
-                });
-                if (response.ok) {
-                    showMessage('Settings saved successfully!', 'success');
-                } else {
-                    showMessage('Failed to save settings', 'error');
-                }
-            } catch (error) {
-                console.error('Failed to save settings:', error);
-                showMessage('Failed to save settings', 'error');
-            }
-        }
+      <div class="section">
+        <div class="section-title">Security</div>
+        <div class="toggle-row">
+          <div class="toggle-copy">
+            <strong>JavaScript</strong>
+            <span>Allow page scripts in the browser runtime.</span>
+          </div>
+          <label class="switch" aria-label="Enable JavaScript">
+            <input id="enable-js" type="checkbox">
+            <span></span>
+          </label>
+        </div>
+      </div>
 
-        function showMessage(text, type) {
-            const message = document.getElementById('message');
-            message.textContent = text;
-            message.className = `mt-4 p-2 rounded ${type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
-            setTimeout(() => message.textContent = '', 3000);
-        }
+      <div class="section">
+        <div class="section-title">General</div>
+        <div class="field">
+          <label for="homepage">Homepage</label>
+          <input id="homepage" type="url" placeholder="os://terminal">
+        </div>
+      </div>
+    </section>
 
-        // Load settings on startup
-        loadSettings();
-    </script>
+    <div class="footer">
+      <button class="save" type="button" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </main>
+
+  <script>
+    async function loadSettings() {
+      try {
+        const response = await fetch('/api/settings');
+        const settings = await response.json();
+        document.getElementById('theme').value = settings.theme || 'dark';
+        document.getElementById('cache-size').value = settings.cache_size_mb || 100;
+        document.getElementById('enable-js').checked = settings.enable_javascript !== false;
+        document.getElementById('homepage').value = settings.homepage || 'os://terminal';
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        showMessage('load failed', 'error');
+      }
+    }
+
+    async function saveSettings() {
+      const settings = {
+        theme: document.getElementById('theme').value,
+        cache_size_mb: parseInt(document.getElementById('cache-size').value) || 100,
+        enable_javascript: document.getElementById('enable-js').checked,
+        homepage: document.getElementById('homepage').value,
+      };
+
+      try {
+        const response = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        });
+        showMessage(response.ok ? 'saved' : 'save failed', response.ok ? 'success' : 'error');
+      } catch (error) {
+        console.error('Failed to save settings:', error);
+        showMessage('save failed', 'error');
+      }
+    }
+
+    function showMessage(text, type) {
+      const message = document.getElementById('message');
+      message.textContent = text;
+      message.style.color = type === 'success' ? 'var(--good)' : type === 'error' ? 'var(--danger)' : 'var(--muted)';
+      setTimeout(() => {
+        message.textContent = 'ready';
+        message.style.color = 'var(--muted)';
+      }, 2400);
+    }
+
+    loadSettings();
+  </script>
 </body>
 </html>
