@@ -1,7 +1,0 @@
-[site]
-name = "soliloquy-web"
-version = "0.1.0"
-description = "Crepus static site (.crepus + WASM)"
-
-# Dev:  crepus web serve --site .
-# Ship: crepus web build --site .

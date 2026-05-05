@@ -103,18 +103,18 @@ start_ui() {
     
     cd "${PROJECT_ROOT}/ui/desktop"
     
-    if ! command -v pnpm &> /dev/null; then
-        log_error "pnpm not found. Install with: corepack enable pnpm"
+    if ! command -v bun &> /dev/null; then
+        log_error "bun not found."
         exit 1
     fi
     
     # Install deps if needed
     if [[ ! -d node_modules ]]; then
         log_info "Installing UI dependencies..."
-        pnpm install
+        bun install
     fi
     
-    pnpm dev &
+    bun run dev &
     UI_PID=$!
     echo "$UI_PID" > /tmp/soliloquy-ui.pid
     

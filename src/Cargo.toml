@@ -15,10 +15,6 @@ path = "../examples/browser_simulation.rs"
 name = "production_demo"
 path = "../examples/production_demo.rs"
 
-[[example]]
-name = "integration_demo"
-path = "../examples/integration_demo.rs"
-
 [dependencies]
 log = "0.4"
 zstd = "0.13"

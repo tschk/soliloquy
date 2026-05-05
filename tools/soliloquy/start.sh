@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Start Soliloquy in appropriate mode (desktop or headless)
-# This script just starts the backend and optionally the UI for dev purposes
+# This script starts sold and optionally the UI for dev purposes
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-BACKEND_DIR="${PROJECT_ROOT}/backend"
 UI_DIR="${PROJECT_ROOT}/ui/desktop"
 
 # Colors
@@ -41,47 +40,41 @@ check_dev_mode() {
     return 1
 }
 
-# Start backend
-start_backend() {
-    log_info "Starting Soliloquy backend (V)..."
-    
-    if ! command -v v &> /dev/null; then
-        log_error "V language not found. Install from https://vlang.io"
+# Start sold
+start_sold() {
+    log_info "Starting sold..."
+
+    if ! command -v cargo &> /dev/null; then
+        log_error "cargo not found."
         exit 1
     fi
-    
-    cd "${BACKEND_DIR}"
-    
-    # Check if .env exists
-    if [[ ! -f .env ]]; then
-        log_warn "No .env file found. Copy .env.example and configure."
-        log_warn "Backend will start with defaults, but OAuth won't work."
-    fi
-    
+
+    cd "${PROJECT_ROOT}"
+
     # Load .env if it exists
     if [[ -f .env ]]; then
         set -a
         source .env
         set +a
     fi
-    
-    v run . &
-    BACKEND_PID=$!
-    
-    log_success "Backend started (PID: ${BACKEND_PID})"
-    echo "${BACKEND_PID}" > /tmp/soliloquy-backend.pid
-    
-    # Wait for backend to be ready
-    log_info "Waiting for backend to be ready..."
+
+    cargo run -p sold &
+    SOLD_PID=$!
+
+    log_success "sold started (PID: ${SOLD_PID})"
+    echo "${SOLD_PID}" > /tmp/soliloquy-sold.pid
+
+    # Wait for sold to be ready
+    log_info "Waiting for sold to be ready..."
     for i in {1..30}; do
-        if curl -s http://localhost:3030/health > /dev/null 2>&1; then
-            log_success "Backend ready"
+        if curl -s http://localhost:8080/api/device > /dev/null 2>&1; then
+            log_success "sold ready"
             return 0
         fi
         sleep 1
     done
-    
-    log_error "Backend failed to start"
+
+    log_error "sold failed to start"
     return 1
 }
 
@@ -122,10 +115,10 @@ cleanup() {
         rm /tmp/soliloquy-ui.pid
     fi
     
-    if [[ -f /tmp/soliloquy-backend.pid ]]; then
-        BACKEND_PID=$(cat /tmp/soliloquy-backend.pid)
-        kill "${BACKEND_PID}" 2>/dev/null || true
-        rm /tmp/soliloquy-backend.pid
+    if [[ -f /tmp/soliloquy-sold.pid ]]; then
+        SOLD_PID=$(cat /tmp/soliloquy-sold.pid)
+        kill "${SOLD_PID}" 2>/dev/null || true
+        rm /tmp/soliloquy-sold.pid
     fi
     
     log_success "Soliloquy stopped"
@@ -137,8 +130,8 @@ trap cleanup EXIT INT TERM
 main() {
     log_info "🌟 Starting Soliloquy..."
     
-    # Always start backend
-    start_backend
+    # Always start sold
+    start_sold
     
     # In dev mode, start UI as well.
     if check_dev_mode; then

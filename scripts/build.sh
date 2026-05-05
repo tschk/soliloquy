@@ -5,10 +5,10 @@
 # Usage: ./scripts/build.sh [target] [options]
 #
 # Targets:
-#   all       - Build everything (default)
-#   backend   - Build V backend only
+#   all       - Build Rust workspace and UI (default)
 #   ui        - Build Svelte UI only
 #   shell     - Build Servo shell
+#   sold      - Build sold service
 #
 # Options:
 #   --release  - Release build (default: debug)
@@ -57,41 +57,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Build functions
-build_backend() {
-    log_info "Building V backend..."
-    cd "${PROJECT_ROOT}/backend"
-    
-    if ! command -v v &> /dev/null; then
-        log_error "V compiler not found. Install from https://vlang.io"
-        exit 1
-    fi
-    
-    if $CLEAN_FIRST; then
-        rm -rf "${PROJECT_ROOT}/backend/soliloquy" 2>/dev/null || true
-    fi
-    
-    local v_flags=""
-    if $RELEASE_MODE; then
-        v_flags="-prod"
-    fi
-    
-    v $v_flags build .
-    log_success "Backend built"
-    
-    if $RUN_TESTS; then
-        log_info "Running backend tests..."
-        v test .
-        log_success "Backend tests passed"
-    fi
-}
-
 build_ui() {
     log_info "Building Svelte UI..."
     cd "${PROJECT_ROOT}/ui/desktop"
     
-    if ! command -v pnpm &> /dev/null; then
-        log_error "pnpm not found. Install with: corepack enable pnpm"
+    if ! command -v bun &> /dev/null; then
+        log_error "bun not found."
         exit 1
     fi
     
@@ -99,15 +70,39 @@ build_ui() {
         rm -rf node_modules .svelte-kit build 2>/dev/null || true
     fi
     
-    pnpm install
+    bun install
     
     if $RELEASE_MODE; then
-        pnpm build
+        bun run build
     else
-        log_info "UI ready for dev mode (run: pnpm dev)"
+        bun run check
     fi
     
     log_success "UI built"
+}
+
+build_sold() {
+    log_info "Building sold service with Cargo..."
+    cd "${PROJECT_ROOT}"
+
+    if ! command -v cargo &> /dev/null; then
+        log_error "Cargo not found. Install Rust first."
+        exit 1
+    fi
+
+    local cargo_flags="-p sold"
+    if $RELEASE_MODE; then
+        cargo_flags="$cargo_flags --release"
+    fi
+
+    cargo build $cargo_flags
+    log_success "sold built"
+
+    if $RUN_TESTS; then
+        log_info "Running sold tests..."
+        cargo test -p sold
+        log_success "sold tests passed"
+    fi
 }
 
 build_shell() {
@@ -140,7 +135,7 @@ build_shell() {
 
 build_all() {
     log_info "Building all targets..."
-    build_backend
+    build_sold
     build_ui
     build_shell
     log_success "All targets built successfully"
@@ -155,18 +150,18 @@ case "$TARGET" in
     all)
         build_all
         ;;
-    backend)
-        build_backend
-        ;;
     ui)
         build_ui
+        ;;
+    sold)
+        build_sold
         ;;
     shell)
         build_shell
         ;;
     *)
         log_error "Unknown target: $TARGET"
-        echo "Valid targets: all, backend, ui, shell"
+        echo "Valid targets: all, ui, shell, sold"
         exit 1
         ;;
 esac

@@ -1,3 +1,0 @@
-# Extensions package for Bazel module extensions
-
-exports_files(["v_toolchain.bzl"])
