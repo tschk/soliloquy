@@ -30,6 +30,7 @@ nix::ioctl_write_int_bad!(pty_set_ctty, nix::libc::TIOCSCTTY);
 // ── constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_FILES_DIR: &str = "/var/lib/soliloquy/files";
+const LOCAL_FILES_DIR: &str = ".soliloquy/files";
 /// Shell search order on Alpine.
 const SHELLS: &[&str] = &["/usr/bin/zellij", "/bin/ash", "/bin/sh"];
 
@@ -467,7 +468,7 @@ async fn main() {
     let files_dir = std::env::var_os("SOLILOQUY_FILES_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_FILES_DIR));
-    fs::create_dir_all(&files_dir).await.unwrap();
+    let files_dir = prepare_files_dir(files_dir).await;
     let runtime_env_path = std::env::var_os("SOLILOQUY_RUNTIME_ENV")
         .map(PathBuf::from)
         .unwrap_or_else(|| files_dir.join("runtime.env"));
@@ -558,6 +559,27 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+async fn prepare_files_dir(files_dir: PathBuf) -> PathBuf {
+    match fs::create_dir_all(&files_dir).await {
+        Ok(()) => files_dir,
+        Err(error) if files_dir == FsPath::new(DEFAULT_FILES_DIR) => {
+            let fallback = PathBuf::from(LOCAL_FILES_DIR);
+            eprintln!(
+                "sold: cannot use {DEFAULT_FILES_DIR}: {error}; using {}",
+                fallback.display()
+            );
+            fs::create_dir_all(&fallback)
+                .await
+                .expect("failed to create local Soliloquy files directory");
+            fallback
+        }
+        Err(error) => panic!(
+            "failed to create Soliloquy files directory {}: {error}",
+            files_dir.display()
+        ),
+    }
+}
+
 // ── terminal handlers ─────────────────────────────────────────────────────────
 
 async fn serve_terminal_page() -> Html<&'static str> {
@@ -571,7 +593,11 @@ async fn browse_page(
     let url = parse_remote_url(&query.url)?;
     let settings = load_settings(&state).await;
     if settings.block_private_network_proxy && !remote_url_allowed(&url) {
-        return Err(StatusCode::FORBIDDEN);
+        return Ok(Html(render_browser_message_page(
+            url.as_str(),
+            "blocked",
+            "private network proxy blocked",
+        )));
     }
     let cache_key = url.to_string();
     let ttl = Duration::from_secs(settings.page_proxy_cache_seconds.into());
@@ -582,17 +608,36 @@ async fn browse_page(
         }
     }
 
-    let body = state
-        .http
-        .get(url.clone())
-        .send()
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?
-        .error_for_status()
-        .map_err(|_| StatusCode::BAD_GATEWAY)?
-        .text()
-        .await
-        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let response = match state.http.get(url.clone()).send().await {
+        Ok(response) => response,
+        Err(_) => {
+            return Ok(Html(render_browser_message_page(
+                url.as_str(),
+                "unavailable",
+                "remote page did not respond",
+            )));
+        }
+    };
+    let response = match response.error_for_status() {
+        Ok(response) => response,
+        Err(_) => {
+            return Ok(Html(render_browser_message_page(
+                url.as_str(),
+                "unavailable",
+                "remote page returned an error",
+            )));
+        }
+    };
+    let body = match response.text().await {
+        Ok(body) => body,
+        Err(_) => {
+            return Ok(Html(render_browser_message_page(
+                url.as_str(),
+                "unavailable",
+                "remote page body could not be read",
+            )));
+        }
+    };
     let html = render_remote_page(url.as_str(), &body);
 
     if ttl > Duration::ZERO {
@@ -1825,6 +1870,15 @@ fn render_remote_page(url: &str, body: &str) -> String {
     )
 }
 
+fn render_browser_message_page(url: &str, title: &str, message: &str) -> String {
+    format!(
+        r#"<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="dark"><style>html,body{{height:100%;margin:0;background:#000;color:#fff;font:15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}}main{{min-height:100%;display:grid;place-items:center;padding:32px;box-sizing:border-box}}section{{width:min(520px,100%);text-align:left}}p{{margin:0;color:rgba(255,255,255,.62)}}h1{{margin:0 0 10px;font-size:28px;line-height:1.05;letter-spacing:-.04em;font-weight:650}}code{{display:block;margin-top:22px;color:rgba(255,255,255,.44);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}}</style></head><body><main><section><h1>{}</h1><p>{}</p><code>{}</code></section></main></body></html>"#,
+        escape_html_text(title),
+        escape_html_text(message),
+        escape_html_text(url)
+    )
+}
+
 fn escape_html_attr(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -1886,6 +1940,15 @@ mod tests {
     fn plain_remote_text_is_escaped() {
         let html = render_remote_page("https://example.com/", "<script>alert(1)</script>");
         assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+    }
+
+    #[test]
+    fn browser_message_page_is_dark_and_escaped() {
+        let html = render_browser_message_page("http://127.0.0.1/<x>", "blocked", "<no>");
+        assert!(html.contains("background:#000"));
+        assert!(html.contains("blocked"));
+        assert!(html.contains("&lt;no&gt;"));
+        assert!(html.contains("http://127.0.0.1/&lt;x&gt;"));
     }
 
     #[test]
