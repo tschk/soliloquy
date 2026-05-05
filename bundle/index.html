@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Soliloquy</title>
   <style>
+    @font-face {
+      font-family: "Material Symbols Rounded";
+      src: url("/assets/MaterialSymbolsRounded.woff2") format("woff2");
+      font-weight: 100 700;
+    }
+
     :root {
       color-scheme: dark;
       --bg: #000000;
@@ -69,39 +75,20 @@
       padding: 10px 8px;
       background: #000;
       overflow: hidden;
-      opacity: 0.72;
       transition: width 160ms ease, transform 160ms ease;
     }
 
     .sidebar:hover,
     .sidebar:focus-within {
       width: var(--sidebar-open);
-      opacity: 1;
     }
 
-    .command {
-      position: fixed;
-      top: 22px;
-      right: 28px;
-      z-index: 3;
-      width: min(54vw, 620px);
-    }
-
-    .command input {
-      width: 100%;
-      height: 40px;
-      border: 0;
-      outline: 0;
-      background: transparent;
-      color: var(--text);
-      font-size: 24px;
-      font-weight: 400;
-      text-align: right;
-    }
-
-    .command input::placeholder {
-      color: #f5f5f5;
-      opacity: 0.9;
+    .symbol {
+      font-family: "Material Symbols Rounded";
+      font-size: 20px;
+      line-height: 1;
+      font-feature-settings: "liga";
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" -50, "opsz" 24;
     }
 
     .window-actions,
@@ -114,6 +101,7 @@
     .window-actions {
       height: 24px;
       align-items: center;
+      justify-content: center;
       gap: 9px;
     }
 
@@ -128,16 +116,28 @@
     }
 
     .dot {
-      width: 12px;
-      height: 12px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       background: #1f1f1f;
+      color: #000;
+      overflow: hidden;
+    }
+
+    .dot .symbol {
+      font-size: 11px;
+      opacity: 0;
     }
 
     .dot:hover,
     .dot:focus-visible {
       background: #fff;
       color: #000;
+    }
+
+    .dot:hover .symbol,
+    .dot:focus-visible .symbol {
+      opacity: 1;
     }
 
     .dot[data-device-action="shutdown"]:hover,
@@ -157,6 +157,8 @@
 
     .nav-actions {
       align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
     }
 
     .icon-button,
@@ -184,20 +186,29 @@
 
     .app-actions {
       flex-direction: column;
-      align-items: stretch;
+      align-items: center;
     }
 
     .app-actions button {
       height: 34px;
+      width: 36px;
       display: grid;
-      grid-template-columns: 18px 1fr;
+      grid-template-columns: 1fr;
       align-items: center;
+      justify-items: center;
       gap: 8px;
       color: var(--muted);
       text-align: left;
       font-size: 12px;
       font-weight: 600;
       text-transform: uppercase;
+    }
+
+    .sidebar:hover .app-actions button,
+    .sidebar:focus-within .app-actions button {
+      width: 100%;
+      grid-template-columns: 18px 1fr;
+      justify-items: start;
     }
 
     .app-actions button:hover,
@@ -213,6 +224,11 @@
       transition: opacity 120ms ease;
     }
 
+    .app-label,
+    .tab-title {
+      display: none;
+    }
+
     .sidebar:hover .app-label,
     .sidebar:focus-within .app-label,
     .sidebar:hover .tab-title,
@@ -222,10 +238,18 @@
       opacity: 1;
     }
 
+    .sidebar:hover .app-label,
+    .sidebar:focus-within .app-label,
+    .sidebar:hover .tab-title,
+    .sidebar:focus-within .tab-title {
+      display: inline;
+    }
+
     .tabs {
       min-height: 0;
       display: flex;
       flex-direction: column;
+      align-items: center;
       gap: 6px;
       overflow: auto;
       scrollbar-width: none;
@@ -236,22 +260,48 @@
     }
 
     .tab {
+      width: 100%;
       min-height: 38px;
       display: grid;
-      grid-template-columns: 18px 1fr 24px;
+      grid-template-columns: 1fr;
       align-items: center;
+      justify-items: center;
       gap: 4px;
       color: var(--muted);
+    }
+
+    .sidebar:hover .tab,
+    .sidebar:focus-within .tab {
+      grid-template-columns: 18px 1fr 24px;
+      justify-items: stretch;
     }
 
     .tab.active {
       color: var(--text);
     }
 
-    .tab-open,
+    .tab-open {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      color: inherit;
+    }
+
+    .sidebar:hover .tab-open,
+    .sidebar:focus-within .tab-open,
     .tab-form {
       min-width: 0;
       height: 100%;
+      display: contents;
+    }
+
+    .tab-form {
+      display: none;
+    }
+
+    .sidebar:hover .tab-form,
+    .sidebar:focus-within .tab-form {
       display: contents;
     }
 
@@ -281,13 +331,13 @@
       background: transparent;
       color: var(--text);
       opacity: 0;
-      display: none;
+      pointer-events: none;
     }
 
     .sidebar:hover .tab-input,
     .sidebar:focus-within .tab-input {
       opacity: 1;
-      display: block;
+      pointer-events: auto;
     }
 
     .tab-close {
@@ -295,11 +345,14 @@
       height: 24px;
       color: var(--subtle);
       opacity: 0;
+      display: none;
     }
 
     .sidebar:hover .tab-close,
     .sidebar:focus-within .tab-close {
       opacity: 1;
+      display: grid;
+      place-items: center;
     }
 
     .tab-close:hover {
@@ -310,6 +363,7 @@
     .sidebar-footer {
       display: grid;
       gap: 8px;
+      justify-items: center;
     }
 
     .device-message {
@@ -329,6 +383,15 @@
       position: relative;
       background: #000;
       grid-column: 1;
+      width: calc(100% - var(--sidebar));
+      margin-left: var(--sidebar);
+      transition: width 160ms ease, margin-left 160ms ease;
+    }
+
+    .sidebar:hover ~ .viewport,
+    .sidebar:focus-within ~ .viewport {
+      width: calc(100% - var(--sidebar-open));
+      margin-left: var(--sidebar-open);
     }
 
     iframe {
@@ -354,23 +417,17 @@
     }
 
     body.zen .sidebar {
-      transform: translateX(calc(-1 * var(--sidebar)));
+      transform: translateX(calc(10px - var(--sidebar)));
+    }
+
+    body.zen .viewport {
+      width: calc(100% - 10px);
+      margin-left: 10px;
     }
 
     body.zen .sidebar:hover,
     body.zen .sidebar:focus-within {
       transform: translateX(0);
-    }
-
-    body.zen .command {
-      opacity: 0;
-      pointer-events: auto;
-      transition: opacity 160ms ease;
-    }
-
-    body.zen .command:hover,
-    body.zen .command:focus-within {
-      opacity: 1;
     }
 
     @media (max-width: 760px) {
@@ -387,33 +444,29 @@
 </head>
 <body>
   <main class="browser">
-    <form class="command" id="command-form">
-      <input id="command-input" autocomplete="off" spellcheck="false" placeholder="search">
-    </form>
-
     <aside class="sidebar" id="sidebar">
       <div class="window-actions">
-        <button class="dot" type="button" data-device-action="shutdown" aria-label="Shutdown"></button>
-        <button class="dot" type="button" data-device-action="sleep" aria-label="Sleep"></button>
-        <button class="dot" type="button" data-device-action="logout" aria-label="Logout"></button>
+        <button class="dot" type="button" data-device-action="shutdown" aria-label="Shutdown"><span class="symbol">power_settings_new</span></button>
+        <button class="dot" type="button" data-device-action="sleep" aria-label="Sleep"><span class="symbol">bedtime</span></button>
+        <button class="dot" type="button" data-device-action="logout" aria-label="Logout"><span class="symbol">logout</span></button>
       </div>
 
       <div class="nav-actions">
-        <button class="icon-button" id="back" type="button" aria-label="Back">‹</button>
-        <button class="icon-button" id="forward" type="button" aria-label="Forward">›</button>
-        <button class="icon-button" id="reload" type="button" aria-label="Reload">↻</button>
-        <button class="new-tab" id="new-tab" type="button" aria-label="New tab">+</button>
+        <button class="icon-button" id="back" type="button" aria-label="Back"><span class="symbol">arrow_back_ios_new</span></button>
+        <button class="icon-button" id="forward" type="button" aria-label="Forward"><span class="symbol">arrow_forward_ios</span></button>
+        <button class="icon-button" id="reload" type="button" aria-label="Reload"><span class="symbol">refresh</span></button>
+        <button class="new-tab" id="new-tab" type="button" aria-label="New tab"><span class="symbol">add</span></button>
       </div>
 
       <div class="tabs" id="tabs"></div>
 
       <div class="sidebar-footer">
         <nav class="app-actions" id="quick-nav">
-          <button type="button" data-url="os://terminal"><span>⌁</span><span class="app-label">terminal</span></button>
-          <button type="button" data-url="os://files"><span>□</span><span class="app-label">files</span></button>
-          <button type="button" data-url="os://settings"><span>◌</span><span class="app-label">settings</span></button>
+          <button type="button" data-url="os://terminal"><span class="symbol">terminal</span><span class="app-label">terminal</span></button>
+          <button type="button" data-url="os://files"><span class="symbol">folder</span><span class="app-label">files</span></button>
+          <button type="button" data-url="os://settings"><span class="symbol">settings</span><span class="app-label">settings</span></button>
         </nav>
-        <button class="zen-toggle" id="zen-toggle" type="button" aria-label="Zen mode">z</button>
+        <button class="zen-toggle" id="zen-toggle" type="button" aria-label="Zen mode"><span class="symbol">fullscreen</span></button>
         <div class="device-message" id="device-message">ready</div>
       </div>
     </aside>
@@ -544,7 +597,7 @@
         const node = document.createElement('div');
         node.className = `tab${item.id === activeTabId ? ' active' : ''}`;
         if (item.id === activeTabId) {
-          node.innerHTML = '<span class="tab-mark"></span><form class="tab-form"><input class="tab-input" autocomplete="off" spellcheck="false"></form><button class="tab-close" type="button" aria-label="Close tab">×</button>';
+          node.innerHTML = '<span class="tab-mark"></span><form class="tab-form"><input class="tab-input" autocomplete="off" spellcheck="false"></form><button class="tab-close" type="button" aria-label="Close tab"><span class="symbol">close</span></button>';
           const input = node.querySelector('.tab-input');
           input.value = item.url;
           node.querySelector('.tab-form').addEventListener('submit', (event) => {
@@ -558,7 +611,7 @@
             }
           });
         } else {
-          node.innerHTML = '<button class="tab-open" type="button"><span class="tab-mark"></span><span class="tab-title"></span></button><button class="tab-close" type="button" aria-label="Close tab">×</button>';
+          node.innerHTML = '<button class="tab-open" type="button"><span class="tab-mark"></span><span class="tab-title"></span></button><button class="tab-close" type="button" aria-label="Close tab"><span class="symbol">close</span></button>';
           node.querySelector('.tab-title').textContent = item.title;
           node.querySelector('.tab-open').addEventListener('click', () => setActive(item.id));
         }
@@ -569,7 +622,6 @@
         tabsNode.appendChild(node);
       }
       if (tab) {
-        commandInput.value = tab.url;
         backButton.disabled = tab.index <= 0;
         forwardButton.disabled = tab.index >= tab.history.length - 1;
         document.querySelectorAll('[data-url]').forEach((node) => {
@@ -618,18 +670,6 @@
       node.addEventListener('click', () => sendDeviceAction(node.dataset.deviceAction));
     });
     zenToggle.addEventListener('click', () => setZenMode(!document.body.classList.contains('zen')));
-    const commandInput = document.getElementById('command-input');
-    document.getElementById('command-form').addEventListener('submit', (event) => {
-      event.preventDefault();
-      navigate(commandInput.value);
-    });
-    commandInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        navigate(commandInput.value);
-      }
-    });
-
     frame.addEventListener('load', () => {
       const tab = activeTab();
       loadBar.classList.remove('loading');
@@ -637,7 +677,8 @@
       loadDevice();
     });
 
-    setZenMode(localStorage.getItem('soliloquy-zen') === '1');
+    localStorage.removeItem('soliloquy-zen');
+    setZenMode(false);
     const params = new URLSearchParams(window.location.search);
     createTab(params.get('url') || 'os://terminal');
     loadDevice();
