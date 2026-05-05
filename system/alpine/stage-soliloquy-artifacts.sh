@@ -28,7 +28,7 @@ cat > "${ROOTFS_DIR}/usr/local/bin/sol-session" << 'EOF'
 # Soliloquy session launcher
 
 # Wait for sold to be ready
-while ! curl -s http://127.0.0.1:8080/health > /dev/null; do
+while ! wget -q -O /dev/null http://127.0.0.1:8080/health; do
     sleep 1
 done
 
@@ -39,7 +39,8 @@ EOF
 chmod +x "${ROOTFS_DIR}/usr/local/bin/sol-session"
 
 # Stage browser bundle
-mkdir -p "${ROOTFS_DIR}/usr/share/soliloquy/bundle"
-echo "<html><body><h1>Soliloquy Appliance</h1><p>Loading...</p></body></html>" > "${ROOTFS_DIR}/usr/share/soliloquy/bundle/index.html"
+rm -rf "${ROOTFS_DIR}/usr/local/share/soliloquy/bundle"
+mkdir -p "${ROOTFS_DIR}/usr/local/share/soliloquy/bundle"
+cp -R "${PROJECT_ROOT}/bundle/." "${ROOTFS_DIR}/usr/local/share/soliloquy/bundle"
 
 echo "Artifacts staged."

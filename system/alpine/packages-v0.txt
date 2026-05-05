@@ -4,8 +4,6 @@ openrc
 linux-virt
 seatd
 cage
-xwayland
-xvfb
 mesa-egl
 mesa-gbm
 mesa-dri-gallium

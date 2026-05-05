@@ -115,8 +115,8 @@ build_sold_linux() {
       set -eu
       export PATH=/usr/local/cargo/bin:\$PATH
       apk add --no-cache musl-dev
-      cargo build --release --manifest-path system/sold/Cargo.toml --target-dir target/system-sold
-      cp target/system-sold/release/sold build/alpine/artifacts/linux-${QEMU_ARCH}/sold
+      cargo build --release --manifest-path sold/Cargo.toml --target-dir target/alpine-sold
+      cp target/alpine-sold/release/sold build/alpine/artifacts/linux-${QEMU_ARCH}/sold
     " >&2
 }
 
@@ -256,14 +256,13 @@ build_servo_runtime_bundle() {
         libgstreamer-plugins-base1.0-0 \
         libgstreamer-plugins-bad1.0-0 \
         libfontconfig1 \
-        libxcursor1 \
-        libxi6 \
-        libxrandr2 \
-        libxinerama1 \
-        libxkbcommon-x11-0 \
-        libx11-xcb1 \
-        libxcb1 \
-        libxrender1 \
+        libwayland-client0 \
+        libwayland-cursor0 \
+        libwayland-egl1 \
+        libxkbcommon0 \
+        libdrm2 \
+        libgbm1 \
+        libegl1 \
         zlib1g \
         libstdc++6 >/dev/null
       python3 - <<"PY"
@@ -282,14 +281,13 @@ needed = set([loader])
 queue = deque([servo])
 
 for extra in [
-    "/lib/x86_64-linux-gnu/libXcursor.so.1",
-    "/lib/x86_64-linux-gnu/libXi.so.6",
-    "/lib/x86_64-linux-gnu/libXrandr.so.2",
-    "/lib/x86_64-linux-gnu/libXinerama.so.1",
-    "/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0",
-    "/lib/x86_64-linux-gnu/libX11-xcb.so.1",
-    "/lib/x86_64-linux-gnu/libxcb.so.1",
-    "/lib/x86_64-linux-gnu/libXrender.so.1",
+    "/lib/x86_64-linux-gnu/libwayland-client.so.0",
+    "/lib/x86_64-linux-gnu/libwayland-cursor.so.0",
+    "/lib/x86_64-linux-gnu/libwayland-egl.so.1",
+    "/lib/x86_64-linux-gnu/libxkbcommon.so.0",
+    "/lib/x86_64-linux-gnu/libdrm.so.2",
+    "/lib/x86_64-linux-gnu/libgbm.so.1",
+    "/lib/x86_64-linux-gnu/libEGL.so.1",
 ]:
     if os.path.exists(extra):
         needed.add(extra)

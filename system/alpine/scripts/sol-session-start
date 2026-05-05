@@ -5,6 +5,10 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export WLR_BACKENDS="${WLR_BACKENDS:-drm,libinput}"
 export WLR_RENDERER="${WLR_RENDERER:-pixman}"
 export WLR_RENDERER_ALLOW_SOFTWARE="${WLR_RENDERER_ALLOW_SOFTWARE:-1}"
+export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+export SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-wayland}"
+export WINIT_UNIX_BACKEND="${WINIT_UNIX_BACKEND:-wayland}"
+export EGL_PLATFORM="${EGL_PLATFORM:-wayland}"
 export SOL_TOKEN="${SOL_TOKEN:-dev-token-change-me}"
 export SOLILOQUY_HOME="${SOLILOQUY_HOME:-/var/lib/soliloquy}"
 export SOLILOQUY_SYSTEM_CONFIG="${SOLILOQUY_SYSTEM_CONFIG:-/etc/soliloquy/system.json}"
@@ -61,10 +65,13 @@ has_input_device() {
   [ -e /dev/input/mice ] || { set -- /dev/input/event*; [ -e "$1" ]; }
 }
 
+has_seatd_socket() {
+  [ -S /run/seatd.sock ]
+}
+
 launch_session() {
   backend="$1"
   export WLR_BACKENDS="${backend}"
-  export SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-x11}"
   if ! has_input_device; then
     export WLR_LIBINPUT_NO_DEVICES=1
     log "no input devices found; allowing wlroots to continue without libinput devices"
@@ -72,6 +79,9 @@ launch_session() {
   log "WLR_BACKENDS=${WLR_BACKENDS}"
   log "WLR_RENDERER=${WLR_RENDERER}"
   log "SERVO_DISPLAY_BACKEND=${SERVO_DISPLAY_BACKEND}"
+  log "XDG_SESSION_TYPE=${XDG_SESSION_TYPE}"
+  log "WINIT_UNIX_BACKEND=${WINIT_UNIX_BACKEND}"
+  log "EGL_PLATFORM=${EGL_PLATFORM}"
   log "SOLILOQUY_JS_ENGINE=${SOLILOQUY_JS_ENGINE:-v8-experimental}"
 
   if [ -c "${SERIAL_CONSOLE}" ]; then
@@ -84,34 +94,23 @@ launch_session() {
 log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
 log "SOLILOQUY_SYSTEM_CONFIG=${SOLILOQUY_SYSTEM_CONFIG}"
 
-if has_drm_device; then
-  log "DRM device found; using cage (Wayland)"
-  launch_session "${WLR_BACKENDS:-drm,libinput}"
-else
-  log "no DRM device found; using Xvfb (X11)"
-  export XDG_SESSION_TYPE="x11"
-  export DISPLAY="${DISPLAY:-:0}"
-  export SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-x11}"
-  export SOL_SERVO_HEADLESS="${SOL_SERVO_HEADLESS:-1}"
-  log "SERVO_DISPLAY_BACKEND=${SERVO_DISPLAY_BACKEND}"
-  log "SOL_SERVO_HEADLESS=${SOL_SERVO_HEADLESS}"
-  log "SOLILOQUY_JS_ENGINE=${SOLILOQUY_JS_ENGINE:-v8-experimental}"
-  if command -v Xvfb >/dev/null 2>&1; then
-    log "starting Xvfb on display ${DISPLAY}"
-    Xvfb "${DISPLAY}" -screen 0 1024x768x24 +extension GLX >>"${SERIAL_CONSOLE}" 2>&1 &
-    xvfb_pid=$!
-    sleep 1
-    if kill -0 "${xvfb_pid}" 2>/dev/null; then
-      log "Xvfb started with pid ${xvfb_pid}"
-    else
-      log "Xvfb failed to start"
-    fi
-  else
-    log "Xvfb not available"
-  fi
-  log "launching sol-servo-wrapper directly (no cage)"
-  /usr/local/bin/sol-servo-wrapper >>"${SERIAL_CONSOLE}" 2>&1
+if ! has_drm_device; then
+  log "no DRM device found; cannot start Wayland appliance"
+  exit 1
 fi
+
+if ! has_seatd_socket; then
+  log "seatd socket not found at /run/seatd.sock; cannot start Wayland appliance"
+  exit 1
+fi
+
+if ! command -v cage >/dev/null 2>&1; then
+  log "cage not found; cannot start Wayland appliance"
+  exit 1
+fi
+
+log "DRM device found; using cage (Wayland)"
+launch_session "${WLR_BACKENDS:-drm,libinput}"
 status=$?
-log "cage exited with status ${status}"
+log "Wayland session exited with status ${status}"
 exit "${status}"
