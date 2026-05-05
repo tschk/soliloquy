@@ -7,83 +7,86 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #07090d;
-      --panel: rgba(255, 255, 255, 0.06);
-      --panel-strong: rgba(255, 255, 255, 0.1);
+      --text: #ffffff;
+      --muted: #a3a3a3;
       --line: rgba(255, 255, 255, 0.12);
-      --text: #f4f7fb;
-      --muted: rgba(244, 247, 251, 0.62);
-      --accent: #7cdaff;
-      --good: #baff92;
-      --danger: #ff8f8f;
+      --ring: rgba(255, 255, 255, 0.14) 0px 0px 0px 1px;
+      --card: rgba(255,255,255,0.14) 0px 0px 0px 1px, rgba(255,255,255,0.04) 0px 2px 2px, rgba(255,255,255,0.06) 0px 0px 0px 1px inset;
+      --focus: hsla(212, 100%, 48%, 1);
     }
 
     * {
       box-sizing: border-box;
+      font-feature-settings: "liga";
     }
 
     html, body {
       min-height: 100%;
       margin: 0;
-      background:
-        radial-gradient(circle at 92% 0%, rgba(124, 218, 255, 0.12), transparent 30%),
-        var(--bg);
+      background: #000;
       color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Geist, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
     }
 
     button, input, select {
       font: inherit;
     }
 
-    .page {
-      min-height: 100vh;
-      padding: clamp(22px, 4vw, 46px);
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
     }
 
-    .header {
-      display: flex;
-      align-items: end;
-      justify-content: space-between;
-      gap: 22px;
-      margin-bottom: 26px;
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 72px 24px;
+    }
+
+    .top {
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+      text-align: center;
+      margin-bottom: 40px;
     }
 
     h1 {
-      margin: 0 0 8px;
-      font-size: clamp(30px, 5vw, 58px);
+      margin: 0;
+      font-size: clamp(44px, 7vw, 72px);
       line-height: 1;
+      font-weight: 600;
       letter-spacing: 0;
     }
 
     .subhead {
+      max-width: 560px;
       margin: 0;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 18px;
+      line-height: 1.55;
     }
 
     .status {
-      min-width: 150px;
-      height: 34px;
-      display: grid;
-      place-items: center;
-      border: 1px solid var(--line);
-      border-radius: 999px;
+      min-height: 24px;
       color: var(--muted);
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
       font-size: 12px;
+      font-weight: 500;
     }
 
     .grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
+      gap: 12px;
     }
 
     .section {
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: var(--panel);
-      overflow: hidden;
+      border-radius: 8px;
+      box-shadow: var(--card);
+      background: #000;
     }
 
     .section.wide {
@@ -91,66 +94,62 @@
     }
 
     .section-title {
-      padding: 16px 18px;
-      border-bottom: 1px solid var(--line);
-      font-weight: 650;
+      padding: 16px;
+      box-shadow: var(--ring);
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0;
     }
 
     .field {
       display: grid;
       gap: 8px;
-      padding: 18px;
+      padding: 16px;
     }
 
     label {
       color: var(--muted);
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
       font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
+      font-weight: 500;
     }
 
     input, select {
       width: 100%;
-      height: 40px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: rgba(0, 0, 0, 0.22);
+      height: 38px;
+      border: 0;
+      border-radius: 6px;
+      box-shadow: var(--ring);
+      background: #000;
       color: var(--text);
-      padding: 0 12px;
+      padding: 0 10px;
       outline: 0;
-    }
-
-    input:focus, select:focus {
-      border-color: rgba(124, 218, 255, 0.42);
-      box-shadow: 0 0 0 3px rgba(124, 218, 255, 0.12);
     }
 
     .toggle-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 18px;
-      padding: 18px;
-    }
-
-    .toggle-copy {
-      min-width: 0;
+      gap: 16px;
+      padding: 16px;
     }
 
     .toggle-copy strong {
       display: block;
       margin-bottom: 4px;
+      font-weight: 600;
+      letter-spacing: 0;
     }
 
     .toggle-copy span {
       color: var(--muted);
-      font-size: 13px;
+      font-size: 14px;
     }
 
     .switch {
       position: relative;
-      width: 52px;
-      height: 30px;
+      width: 44px;
+      height: 26px;
       flex: 0 0 auto;
     }
 
@@ -165,57 +164,81 @@
       position: absolute;
       inset: 0;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.14);
-      transition: background 160ms ease;
+      box-shadow: var(--ring);
     }
 
     .switch span::after {
       content: "";
       position: absolute;
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       top: 3px;
       left: 3px;
-      border-radius: 999px;
-      background: #fff;
-      transition: transform 160ms ease;
-    }
-
-    .switch input:checked + span {
-      background: rgba(124, 218, 255, 0.44);
+      border-radius: 50%;
+      background: #525252;
+      transition: transform 120ms ease, background 120ms ease;
     }
 
     .switch input:checked + span::after {
-      transform: translateX(22px);
+      transform: translateX(18px);
+      background: var(--text);
+    }
+
+    .device {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      background: #1f1f1f;
+      box-shadow: var(--ring);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+
+    .metric {
+      background: #000;
+      padding: 16px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .metric strong {
+      font-size: 24px;
+      line-height: 1.2;
+      letter-spacing: 0;
     }
 
     .footer {
       display: flex;
-      justify-content: flex-end;
-      margin-top: 16px;
+      justify-content: center;
+      margin-top: 24px;
     }
 
     .save {
-      height: 42px;
-      border: 1px solid rgba(124, 218, 255, 0.28);
-      border-radius: 999px;
-      background: rgba(124, 218, 255, 0.14);
-      color: var(--text);
-      padding: 0 18px;
+      height: 40px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--text);
+      color: #000;
+      padding: 0 16px;
+      font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
     }
 
-    .save:hover {
-      background: rgba(124, 218, 255, 0.2);
-    }
-
     @media (max-width: 760px) {
-      .header {
-        align-items: start;
-        flex-direction: column;
+      .page {
+        padding: 48px 16px;
       }
 
-      .grid {
+      .grid,
+      .device {
         grid-template-columns: 1fr;
       }
     }
@@ -223,11 +246,9 @@
 </head>
 <body>
   <main class="page">
-    <header class="header">
-      <div>
-        <h1>Settings</h1>
-        <p class="subhead">Browser runtime preferences for this Soliloquy image.</p>
-      </div>
+    <header class="top">
+      <h1>Settings</h1>
+      <p class="subhead">Small runtime switches for the browser appliance.</p>
       <div id="message" class="status">ready</div>
     </header>
 
@@ -237,8 +258,8 @@
         <div class="field">
           <label for="theme">Theme</label>
           <select id="theme">
-            <option value="light">Light</option>
             <option value="dark">Dark</option>
+            <option value="light">Light</option>
             <option value="auto">Auto</option>
           </select>
         </div>
@@ -247,7 +268,7 @@
       <div class="section">
         <div class="section-title">Performance</div>
         <div class="field">
-          <label for="cache-size">Cache Size MB</label>
+          <label for="cache-size">Cache MB</label>
           <input id="cache-size" type="number" min="10" max="1000">
         </div>
       </div>
@@ -257,7 +278,7 @@
         <div class="toggle-row">
           <div class="toggle-copy">
             <strong>JavaScript</strong>
-            <span>Allow page scripts in the browser runtime.</span>
+            <span>Allow page scripts.</span>
           </div>
           <label class="switch" aria-label="Enable JavaScript">
             <input id="enable-js" type="checkbox">
@@ -273,6 +294,13 @@
           <input id="homepage" type="url" placeholder="os://terminal">
         </div>
       </div>
+    </section>
+
+    <section class="device" id="device">
+      <div class="metric"><span>service</span><strong>sold</strong></div>
+      <div class="metric"><span>uptime</span><strong>0s</strong></div>
+      <div class="metric"><span>pty</span><strong>0</strong></div>
+      <div class="metric"><span>files</span><strong>ready</strong></div>
     </section>
 
     <div class="footer">
@@ -291,7 +319,23 @@
         document.getElementById('homepage').value = settings.homepage || 'os://terminal';
       } catch (error) {
         console.error('Failed to load settings:', error);
-        showMessage('load failed', 'error');
+        showMessage('load failed');
+      }
+    }
+
+    async function loadDevice() {
+      try {
+        const response = await fetch('/api/device');
+        const device = await response.json();
+        const seconds = Math.round(device.uptime_ms / 1000);
+        document.getElementById('device').innerHTML = `
+          <div class="metric"><span>service</span><strong>${device.service}</strong></div>
+          <div class="metric"><span>uptime</span><strong>${seconds}s</strong></div>
+          <div class="metric"><span>pty</span><strong>${device.terminal_sessions}</strong></div>
+          <div class="metric"><span>files</span><strong>ready</strong></div>
+        `;
+      } catch (error) {
+        console.error('Failed to load device:', error);
       }
     }
 
@@ -309,24 +353,21 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(settings)
         });
-        showMessage(response.ok ? 'saved' : 'save failed', response.ok ? 'success' : 'error');
+        showMessage(response.ok ? 'saved' : 'save failed');
       } catch (error) {
         console.error('Failed to save settings:', error);
-        showMessage('save failed', 'error');
+        showMessage('save failed');
       }
     }
 
-    function showMessage(text, type) {
+    function showMessage(text) {
       const message = document.getElementById('message');
       message.textContent = text;
-      message.style.color = type === 'success' ? 'var(--good)' : type === 'error' ? 'var(--danger)' : 'var(--muted)';
-      setTimeout(() => {
-        message.textContent = 'ready';
-        message.style.color = 'var(--muted)';
-      }, 2400);
+      setTimeout(() => { message.textContent = 'ready'; }, 1800);
     }
 
     loadSettings();
+    loadDevice();
   </script>
 </body>
 </html>

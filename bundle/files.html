@@ -7,25 +7,24 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #07090d;
-      --panel: rgba(255, 255, 255, 0.06);
-      --panel-strong: rgba(255, 255, 255, 0.1);
+      --text: #ffffff;
+      --muted: #a3a3a3;
       --line: rgba(255, 255, 255, 0.12);
-      --text: #f4f7fb;
-      --muted: rgba(244, 247, 251, 0.62);
-      --accent: #7cdaff;
+      --ring: rgba(255, 255, 255, 0.14) 0px 0px 0px 1px;
+      --card: rgba(255,255,255,0.14) 0px 0px 0px 1px, rgba(255,255,255,0.04) 0px 2px 2px, rgba(255,255,255,0.06) 0px 0px 0px 1px inset;
     }
 
     * {
       box-sizing: border-box;
+      font-feature-settings: "liga";
     }
 
     html, body {
       height: 100%;
       margin: 0;
-      background: var(--bg);
+      background: #000;
       color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Geist, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
       overflow: hidden;
     }
 
@@ -34,59 +33,55 @@
     }
 
     button {
-      height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--panel);
+      height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: #000;
+      box-shadow: var(--ring);
       color: var(--text);
-      padding: 0 14px;
+      padding: 0 12px;
+      font-size: 14px;
+      font-weight: 500;
       cursor: pointer;
-    }
-
-    button:hover {
-      background: var(--panel-strong);
     }
 
     .layout {
       height: 100%;
       display: grid;
-      grid-template-columns: minmax(230px, 300px) 1fr;
-      background:
-        radial-gradient(circle at 0% 0%, rgba(124, 218, 255, 0.11), transparent 30%),
-        var(--bg);
+      grid-template-columns: 280px 1fr;
     }
 
     .sidebar {
       min-width: 0;
       display: grid;
       grid-template-rows: auto auto 1fr;
-      border-right: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.035);
+      box-shadow: var(--ring);
+      z-index: 1;
     }
 
     .header {
-      padding: 18px;
-      border-bottom: 1px solid var(--line);
+      padding: 32px 16px 16px;
     }
 
     h1 {
-      margin: 0 0 6px;
-      font-size: 20px;
-      font-weight: 650;
+      margin: 0;
+      font-size: 40px;
+      line-height: 1;
+      font-weight: 600;
       letter-spacing: 0;
     }
 
     .subhead {
-      margin: 0;
+      margin: 10px 0 0;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 14px;
+      line-height: 1.5;
     }
 
     .actions {
       display: flex;
       gap: 8px;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--line);
+      padding: 0 16px 16px;
     }
 
     .file-list {
@@ -101,15 +96,16 @@
       grid-template-columns: 1fr auto;
       gap: 12px;
       align-items: center;
-      padding: 11px 12px;
-      border-radius: 12px;
+      padding: 10px;
+      border-radius: 6px;
       color: var(--text);
       cursor: pointer;
+      font-size: 14px;
     }
 
     .file-item:hover,
     .file-item.active {
-      background: rgba(124, 218, 255, 0.12);
+      box-shadow: var(--ring);
     }
 
     .file-name {
@@ -117,30 +113,30 @@
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
-      font-size: 13px;
+      font-weight: 500;
     }
 
     .file-size {
       color: var(--muted);
-      font-size: 11px;
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      font-size: 12px;
     }
 
     .workspace {
       min-width: 0;
       min-height: 0;
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: 56px 1fr;
     }
 
     .editor-header {
-      min-height: 62px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.025);
+      padding: 0 16px;
+      box-shadow: var(--ring);
+      z-index: 1;
     }
 
     .current-file {
@@ -149,14 +145,20 @@
       white-space: nowrap;
       text-overflow: ellipsis;
       color: var(--muted);
-      font-size: 13px;
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      font-size: 12px;
+      font-weight: 500;
     }
 
-    .editor,
-    .pdf-viewer,
-    .empty-state {
+    .stage,
+    #editor,
+    #pdf-viewer {
       min-height: 0;
       height: 100%;
+    }
+
+    .stage {
+      position: relative;
     }
 
     textarea {
@@ -165,25 +167,25 @@
       border: 0;
       outline: 0;
       resize: none;
-      padding: 22px;
-      background: transparent;
+      padding: 24px;
+      background: #000;
       color: var(--text);
-      font: 13px/1.7 "SF Mono", "IBM Plex Mono", "Cascadia Code", monospace;
+      font: 14px/1.6 "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
     }
 
     iframe {
       width: 100%;
       height: 100%;
       border: 0;
-      background: #fff;
+      background: #000;
     }
 
     .empty-state {
+      height: 100%;
       display: grid;
       place-items: center;
       color: var(--muted);
-      text-align: center;
-      padding: 24px;
+      font-size: 14px;
     }
 
     .hidden {
@@ -193,12 +195,7 @@
     @media (max-width: 760px) {
       .layout {
         grid-template-columns: 1fr;
-        grid-template-rows: 260px 1fr;
-      }
-
-      .sidebar {
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
+        grid-template-rows: 230px 1fr;
       }
     }
   </style>
@@ -208,7 +205,7 @@
     <aside class="sidebar">
       <div class="header">
         <h1>Files</h1>
-        <p class="subhead">Local workspace files</p>
+        <p class="subhead">Local device storage.</p>
       </div>
       <div class="actions">
         <button type="button" onclick="newFile()">New</button>
@@ -222,12 +219,14 @@
         <span id="current-file" class="current-file">No file selected</span>
         <button type="button" onclick="saveFile()">Save</button>
       </div>
-      <div id="empty-state" class="empty-state">Select a file to inspect or edit.</div>
-      <div id="editor" class="editor hidden">
-        <textarea id="file-content" placeholder="Select a file to edit..."></textarea>
-      </div>
-      <div id="pdf-viewer" class="pdf-viewer hidden">
-        <iframe id="pdf-frame" title="PDF preview"></iframe>
+      <div class="stage">
+        <div id="empty-state" class="empty-state">Select a file.</div>
+        <div id="editor" class="hidden">
+          <textarea id="file-content"></textarea>
+        </div>
+        <div id="pdf-viewer" class="hidden">
+          <iframe id="pdf-frame" title="PDF preview"></iframe>
+        </div>
       </div>
     </main>
   </div>
@@ -247,7 +246,7 @@
           div.className = `file-item${file.name === currentFile ? ' active' : ''}`;
           div.innerHTML = '<span class="file-name"></span><span class="file-size"></span>';
           div.querySelector('.file-name').textContent = file.name;
-          div.querySelector('.file-size').textContent = `${file.size} bytes`;
+          div.querySelector('.file-size').textContent = `${file.size}b`;
           div.onclick = () => openFile(file.name);
           fileList.appendChild(div);
         });
@@ -265,16 +264,12 @@
         if (response.ok) {
           if (filename.toLowerCase().endsWith('.pdf')) {
             const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            showPdfViewer(url);
+            showPdfViewer(URL.createObjectURL(blob));
           } else {
-            const content = await response.text();
-            document.getElementById('file-content').value = content;
+            document.getElementById('file-content').value = await response.text();
             showEditor();
           }
           loadFiles();
-        } else {
-          alert('Failed to load file');
         }
       } catch (error) {
         console.error('Failed to open file:', error);
@@ -296,19 +291,13 @@
 
     async function saveFile() {
       if (!currentFile) return;
-
-      const content = document.getElementById('file-content').value;
       try {
-        const response = await fetch(`/api/files/${currentFile}`, {
+        await fetch(`/api/files/${currentFile}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content })
+          body: JSON.stringify({ content: document.getElementById('file-content').value })
         });
-        if (response.ok) {
-          loadFiles();
-        } else {
-          alert('Failed to save file');
-        }
+        loadFiles();
       } catch (error) {
         console.error('Failed to save file:', error);
       }
@@ -316,13 +305,12 @@
 
     function newFile() {
       const filename = prompt('Enter filename:');
-      if (filename) {
-        currentFile = filename;
-        document.getElementById('current-file').textContent = filename;
-        document.getElementById('file-content').value = '';
-        showEditor();
-        loadFiles();
-      }
+      if (!filename) return;
+      currentFile = filename;
+      document.getElementById('current-file').textContent = filename;
+      document.getElementById('file-content').value = '';
+      showEditor();
+      loadFiles();
     }
 
     loadFiles();

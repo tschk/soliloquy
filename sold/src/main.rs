@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::os::unix::io::{AsRawFd, BorrowedFd, IntoRawFd};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
@@ -26,6 +27,7 @@ nix::ioctl_write_int_bad!(pty_set_ctty, nix::libc::TIOCSCTTY);
 // ── constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_FILES_DIR: &str = "/var/lib/soliloquy/files";
+const BROWSE_CACHE_TTL: Duration = Duration::from_secs(15);
 /// Shell search order on Alpine.
 const SHELLS: &[&str] = &["/usr/bin/zellij", "/bin/ash", "/bin/sh"];
 
@@ -49,6 +51,35 @@ struct Settings {
 #[derive(Deserialize)]
 struct FileContent {
     content: String,
+}
+
+#[derive(Clone)]
+struct CachedPage {
+    html: String,
+    stored_at: Instant,
+}
+
+#[derive(Deserialize)]
+struct BrowseQuery {
+    url: String,
+}
+
+#[derive(Serialize)]
+struct DeviceStatus {
+    service: &'static str,
+    now_unix_ms: u128,
+    uptime_ms: u128,
+    files_dir: String,
+    terminal_sessions: usize,
+    terminal_shells: &'static [&'static str],
+}
+
+#[derive(Serialize)]
+struct DeviceActionResult {
+    action: String,
+    accepted: bool,
+    applied: bool,
+    message: &'static str,
 }
 
 /// Live PTY session.
@@ -90,6 +121,9 @@ struct WsQuery {
 struct AppState {
     sessions: SessionMap,
     files_dir: PathBuf,
+    http: reqwest::Client,
+    page_cache: Arc<DashMap<String, CachedPage>>,
+    started_at: Instant,
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -104,10 +138,21 @@ async fn main() {
     let state = AppState {
         sessions: Arc::new(DashMap::new()),
         files_dir,
+        http: reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(3))
+            .timeout(Duration::from_secs(8))
+            .user_agent("Soliloquy/0.1")
+            .build()
+            .unwrap(),
+        page_cache: Arc::new(DashMap::new()),
+        started_at: Instant::now(),
     };
 
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/browse", get(browse_page))
+        .route("/api/device", get(device_status))
+        .route("/api/device/{action}", post(device_action))
         // os://terminal landing + PTY bridge
         .route("/terminal", get(serve_terminal_page))
         .route("/v1/term/session", post(create_term_session))
@@ -135,6 +180,102 @@ async fn main() {
 
 async fn serve_terminal_page() -> Html<&'static str> {
     Html(include_str!("../../bundle/terminal/index.html"))
+}
+
+async fn browse_page(
+    Query(query): Query<BrowseQuery>,
+    State(state): State<AppState>,
+) -> Result<Html<String>, StatusCode> {
+    let url = parse_remote_url(&query.url)?;
+    let cache_key = url.to_string();
+
+    if let Some(entry) = state.page_cache.get(&cache_key) {
+        if entry.stored_at.elapsed() <= BROWSE_CACHE_TTL {
+            return Ok(Html(entry.html.clone()));
+        }
+    }
+
+    let body = state
+        .http
+        .get(url.clone())
+        .send()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?
+        .error_for_status()
+        .map_err(|_| StatusCode::BAD_GATEWAY)?
+        .text()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let html = render_remote_page(url.as_str(), &body);
+
+    state.page_cache.insert(
+        cache_key,
+        CachedPage {
+            html: html.clone(),
+            stored_at: Instant::now(),
+        },
+    );
+
+    Ok(Html(html))
+}
+
+async fn device_status(State(state): State<AppState>) -> Json<DeviceStatus> {
+    let now_unix_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+
+    Json(DeviceStatus {
+        service: "sold",
+        now_unix_ms,
+        uptime_ms: state.started_at.elapsed().as_millis(),
+        files_dir: state.files_dir.to_string_lossy().to_string(),
+        terminal_sessions: state.sessions.len(),
+        terminal_shells: SHELLS,
+    })
+}
+
+async fn device_action(
+    Path(action): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<DeviceActionResult>, StatusCode> {
+    match action.as_str() {
+        "logout" => {
+            for session in state.sessions.iter() {
+                let _ = nix::sys::signal::kill(session.child_pid, Signal::SIGHUP);
+            }
+            state.sessions.clear();
+            Ok(Json(DeviceActionResult {
+                action,
+                accepted: true,
+                applied: true,
+                message: "sessions closed",
+            }))
+        }
+        "shutdown" | "sleep" => {
+            let enabled = std::env::var("SOLILOQUY_ENABLE_POWER_ACTIONS")
+                .ok()
+                .as_deref()
+                == Some("1");
+            if enabled {
+                run_power_action(&action)?;
+                Ok(Json(DeviceActionResult {
+                    action,
+                    accepted: true,
+                    applied: true,
+                    message: "power action sent",
+                }))
+            } else {
+                Ok(Json(DeviceActionResult {
+                    action,
+                    accepted: true,
+                    applied: false,
+                    message: "power action disabled",
+                }))
+            }
+        }
+        _ => Err(StatusCode::BAD_REQUEST),
+    }
 }
 
 /// POST /v1/term/session — fork PTY + shell, return session_id.
@@ -403,4 +544,110 @@ async fn put_settings(
     fs::write(state.files_dir.join("settings.json"), content)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+fn parse_remote_url(raw: &str) -> Result<reqwest::Url, StatusCode> {
+    let url = reqwest::Url::parse(raw).map_err(|_| StatusCode::BAD_REQUEST)?;
+    match url.scheme() {
+        "http" | "https" => Ok(url),
+        _ => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+fn render_remote_page(url: &str, body: &str) -> String {
+    let escaped_url = escape_html_attr(url);
+    let base = format!(r#"<base href="{escaped_url}">"#);
+    let lower = body.to_ascii_lowercase();
+
+    if let Some(head_start) = lower.find("<head") {
+        if let Some(head_end) = body[head_start..].find('>') {
+            let insert_at = head_start + head_end + 1;
+            let mut output = String::with_capacity(body.len() + base.len());
+            output.push_str(&body[..insert_at]);
+            output.push_str(&base);
+            output.push_str(&body[insert_at..]);
+            return output;
+        }
+    }
+
+    format!(
+        r#"<!doctype html><html><head><meta charset="utf-8">{base}<style>body{{margin:0;padding:24px;font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#fff;background:#000}}pre{{white-space:pre-wrap;word-break:break-word}}</style></head><body><pre>{}</pre></body></html>"#,
+        escape_html_text(body)
+    )
+}
+
+fn escape_html_attr(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn escape_html_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn run_power_action(action: &str) -> Result<(), StatusCode> {
+    let Some((program, args)) = power_command(action) else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+    std::process::Command::new(program)
+        .args(args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
+}
+
+fn power_command(action: &str) -> Option<(&'static str, &'static [&'static str])> {
+    match action {
+        "shutdown" => Some(("/sbin/poweroff", &[])),
+        "sleep" => Some(("/usr/bin/systemctl", &["suspend"])),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn browse_url_accepts_http_and_https_only() {
+        assert!(parse_remote_url("https://example.com").is_ok());
+        assert!(parse_remote_url("http://example.com").is_ok());
+        assert!(parse_remote_url("file:///etc/passwd").is_err());
+        assert!(parse_remote_url("os://terminal").is_err());
+    }
+
+    #[test]
+    fn remote_html_gets_base_tag() {
+        let html = render_remote_page(
+            "https://example.com/path/",
+            "<html><head><title>x</title></head></html>",
+        );
+        assert!(html.contains(r#"<base href="https://example.com/path/">"#));
+        assert!(html.contains("<title>x</title>"));
+    }
+
+    #[test]
+    fn plain_remote_text_is_escaped() {
+        let html = render_remote_page("https://example.com/", "<script>alert(1)</script>");
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+    }
+
+    #[test]
+    fn power_actions_are_limited_to_known_commands() {
+        assert_eq!(
+            power_command("shutdown").map(|command| command.0),
+            Some("/sbin/poweroff")
+        );
+        assert_eq!(
+            power_command("sleep").map(|command| command.0),
+            Some("/usr/bin/systemctl")
+        );
+        assert!(power_command("format").is_none());
+    }
 }

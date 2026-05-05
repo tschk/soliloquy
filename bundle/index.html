@@ -7,33 +7,27 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #07080b;
-      --panel: rgba(16, 19, 25, 0.84);
-      --panel-strong: rgba(7, 9, 13, 0.92);
+      --bg: #000000;
+      --text: #ffffff;
+      --muted: #a3a3a3;
+      --subtle: #737373;
       --line: rgba(255, 255, 255, 0.12);
-      --line-strong: rgba(255, 255, 255, 0.2);
-      --text: #f4f7fb;
-      --muted: rgba(244, 247, 251, 0.62);
-      --subtle: rgba(244, 247, 251, 0.42);
-      --accent: #7cdaff;
-      --good: #baff92;
-      --warn: #ffd36c;
-      --shadow: 0 30px 110px rgba(0, 0, 0, 0.48);
+      --focus: hsla(212, 100%, 48%, 1);
+      --sidebar: 112px;
+      --sidebar-open: 220px;
     }
 
     * {
       box-sizing: border-box;
+      font-feature-settings: "liga";
     }
 
     html, body {
       height: 100%;
       margin: 0;
-      background:
-        radial-gradient(circle at 12% -8%, rgba(124, 218, 255, 0.18), transparent 32%),
-        radial-gradient(circle at 86% -10%, rgba(186, 255, 146, 0.13), transparent 30%),
-        linear-gradient(180deg, #0d1016 0%, var(--bg) 48%);
+      background: var(--bg);
       color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Geist, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
       overflow: hidden;
     }
 
@@ -43,264 +37,306 @@
 
     button {
       border: 0;
+      background: transparent;
+      color: inherit;
       cursor: pointer;
     }
 
-    main {
-      height: 100%;
-      padding: 22px;
+    button:focus-visible,
+    input:focus-visible {
+      outline: 1px solid var(--focus);
+      outline-offset: 2px;
     }
 
     .browser {
       height: 100%;
-      min-height: 520px;
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      background: var(--panel);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-      backdrop-filter: blur(24px);
       display: grid;
-      grid-template-rows: 46px 56px 1fr 30px;
+      grid-template-columns: 1fr;
+      background: #000;
     }
 
-    .tab-strip {
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 2;
+      width: var(--sidebar);
+      min-width: 0;
+      height: 100%;
       display: grid;
-      grid-template-columns: auto 1fr auto;
-      align-items: end;
-      gap: 14px;
-      padding: 8px 14px 0;
-      background: rgba(255, 255, 255, 0.045);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .traffic {
-      display: flex;
+      grid-template-rows: auto auto 1fr auto;
       gap: 8px;
-      padding-bottom: 12px;
-    }
-
-    .traffic span {
-      width: 12px;
-      height: 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.28);
-    }
-
-    .tabs {
-      display: flex;
-      min-width: 0;
-      height: 38px;
-      gap: 6px;
+      padding: 10px 8px;
+      background: #000;
       overflow: hidden;
+      opacity: 0.72;
+      transition: width 160ms ease, transform 160ms ease;
     }
 
-    .tab {
-      min-width: 0;
-      width: min(240px, 32vw);
-      display: grid;
-      grid-template-columns: 10px 1fr auto;
-      align-items: center;
-      gap: 9px;
-      padding: 0 12px;
-      border: 1px solid transparent;
-      border-bottom: 0;
-      border-radius: 12px 12px 0 0;
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--muted);
-      font-size: 12px;
+    .sidebar:hover,
+    .sidebar:focus-within {
+      width: var(--sidebar-open);
+      opacity: 1;
     }
 
-    .tab.active {
-      background: var(--panel-strong);
-      border-color: var(--line);
-      color: var(--text);
+    .command {
+      position: fixed;
+      top: 22px;
+      right: 28px;
+      z-index: 3;
+      width: min(54vw, 620px);
     }
 
-    .tab-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: var(--accent);
-      box-shadow: 0 0 18px rgba(124, 218, 255, 0.7);
-    }
-
-    .tab-title {
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .tab-close {
-      width: 20px;
-      height: 20px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: transparent;
-      color: var(--subtle);
-    }
-
-    .tab-close:hover {
-      background: rgba(255, 255, 255, 0.09);
-      color: var(--text);
-    }
-
-    .new-tab {
-      width: 30px;
-      height: 30px;
-      margin-bottom: 6px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.07);
-      color: var(--text);
-      font-size: 20px;
-      line-height: 1;
-    }
-
-    .toolbar {
-      display: grid;
-      grid-template-columns: auto auto auto 1fr auto;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 14px;
-      background: var(--panel-strong);
-      border-bottom: 1px solid var(--line);
-    }
-
-    .tool-button {
-      width: 36px;
-      height: 36px;
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      background: rgba(255, 255, 255, 0.07);
-      color: var(--muted);
-      font-size: 18px;
-    }
-
-    .tool-button:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.12);
-      color: var(--text);
-    }
-
-    .tool-button:disabled {
-      opacity: 0.34;
-      cursor: default;
-    }
-
-    .address-form {
-      height: 38px;
-      min-width: 0;
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      align-items: center;
-      gap: 10px;
-      padding: 0 12px;
-      border: 1px solid rgba(255, 255, 255, 0.11);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.065);
-    }
-
-    .security-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 999px;
-      background: var(--good);
-      box-shadow: 0 0 18px rgba(186, 255, 146, 0.7);
-    }
-
-    .address-input {
-      min-width: 0;
+    .command input {
+      width: 100%;
+      height: 40px;
       border: 0;
       outline: 0;
       background: transparent;
       color: var(--text);
-      font-size: 14px;
+      font-size: 24px;
+      font-weight: 400;
+      text-align: right;
     }
 
-    .address-input::selection {
-      background: rgba(124, 218, 255, 0.25);
+    .command input::placeholder {
+      color: #f5f5f5;
+      opacity: 0.9;
     }
 
-    .go-button {
-      width: 28px;
-      height: 28px;
-      border-radius: 999px;
-      background: rgba(124, 218, 255, 0.14);
-      color: var(--accent);
-      font-size: 15px;
-    }
-
-    .quick-nav {
+    .window-actions,
+    .nav-actions,
+    .app-actions {
       display: flex;
+      gap: 6px;
+    }
+
+    .window-actions {
+      height: 24px;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .dot,
+    .icon-button,
+    .new-tab,
+    .zen-toggle {
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #1f1f1f;
+    }
+
+    .dot:hover,
+    .dot:focus-visible {
+      background: #fff;
+      color: #000;
+    }
+
+    .dot[data-device-action="shutdown"]:hover,
+    .dot[data-device-action="shutdown"]:focus-visible {
+      background: #ff5b4f;
+    }
+
+    .dot[data-device-action="sleep"]:hover,
+    .dot[data-device-action="sleep"]:focus-visible {
+      background: #f5a524;
+    }
+
+    .dot[data-device-action="logout"]:hover,
+    .dot[data-device-action="logout"]:focus-visible {
+      background: #0a72ef;
+    }
+
+    .nav-actions {
+      align-items: center;
+    }
+
+    .icon-button,
+    .new-tab,
+    .zen-toggle {
+      width: 36px;
+      height: 36px;
+      font-size: 16px;
+    }
+
+    .icon-button:hover,
+    .new-tab:hover,
+    .zen-toggle:hover,
+    .icon-button.active,
+    .zen-toggle.active {
+      background: #fff;
+      color: #000;
+    }
+
+    .icon-button:disabled {
+      color: #3f3f3f;
+      background: transparent;
+      cursor: default;
+    }
+
+    .app-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .app-actions button {
+      height: 34px;
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .app-actions button:hover,
+    .app-actions button.active {
+      color: var(--text);
+      background: transparent;
+    }
+
+    .app-label,
+    .tab-title,
+    .device-message {
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+
+    .sidebar:hover .app-label,
+    .sidebar:focus-within .app-label,
+    .sidebar:hover .tab-title,
+    .sidebar:focus-within .tab-title,
+    .sidebar:hover .device-message,
+    .sidebar:focus-within .device-message {
+      opacity: 1;
+    }
+
+    .tabs {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow: auto;
+      scrollbar-width: none;
+    }
+
+    .tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab {
+      min-height: 38px;
+      display: grid;
+      grid-template-columns: 18px 1fr 24px;
+      align-items: center;
+      gap: 4px;
+      color: var(--muted);
+    }
+
+    .tab.active {
+      color: var(--text);
+    }
+
+    .tab-open,
+    .tab-form {
+      min-width: 0;
+      height: 100%;
+      display: contents;
+    }
+
+    .tab-mark {
+      width: 8px;
+      height: 8px;
+      justify-self: center;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .tab-title,
+    .tab-input {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .tab-input {
+      width: 100%;
+      height: 30px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text);
+      opacity: 0;
+      display: none;
+    }
+
+    .sidebar:hover .tab-input,
+    .sidebar:focus-within .tab-input {
+      opacity: 1;
+      display: block;
+    }
+
+    .tab-close {
+      width: 24px;
+      height: 24px;
+      color: var(--subtle);
+      opacity: 0;
+    }
+
+    .sidebar:hover .tab-close,
+    .sidebar:focus-within .tab-close {
+      opacity: 1;
+    }
+
+    .tab-close:hover {
+      background: #fff;
+      color: #000;
+    }
+
+    .sidebar-footer {
+      display: grid;
       gap: 8px;
     }
 
-    .quick-nav button {
-      height: 34px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--muted);
-      padding: 0 13px;
-      font-size: 12px;
-    }
-
-    .quick-nav button:hover,
-    .quick-nav button.active {
-      background: rgba(124, 218, 255, 0.13);
-      border-color: rgba(124, 218, 255, 0.24);
-      color: var(--text);
-    }
-
-    .content {
-      min-height: 0;
-      display: grid;
-      grid-template-columns: 64px 1fr;
-      background: #050607;
-    }
-
-    .rail {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 10px;
-      border-right: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.025);
-    }
-
-    .rail button {
-      width: 40px;
-      height: 40px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--muted);
-      font-size: 17px;
-    }
-
-    .rail button:hover,
-    .rail button.active {
-      background: rgba(124, 218, 255, 0.12);
-      color: var(--text);
+    .device-message {
+      min-height: 16px;
+      color: var(--subtle);
+      font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      font-size: 11px;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .viewport {
       min-width: 0;
       min-height: 0;
       position: relative;
-      background:
-        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-        #050607;
-      background-size: 100% 40px;
+      background: #000;
+      grid-column: 1;
     }
 
     iframe {
       width: 100%;
       height: 100%;
-      border: none;
-      background: #050607;
+      border: 0;
       display: block;
+      background: #000;
     }
 
     .load-bar {
@@ -308,131 +344,95 @@
       left: 0;
       right: 0;
       top: 0;
-      height: 2px;
+      height: 1px;
       background: transparent;
-      overflow: hidden;
       pointer-events: none;
     }
 
-    .load-bar.loading::before {
-      content: "";
-      display: block;
-      width: 34%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      animation: load 860ms ease-in-out infinite;
+    .load-bar.loading {
+      background: #fff;
     }
 
-    .status-bar {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 16px;
-      padding: 0 14px;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
-      background: var(--panel-strong);
-      color: var(--subtle);
-      font-size: 11px;
-      letter-spacing: 0.04em;
+    body.zen .sidebar {
+      transform: translateX(calc(-1 * var(--sidebar)));
     }
 
-    .status-right {
-      color: var(--muted);
+    body.zen .sidebar:hover,
+    body.zen .sidebar:focus-within {
+      transform: translateX(0);
     }
 
-    @keyframes load {
-      from {
-        transform: translateX(-100%);
-      }
-      to {
-        transform: translateX(300%);
-      }
+    body.zen .command {
+      opacity: 0;
+      pointer-events: auto;
+      transition: opacity 160ms ease;
     }
 
-    @media (max-width: 820px) {
-      main {
-        padding: 0;
+    body.zen .command:hover,
+    body.zen .command:focus-within {
+      opacity: 1;
+    }
+
+    @media (max-width: 760px) {
+      :root {
+        --sidebar: 58px;
+        --sidebar-open: min(86vw, 280px);
       }
 
-      .browser {
-        border: 0;
-        border-radius: 0;
-      }
-
-      .toolbar {
-        grid-template-columns: auto auto auto 1fr;
-      }
-
-      .quick-nav {
-        display: none;
-      }
-
-      .content {
-        grid-template-columns: 1fr;
-      }
-
-      .rail {
-        display: none;
+      .sidebar {
+        padding: 8px 6px;
       }
     }
   </style>
 </head>
 <body>
-  <main>
-    <section class="browser">
-      <div class="tab-strip">
-        <div class="traffic"><span></span><span></span><span></span></div>
-        <div class="tabs" id="tabs"></div>
+  <main class="browser">
+    <form class="command" id="command-form">
+      <input id="command-input" autocomplete="off" spellcheck="false" placeholder="search">
+    </form>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="window-actions">
+        <button class="dot" type="button" data-device-action="shutdown" aria-label="Shutdown"></button>
+        <button class="dot" type="button" data-device-action="sleep" aria-label="Sleep"></button>
+        <button class="dot" type="button" data-device-action="logout" aria-label="Logout"></button>
+      </div>
+
+      <div class="nav-actions">
+        <button class="icon-button" id="back" type="button" aria-label="Back">‹</button>
+        <button class="icon-button" id="forward" type="button" aria-label="Forward">›</button>
+        <button class="icon-button" id="reload" type="button" aria-label="Reload">↻</button>
         <button class="new-tab" id="new-tab" type="button" aria-label="New tab">+</button>
       </div>
 
-      <div class="toolbar">
-        <button class="tool-button" id="back" type="button" aria-label="Back">‹</button>
-        <button class="tool-button" id="forward" type="button" aria-label="Forward">›</button>
-        <button class="tool-button" id="reload" type="button" aria-label="Reload">↻</button>
-        <form class="address-form" id="address-form">
-          <span class="security-dot" id="security-dot"></span>
-          <input class="address-input" id="address" autocomplete="off" spellcheck="false" value="os://terminal">
-          <button class="go-button" type="submit" aria-label="Go">↵</button>
-        </form>
-        <nav class="quick-nav" id="quick-nav">
-          <button type="button" data-url="os://terminal">Terminal</button>
-          <button type="button" data-url="os://files">Files</button>
-          <button type="button" data-url="os://settings">Settings</button>
+      <div class="tabs" id="tabs"></div>
+
+      <div class="sidebar-footer">
+        <nav class="app-actions" id="quick-nav">
+          <button type="button" data-url="os://terminal"><span>⌁</span><span class="app-label">terminal</span></button>
+          <button type="button" data-url="os://files"><span>□</span><span class="app-label">files</span></button>
+          <button type="button" data-url="os://settings"><span>◌</span><span class="app-label">settings</span></button>
         </nav>
+        <button class="zen-toggle" id="zen-toggle" type="button" aria-label="Zen mode">z</button>
+        <div class="device-message" id="device-message">ready</div>
       </div>
+    </aside>
 
-      <div class="content">
-        <aside class="rail" id="rail">
-          <button type="button" data-url="os://terminal" aria-label="Terminal">⌁</button>
-          <button type="button" data-url="os://files" aria-label="Files">▦</button>
-          <button type="button" data-url="os://settings" aria-label="Settings">◌</button>
-        </aside>
-        <section class="viewport">
-          <div class="load-bar" id="load-bar"></div>
-          <iframe id="app-frame" title="Soliloquy page"></iframe>
-        </section>
-      </div>
-
-      <div class="status-bar">
-        <span id="status-left">ready</span>
-        <span class="status-right" id="status-right">web chrome active</span>
-      </div>
+    <section class="viewport">
+      <div class="load-bar" id="load-bar"></div>
+      <iframe id="app-frame" title="Soliloquy page"></iframe>
     </section>
   </main>
 
   <script>
     const frame = document.getElementById('app-frame');
-    const address = document.getElementById('address');
     const tabsNode = document.getElementById('tabs');
     const backButton = document.getElementById('back');
     const forwardButton = document.getElementById('forward');
     const reloadButton = document.getElementById('reload');
-    const addressForm = document.getElementById('address-form');
-    const statusLeft = document.getElementById('status-left');
-    const statusRight = document.getElementById('status-right');
     const loadBar = document.getElementById('load-bar');
-    const securityDot = document.getElementById('security-dot');
+    const deviceMessage = document.getElementById('device-message');
+    const zenToggle = document.getElementById('zen-toggle');
     const routes = {
       'os://terminal': '/terminal',
       'os://files': '/files.html',
@@ -444,13 +444,7 @@
 
     function createTab(url) {
       const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-      tabs.push({
-        id,
-        title: titleFor(url),
-        url,
-        history: [],
-        index: -1
-      });
+      tabs.push({ id, title: titleFor(url), url, history: [], index: -1 });
       activeTabId = id;
       navigate(url);
     }
@@ -460,9 +454,9 @@
     }
 
     function titleFor(url) {
-      if (url === 'os://terminal') return 'Terminal';
-      if (url === 'os://files') return 'Files';
-      if (url === 'os://settings') return 'Settings';
+      if (url === 'os://terminal') return 'terminal';
+      if (url === 'os://files') return 'files';
+      if (url === 'os://settings') return 'settings';
       try {
         return new URL(url).hostname || url;
       } catch {
@@ -481,7 +475,7 @@
     }
 
     function resolveUrl(url) {
-      return routes[url] || url;
+      return routes[url] || `/browse?url=${encodeURIComponent(url)}`;
     }
 
     function navigate(rawUrl, options = {}) {
@@ -497,10 +491,7 @@
       }
       tab.url = url;
       tab.title = titleFor(url);
-      address.value = url;
-      statusLeft.textContent = `loading ${url}`;
-      statusRight.textContent = routes[url] ? 'local route' : 'remote page';
-      securityDot.style.background = /^https:|^os:/i.test(url) ? 'var(--good)' : 'var(--warn)';
+      deviceMessage.textContent = `loading ${tab.title}`;
       loadBar.classList.add('loading');
       frame.src = resolveUrl(url);
       render();
@@ -550,12 +541,27 @@
       const tab = activeTab();
       tabsNode.innerHTML = '';
       for (const item of tabs) {
-        const node = document.createElement('button');
-        node.type = 'button';
+        const node = document.createElement('div');
         node.className = `tab${item.id === activeTabId ? ' active' : ''}`;
-        node.innerHTML = `<span class="tab-dot"></span><span class="tab-title"></span><span class="tab-close">×</span>`;
-        node.querySelector('.tab-title').textContent = item.title;
-        node.addEventListener('click', () => setActive(item.id));
+        if (item.id === activeTabId) {
+          node.innerHTML = '<span class="tab-mark"></span><form class="tab-form"><input class="tab-input" autocomplete="off" spellcheck="false"></form><button class="tab-close" type="button" aria-label="Close tab">×</button>';
+          const input = node.querySelector('.tab-input');
+          input.value = item.url;
+          node.querySelector('.tab-form').addEventListener('submit', (event) => {
+            event.preventDefault();
+            navigate(input.value);
+          });
+          input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              navigate(input.value);
+            }
+          });
+        } else {
+          node.innerHTML = '<button class="tab-open" type="button"><span class="tab-mark"></span><span class="tab-title"></span></button><button class="tab-close" type="button" aria-label="Close tab">×</button>';
+          node.querySelector('.tab-title').textContent = item.title;
+          node.querySelector('.tab-open').addEventListener('click', () => setActive(item.id));
+        }
         node.querySelector('.tab-close').addEventListener('click', (event) => {
           event.stopPropagation();
           closeTab(item.id);
@@ -563,7 +569,7 @@
         tabsNode.appendChild(node);
       }
       if (tab) {
-        address.value = tab.url;
+        commandInput.value = tab.url;
         backButton.disabled = tab.index <= 0;
         forwardButton.disabled = tab.index >= tab.history.length - 1;
         document.querySelectorAll('[data-url]').forEach((node) => {
@@ -572,17 +578,34 @@
       }
     }
 
-    addressForm.addEventListener('submit', (event) => {
-      event.preventDefault();
-      navigate(address.value);
-    });
-
-    address.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        navigate(address.value);
+    async function loadDevice() {
+      try {
+        const response = await fetch('/api/device');
+        const device = await response.json();
+        deviceMessage.textContent = `${device.service} ${device.terminal_sessions}pty`;
+      } catch {
+        deviceMessage.textContent = 'device offline';
       }
-    });
+    }
+
+    async function sendDeviceAction(action) {
+      deviceMessage.textContent = action;
+      try {
+        const response = await fetch(`/api/device/${action}`, { method: 'POST' });
+        const result = await response.json();
+        deviceMessage.textContent = result.message || action;
+        loadDevice();
+      } catch {
+        deviceMessage.textContent = `${action} failed`;
+      }
+    }
+
+    function setZenMode(enabled) {
+      document.body.classList.toggle('zen', enabled);
+      zenToggle.classList.toggle('active', enabled);
+      localStorage.setItem('soliloquy-zen', enabled ? '1' : '0');
+      document.activeElement?.blur?.();
+    }
 
     backButton.addEventListener('click', goBack);
     forwardButton.addEventListener('click', goForward);
@@ -591,15 +614,33 @@
     document.querySelectorAll('[data-url]').forEach((node) => {
       node.addEventListener('click', () => navigate(node.dataset.url));
     });
+    document.querySelectorAll('[data-device-action]').forEach((node) => {
+      node.addEventListener('click', () => sendDeviceAction(node.dataset.deviceAction));
+    });
+    zenToggle.addEventListener('click', () => setZenMode(!document.body.classList.contains('zen')));
+    const commandInput = document.getElementById('command-input');
+    document.getElementById('command-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      navigate(commandInput.value);
+    });
+    commandInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        navigate(commandInput.value);
+      }
+    });
 
     frame.addEventListener('load', () => {
       const tab = activeTab();
       loadBar.classList.remove('loading');
-      statusLeft.textContent = tab ? `loaded ${tab.url}` : 'ready';
+      deviceMessage.textContent = tab ? tab.title : 'ready';
+      loadDevice();
     });
 
+    setZenMode(localStorage.getItem('soliloquy-zen') === '1');
     const params = new URLSearchParams(window.location.search);
     createTab(params.get('url') || 'os://terminal');
+    loadDevice();
   </script>
 </body>
 </html>
