@@ -18,9 +18,8 @@ Other important top-level areas:
 - `system/alpine/` - appliance rootfs assembly, staging, and QEMU scripts
 - `ui/desktop/` - Svelte desktop UI used by the dev flow and Alpine staging
 - `bundle/` - static UI assets served by `sold`
-- `soliloquy-web/` - Crepuscularity-based web UI/runtime experiments
 - `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
-- `docs/` - project docs; some sections are current, some are historical
+- `docs/` - project docs for the current Cargo, Bun, Alpine, Servo/RV8, and `sold` paths
 
 ## Architecture Snapshot
 
@@ -70,12 +69,11 @@ More detail lives in [system/alpine/README.md](system/alpine/README.md).
 
 ## Current Build-System Reality
 
-Several build systems appear in the repo, but they are not in the same state:
+Current build paths:
 
 - `Cargo` is the clearest active path for local Rust work
 - `system/alpine/scripts/*` is the clearest active path for appliance packaging and QEMU boot
-- `Bazel` files exist, but they look partial
-- older docs reference `GN/Ninja` and Zircon/Fuchsia-oriented layouts that are not represented by a root `BUILD.gn` in this checkout
+- `Bun` is the only JavaScript package manager used for the Svelte UI
 
 ## Current Bridge State
 
@@ -91,6 +89,6 @@ Several build systems appear in the repo, but they are not in the same state:
 
 - [CLAUDE.md](CLAUDE.md) for a concise repo-operating guide
 - [system/alpine/README.md](system/alpine/README.md) for the appliance path
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/architecture/architecture.md](docs/architecture/architecture.md) for broader design context
+- [docs/v0-architecture.md](docs/v0-architecture.md) and [docs/architecture/appliance-system.md](docs/architecture/appliance-system.md) for broader design context
 - [src/README.md](src/README.md) for the optimization library internals
 - [docs/rv8_linkage_roadmap.md](docs/rv8_linkage_roadmap.md) for the current bridge plan and remaining work

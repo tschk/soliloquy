@@ -181,10 +181,6 @@ Register base addresses:
 ## Testing
 
 ```bash
-# Run unit tests
-bazel test //drivers/generic:soliloquy_drivers_test
-
-# Or with cargo
 cd drivers/generic
 cargo test
 ```
@@ -198,4 +194,4 @@ cargo test
 
 ## License
 
-Apache-2.0
+MPL-2.0

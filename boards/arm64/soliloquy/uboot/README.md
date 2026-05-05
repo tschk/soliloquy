@@ -84,7 +84,7 @@ mmc write 0x42000000 0x10 0x800  # Write at 8KB offset
 2. SPL initializes DRAM and loads U-Boot
 3. U-Boot runs boot.scr
 4. boot.scr loads soliloquy.zbi to memory
-5. U-Boot boots Zircon kernel with booti command
+5. U-Boot boots the appliance kernel with booti command
 
 ## Debugging
 

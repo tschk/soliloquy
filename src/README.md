@@ -493,7 +493,7 @@ isolation.remove_context(tab_id)?;
 
 ## License
 
-MIT OR Apache-2.0 (consistent with Soliloquy project)
+MPL-2.0
 
 ## References
 

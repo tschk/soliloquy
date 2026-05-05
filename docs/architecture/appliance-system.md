@@ -45,7 +45,7 @@ The target service architecture borrows from several operating system designs:
 
 - Solaris: declarative service graph, restart behavior, maintenance states, boot environments.
 - GNU Hurd: path-backed service views and translator-style namespace composition.
-- Fuchsia/Zircon: capability-driven service boundaries, driver isolation, structured diagnostics.
+- Capability-oriented systems: service boundaries, driver isolation, structured diagnostics.
 - BSD: simple service supervision, `rc` discipline, `devfs`-style device handling, log rotation.
 - Redox and Plan 9: treat devices and services as named resources instead of hard-coded global subsystems.
 - MINIX 3: restartable critical services.
@@ -54,7 +54,7 @@ The target service architecture borrows from several operating system designs:
 
 The current appliance now carries a small declarative service registry in
 `/etc/soliloquy/services.json`. It is intentionally small, but it is the first
-step toward a more Solaris/Fuchsia-style service graph instead of purely
+step toward a more declarative service graph instead of purely
 implicit shell-script ordering.
 
 ## Immediate System Changes
@@ -81,7 +81,7 @@ These changes are already reflected or scaffolded in the current appliance path:
 - Update policy lives in `/etc/soliloquy/update-policy.json`.
 - Writable update state lives in `/var/lib/soliloquy/system/update-state.json`.
 - The current strategy is `atomic-generations` with rollback enabled.
-- This mirrors the direction borrowed from Solaris boot environments, Fuchsia system updates, and modern image-based Linux systems.
+- This mirrors the direction borrowed from Solaris boot environments and modern image-based Linux systems.
 
 ## Package Management
 

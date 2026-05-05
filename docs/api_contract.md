@@ -28,4 +28,4 @@ This repo now treats `rover-desktop` as the host boundary for engine access.
 
 - `rover`: engine loop, scheduler, tab/session model, service contracts, optional FFI
 - `rover-desktop`: host windowing, compositor/input integration, control plane
-- `soliloquy`: AI runtime, policy layer, tool-schema mapping, Fuchsia product packaging
+- `soliloquy`: appliance runtime, policy layer, local tools, and Alpine packaging

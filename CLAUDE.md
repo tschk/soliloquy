@@ -2,7 +2,7 @@
 
 ## What Is Soliloquy?
 
-Soliloquy is an experimental browser appliance and web-native shell. The current repo is centered on a Linux/Alpine runtime, a Rust shell, Servo integration work, a V8 runtime layer, and local UI/services for a single-purpose browser environment. The codebase also contains older architectural material that references Zircon/Fuchsia-style concepts, but the checked-in build and runtime paths in this repository are primarily Linux-oriented.
+Soliloquy is an experimental browser appliance and web-native shell. The current repo is centered on a Linux/Alpine runtime, a Rust shell, Servo integration work, a V8 runtime layer, and local UI/services for a single-purpose browser environment.
 
 The project is early-stage and not production-ready.
 
@@ -15,12 +15,10 @@ There are four active Rust packages in the root Cargo workspace:
 - `rv8` (`src/rv8/`) - experimental browser engine/runtime crate
 - `sold` (`sold/`) - local Axum service for bundled UI, files, and settings
 
-There are also substantial adjacent projects in-tree, including:
+There are also substantial adjacent areas in-tree, including:
 
 - `system/alpine/` - Alpine appliance build, staging, and QEMU boot flow
 - `ui/desktop/` - Svelte desktop UI
-- `soliloquy-web/` - Crepuscularity-based web UI/runtime experiments
-- `crepuscularity/` and `equilibrium/` - separate subprojects with their own docs and manifests
 - `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
 - `third_party/servo/components/servo/soliloquy_bridge.rs` - typed snapshot bridge for the current `rv8` Servo/V8 work
 
@@ -43,18 +41,18 @@ At the top level, the repo currently breaks down like this:
 - the current bridge covers simple literals, `+` expressions, structured `window.__soliloquyEval(...)` calls, and live snapshot-backed reads/writes for a narrow DOM surface
 - the live snapshot bridge has been extracted into `third_party/servo/components/servo/soliloquy_bridge.rs`
 - `cargo test --manifest-path src/shell/Cargo.toml --lib` passes locally
-- `pnpm -C ui/desktop check` and `pnpm -C ui/desktop build` pass locally, with the same CSS compatibility warning as before
+- `bun run check` and `bun run build` pass locally in `ui/desktop`, with the same CSS compatibility warning as before
 - Servo-side Rust validation is still blocked in this environment by the existing `mozangle` / Apple LLVM header issue
 
 ## Build Systems
 
-Multiple build systems exist, but they are not equally current:
+Current build paths:
 
 - `Cargo` - primary day-to-day Rust build/test path at the repo root
-- `Bazel` - present via `MODULE.bazel` and `WORKSPACE.bazel`, but appears partial/legacy
-- `GN/Ninja` - referenced in older docs, but there is no root `BUILD.gn` in this checkout
+- `Bun` - JavaScript package manager and Svelte UI check/build path
+- `system/alpine/scripts/*` - appliance staging and QEMU boot path
 
-Treat Cargo plus the Alpine scripts as the authoritative local path unless you have a specific reason to work on Bazel or older architecture experiments.
+Treat Cargo plus Bun plus the Alpine scripts as the authoritative local path.
 
 ## Common Commands
 
@@ -97,9 +95,6 @@ Alpine/QEMU flow:
 ## Notes And Caveats
 
 - The root workspace is not a 25-member workspace in this checkout.
-- The repo does not currently contain the `backend/` tree described in some older docs.
-- `scripts/build.sh` still references a removed `backend/` target and should be treated carefully.
-- `docs/README.md` still points at missing translation/component-manifest material.
 - `third_party/servo` is a nested repository and should be treated as an actively patched fork for `rv8`.
 - `system/alpine/scripts/sol-servo-wrapper` has had local work in this branch history; verify the current status before editing it.
 
@@ -107,7 +102,7 @@ Alpine/QEMU flow:
 
 When changing code in this repo:
 
-- Prefer existing Rust/Cargo patterns over reviving older V/Fuchsia-era assumptions from stale docs.
+- Prefer existing Rust/Cargo patterns over reviving older platform assumptions from stale docs.
 - Verify file paths before trusting documentation references.
 - Keep Alpine appliance work, shell/runtime work, and side-project work scoped separately.
 - Check `git status` before making changes because the workspace may already be dirty.

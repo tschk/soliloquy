@@ -1,5 +1,5 @@
 // Copyright 2024 Soliloquy Authors
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MPL-2.0
 //
 // Generic GPIO Driver
 // Platform-agnostic GPIO implementation using MMIO

@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: MPL-2.0
 #
 # U-Boot boot script for Soliloquy OS on Radxa Cubie A5E
 # This script is compiled with mkimage and stored on the boot partition.
@@ -43,7 +43,7 @@ if test -z "${zbi_name}"; then
     setenv zbi_name soliloquy.zbi
 fi
 
-# Boot arguments for Zircon kernel
+# Boot arguments for appliance kernel
 setenv bootargs "kernel.serial=legacy kernel.halt-on-panic=false devmgr.bind-eager=all console=ttyS0,115200"
 
 # Optional: Add debug arguments

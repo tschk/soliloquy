@@ -40,7 +40,7 @@ The Soliloquy networking stack implements modern web performance optimizations i
 └──────────────────┴──────────────────┴───────────────────┘
                    │
 ┌──────────────────┴──────────────────────────────────────┐
-│         Fuchsia Networking Stack (FIDL)                  │
+│         Linux networking, rustls, HTTP/3, QUIC           │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -482,4 +482,4 @@ let loader = ResourceLoader::new()
 ## License
 
 Copyright (c) 2025 Soliloquy Project
-Licensed under MIT OR Apache-2.0
+Licensed under MPL-2.0

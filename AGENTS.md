@@ -23,10 +23,8 @@ Build paths currently coexist:
 
 - Alpine image assembly and OpenRC service staging under `system/alpine`
 - Servo/RV8 bridge checks through Cargo and the local Servo checkout
-- Bazel: bazel build //... or bazel test //... (uses rules_rust v0.56.0)
-- Cargo: cargo build / cargo test (25 workspace members)
-
-The root BUILD.gn defines targets: :default, :soliloquy, :soliloquy_headless, :soliloquy_qemu, :tests, :drivers.
+- Cargo: cargo build / cargo test
+- Bun: bun run check / bun run build in `ui/desktop`
 
 ## Project Layout
 
@@ -39,30 +37,30 @@ The root BUILD.gn defines targets: :default, :soliloquy, :soliloquy_headless, :s
     src/cache/          unified.rs (LRU), texture_atlas.rs, disk_cache.rs
     drivers/            wifi/aic8800, gpio, gpu/mali_g57, common/soliloquy_hal
     boards/             arm64/soliloquy (A527 board support)
-    third_party/        servo/, fuchsia-sdk-rust/ mock bindings
+    third_party/        servo/ checkout and optional external source trees
     gen/fidl/           Generated FIDL bindings (fuchsia_ui_composition, views, app, input)
     tools/              RV8/Servo checks, UI build/dev/start helpers, serial debug
     test/               support lib, component tests, vm tests
-    docs/               ARCHITECTURE.md, browser_optimizations.md, build.md, guides/
+    docs/               v0-architecture.md, browser_optimizations.md, build.md, guides/
 
 ## Key Crates and Dependencies
 
 Shell (src/shell/Cargo.toml):
 - rusty_v8 0.32 (V8 bindings), tokio 1.40 (async), serde/serde_json (serialization)
 - Networking: quinn 0.11 (QUIC), rustls 0.23, hyper 1.4, reqwest 0.12
-- FIDL stubs in third_party/fuchsia-sdk-rust/ and gen/fidl/ (mock impls for non-Fuchsia builds)
+- FIDL stubs in gen/fidl/ (mock impls for host builds)
 
 RV8 (src/rv8/):
 - ipc-channel for real multi-process IPC (bootstrap server pattern)
 - html5ever for HTML tokenization/parsing
 
-Root workspace: 25 members, edition 2021, Apache 2.0 license
+Root workspace: 3 listed members, edition 2021, MPL-2.0 license
 
 ## Common Patterns
 
 - License field: Use license-file.workspace = true (not license.workspace) in Cargo.toml files
-- FIDL stubs: The gen/fidl/ and third_party/fuchsia-sdk-rust/ crates are mock implementations
-  for building on non-Fuchsia. They need trait derives (Clone, Debug, PartialEq) and constants
+- FIDL stubs: The gen/fidl/ crates are mock implementations
+  for building on host systems. They need trait derives (Clone, Debug, PartialEq) and constants
   (PROTOCOL_NAME) added as needed.
 - Borrow checker in speculation.rs: evaluate_speculation collects actions into a Vec before
   calling mutable methods to avoid borrow conflicts
@@ -74,8 +72,6 @@ Root workspace: 25 members, edition 2021, Apache 2.0 license
     cargo test                        # All Rust tests
     cargo test -p soliloquy-shell     # Shell crate only
     cargo test -p soliloquy-shell --lib  # Library tests only
-    bazel test //...                  # All Bazel tests
-
 Networking module has 56+ tests. Memory, GPU, and cache modules have their own test suites.
 The shell test_flatland_present validates Flatland compositor integration.
 
@@ -97,7 +93,7 @@ The shell test_flatland_present validates Flatland compositor integration.
 <claude-mem-context>
 # Memory Context
 
-# [soliloquy] recent context, 2026-05-05 11:57pm GMT+10
+# [soliloquy] recent context, 2026-05-06 12:30am GMT+10
 
 No previous sessions found.
 </claude-mem-context>

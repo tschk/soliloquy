@@ -1,0 +1,11 @@
+*.dts linguist-language=Devicetree
+*.dtsi linguist-language=Devicetree
+*.gn linguist-language=GN
+*.gni linguist-language=GN
+*.v linguist-language=V
+*.crepus linguist-language=JSON
+
+bundle/assets/** linguist-vendored
+third_party/** linguist-vendored
+docs/** linguist-documentation
+LICENSE linguist-documentation

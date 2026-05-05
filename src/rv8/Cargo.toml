@@ -3,7 +3,7 @@ name = "rv8"
 version = "0.1.0"
 edition = "2021"
 description = "rover, a modern browser engine with Servo rendering and V8 JavaScript"
-license = "MIT OR Apache-2.0"
+license-file.workspace = true
 rust-version = "1.75.0"
 authors = ["ATechnology Company"]
 repository = "https://github.com/atechnology-company/soliloquy"
@@ -20,8 +20,7 @@ path = "main.rs"
 
 [dependencies]
 # V8 JavaScript Engine
-# Using crates.io version; switch to local fork when ready:
-# rusty_v8 = { path = "../../vendor/rusty_v8_fork" }
+# Using crates.io version.
 rusty_v8 = "0.32"
 
 # Logging

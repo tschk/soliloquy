@@ -1,5 +1,5 @@
 // Copyright 2024 Soliloquy Authors
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MPL-2.0
 //
 // Generic Drivers Library
 // Platform-agnostic hardware driver implementations for Soliloquy OS
