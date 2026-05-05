@@ -1,2 +1,0 @@
--> base code level agentic actions
--> page caching, ai understands how to use a webpage and makes a routine through playwright or pointers for future models
