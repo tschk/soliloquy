@@ -21,6 +21,8 @@
       --bg: #0d0d0d;
       --fg: #e8e8e8;
       --cursor: #e8e8e8;
+      --chrome: rgba(15, 18, 24, 0.88);
+      --line: rgba(255,255,255,0.12);
       --selection: rgba(255,255,255,0.15);
       --font: "Cascadia Code", "IBM Plex Mono", "Fira Code", "SF Mono", ui-monospace, monospace;
       --font-size: 14px;
@@ -34,16 +36,70 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at 12% 0%, rgba(124, 218, 255, 0.16), transparent 34%),
+        linear-gradient(180deg, #111318 0%, var(--bg) 38%);
     }
 
     #terminal-canvas {
       display: block;
       position: absolute;
-      inset: 0;
+      inset: 42px 0 22px 0;
       width: 100%;
-      height: 100%;
+      height: calc(100% - 64px);
       cursor: text;
+    }
+
+    #browser-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 42px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 0 14px;
+      background: var(--chrome);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .traffic {
+      display: flex;
+      gap: 7px;
+    }
+
+    .traffic span {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.26);
+    }
+
+    #address {
+      min-width: 0;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.76);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #window-state {
+      font-size: 11px;
+      color: rgba(255,255,255,0.52);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
     }
 
     /* Fallback pre-canvas text output when WASM unavailable */
@@ -72,23 +128,66 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(255,255,255,0.04);
-      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(15,18,24,0.86);
+      border-top: 1px solid var(--line);
       font-family: var(--font);
       font-size: 11px;
       color: rgba(255,255,255,0.45);
       letter-spacing: 0.04em;
       pointer-events: none;
     }
+
+    #software-cursor {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 24px;
+      transform: translate(-1px, -1px);
+      pointer-events: none;
+      z-index: 10;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.65));
+    }
+
+    #software-cursor::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 0 0 22px 15px;
+      border-color: transparent transparent #fff transparent;
+    }
+
+    #software-cursor::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: 5px;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 0 0 13px 9px;
+      border-color: transparent transparent #111 transparent;
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body>
+  <div id="browser-bar">
+    <div class="traffic"><span></span><span></span><span></span></div>
+    <div id="address">os://terminal</div>
+    <div id="window-state">Live</div>
+  </div>
   <canvas id="terminal-canvas" tabindex="0"></canvas>
   <pre id="terminal-fallback" aria-live="polite"></pre>
   <div id="status-bar">
     <span id="status-left">os://terminal</span>
     <span id="status-right">connecting…</span>
   </div>
+  <div id="software-cursor" aria-hidden="true"></div>
 
   <script type="module">
     // ── config ────────────────────────────────────────────────────────────────
@@ -136,9 +235,10 @@
       resize() {
         const dpr  = window.devicePixelRatio || 1;
         const w    = this.canvas.clientWidth;
-        const h    = this.canvas.clientHeight - 22; // subtract status bar
+        const h    = this.canvas.clientHeight;
         this.canvas.width  = w * dpr;
         this.canvas.height = h * dpr;
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(dpr, dpr);
         this.cols = Math.max(1, Math.floor(w / this.cell.w));
         this.rows = Math.max(1, Math.floor(h / this.cell.h));
@@ -547,9 +647,15 @@
     const canvas     = document.getElementById('terminal-canvas');
     const statusLeft = document.getElementById('status-left');
     const statusRight= document.getElementById('status-right');
+    const softwareCursor = document.getElementById('software-cursor');
 
     const renderer = new CanvasTerminal(canvas);
     canvas.focus();
+
+    window.addEventListener('pointermove', (e) => {
+      softwareCursor.style.left = `${e.clientX}px`;
+      softwareCursor.style.top = `${e.clientY}px`;
+    }, { passive: true });
 
     // Load WASM and connect PTY concurrently
     const [wasmInst, sessionId] = await Promise.allSettled([

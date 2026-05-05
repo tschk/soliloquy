@@ -14,6 +14,8 @@
 	let terminalRef: HTMLDivElement | null = null;
 	let connecting = false;
 	const commandInputId = 'terminal-command-input';
+	const textEncoder = new TextEncoder();
+	const textDecoder = new TextDecoder();
 
 	function appendOutput(chunk: string) {
 		output += chunk;
@@ -51,12 +53,19 @@
 			const wsUrl = new URL(`${apiBase.replace(/^http/, 'ws')}/v1/term/session/${sessionId}/ws`);
 			wsUrl.searchParams.set('token', apiToken);
 			socket = new WebSocket(wsUrl.toString());
+			socket.binaryType = 'arraybuffer';
 			socket.onopen = () => {
 				ready = true;
 				appendOutput('connected to terminal\n');
 			};
-			socket.onmessage = (event) => {
-				appendOutput(String(event.data));
+			socket.onmessage = async (event) => {
+				if (event.data instanceof ArrayBuffer) {
+					appendOutput(textDecoder.decode(event.data));
+				} else if (event.data instanceof Blob) {
+					appendOutput(textDecoder.decode(await event.data.arrayBuffer()));
+				} else {
+					appendOutput(String(event.data));
+				}
 			};
 			socket.onerror = () => {
 				appendOutput('\n[terminal error]\n');
@@ -88,7 +97,7 @@
 		if (!socket || socket.readyState !== WebSocket.OPEN || !value) {
 			return;
 		}
-		socket.send(`${value}\r`);
+		socket.send(textEncoder.encode(`${value}\r`));
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
