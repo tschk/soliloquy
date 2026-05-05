@@ -267,7 +267,7 @@ soliloquy-build-manager
 
 # Or from source
 cd tools/build_manager/build_manager_gui
-npm run tauri dev
+bun run tauri dev
 ```
 
 **See**: [Build Manager Documentation](../../tools/build_manager/README.md)
@@ -310,7 +310,7 @@ Start UI prototype development server.
 ```
 
 **What it does**:
-- Runs the SvelteKit dev server via pnpm (Servo desktop shell)
+- Runs the SvelteKit dev server via Bun (Servo desktop shell)
 - Provides hot reload + HMR for the Servo/V8 runtime surface
 - Binds to port 5173 by default (override with VITE_PORT)
 

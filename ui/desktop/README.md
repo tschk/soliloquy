@@ -22,8 +22,7 @@ A Svelte v5 application that prototypes the Servo desktop surface for Soliloquy.
 
 ### Prerequisites
 
-- Node.js 18+ (Corepack recommended)
-- pnpm 10+ (`corepack enable pnpm`)
+- Bun 1.3+
 - Tailwind CSS v4 (installed via `@tailwindcss/vite`)
 - optional V language backend (https://vlang.io) for richer search results
 
@@ -46,17 +45,17 @@ The backend listens on `http://localhost:3030` and can enrich search results, bu
 
 # Or manually:
 cd ui/desktop
-pnpm install
-pnpm dev
+bun install
+bun run dev
 ```
 
 ### Scripts
 
-- `pnpm dev` – start the Svelte dev server (used by Servo during development)
-- `pnpm build` – build the static bundle that Servo hosts
-- `pnpm preview` – preview the production bundle locally
-- `pnpm check` – run `svelte-check` + type analysis
-- `pnpm check:watch` – watch mode for the same checks
+- `bun run dev` – start the Svelte dev server (used by Servo during development)
+- `bun run build` – build the static bundle that Servo hosts
+- `bun run preview` – preview the production bundle locally
+- `bun run check` – run `svelte-check` + type analysis
+- `bun run check:watch` – watch mode for the same checks
 
 ### Tableware Endpoint
 
@@ -64,7 +63,7 @@ Set `VITE_TABLEWARE_BASE_URL` if your optional search service is not running on 
 
 ### Build Output
 
-`pnpm build` emits a static bundle in `build/`. `sold` serves that directory from `/usr/local/share/soliloquy/ui` at runtime.
+`bun run build` emits a static bundle in `build/`. `sold` serves that directory from `/usr/local/share/soliloquy/ui` at runtime.
 
 ## Architecture
 
@@ -118,5 +117,5 @@ src/
 
 1. Keep components declarative and side-effect free; use stores/utilities for shared logic
 2. Prefer data-driven configuration so Servo can hydrate state from FIDL in the future
-3. Run `pnpm check` + `pnpm build` before submitting changes
+3. Run `bun run check` + `bun run build` before submitting changes
 4. Document any new palette shortcuts or surface copy updates in this README

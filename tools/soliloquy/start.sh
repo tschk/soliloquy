@@ -91,19 +91,19 @@ start_ui() {
     
     cd "${UI_DIR}"
     
-    if ! command -v pnpm &> /dev/null; then
-        log_error "pnpm not found. Install with: corepack enable pnpm"
+    if ! command -v bun &> /dev/null; then
+        log_error "bun not found."
         exit 1
     fi
     
     # Install dependencies if needed
     if [[ ! -d node_modules ]]; then
         log_info "Installing UI dependencies..."
-        pnpm install
+        bun install
     fi
     
     # Start dev server
-    pnpm dev &
+    bun run dev &
     UI_PID=$!
     
     log_success "UI dev server started (PID: ${UI_PID})"

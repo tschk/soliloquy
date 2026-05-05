@@ -84,7 +84,7 @@ Several build systems appear in the repo, but they are not in the same state:
 - the current bridge covers simple literals, `+` expressions, structured `window.__soliloquyEval(...)` calls, and live snapshot-backed reads/writes for a narrow DOM surface
 - the live snapshot bridge has been extracted into `third_party/servo/components/servo/soliloquy_bridge.rs`
 - `cargo test --manifest-path src/shell/Cargo.toml --lib` passes locally
-- `pnpm -C ui/desktop check` and `pnpm -C ui/desktop build` pass locally, with the same CSS compatibility warning as before
+- `bun run check` and `bun run build` pass locally in `ui/desktop`, with the same CSS compatibility warning as before
 - Servo-side Rust validation is still blocked in this environment by the existing `mozangle` / Apple LLVM header issue
 
 ## Where To Look Next

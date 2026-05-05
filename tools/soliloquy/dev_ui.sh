@@ -14,20 +14,20 @@ if [ ! -d "$UI_DIR" ]; then
     exit 1
 fi
 
-if ! command -v pnpm &> /dev/null; then
-    echo "Error: pnpm not found. Enable it with: corepack enable pnpm"
+if ! command -v bun &> /dev/null; then
+    echo "Error: bun not found."
     exit 1
 fi
 
 cd "$UI_DIR"
 
 if [ ! -d "node_modules" ]; then
-    echo "[*] Installing dependencies with pnpm (Svelte v5 bundle)..."
-    pnpm install
+    echo "[*] Installing dependencies with bun (Svelte v5 bundle)..."
+    bun install
 fi
 
 echo "[*] Starting Svelte dev server for the Servo/V8 desktop surface..."
 echo "Press Ctrl+C to stop the development server."
 
 PORT=${VITE_PORT:-5173}
-pnpm dev -- --host 0.0.0.0 --port "$PORT"
+bun run dev -- --host 0.0.0.0 --port "$PORT"
