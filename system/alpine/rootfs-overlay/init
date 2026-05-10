@@ -7,6 +7,20 @@ log() {
 
 log "starting early userspace"
 mount -t proc proc /proc || true
+# Larger core socket limits can avoid EMSGSIZE on some Wayland client↔compositor paths
+# (e.g. winit's initial registry roundtrip) when defaults are tight in minimal VMs.
+if [ -w /proc/sys/net/core/rmem_max ]; then
+  echo 67108864 >/proc/sys/net/core/rmem_max 2>/dev/null || true
+fi
+if [ -w /proc/sys/net/core/wmem_max ]; then
+  echo 67108864 >/proc/sys/net/core/wmem_max 2>/dev/null || true
+fi
+if [ -w /proc/sys/net/core/rmem_default ]; then
+  echo 8388608 >/proc/sys/net/core/rmem_default 2>/dev/null || true
+fi
+if [ -w /proc/sys/net/core/wmem_default ]; then
+  echo 8388608 >/proc/sys/net/core/wmem_default 2>/dev/null || true
+fi
 mount -t sysfs sysfs /sys || true
 mount -t tmpfs tmpfs /run || true
 mount -t tmpfs -o mode=755,nosuid,nodev tmpfs /tmp || true
@@ -24,6 +38,12 @@ if ! mount -t devtmpfs devtmpfs /dev 2>/dev/null; then
   mknod -m 620 /dev/tty1 c 4 1 || true
   mknod -m 620 /dev/ttyS0 c 4 64 || true
 fi
+
+# wlroots uses shm_open for several allocations (e.g. linux-dmabuf format tables). A missing
+# or undersized /dev/shm breaks the compositor and can surface as client-side Wayland I/O errors.
+mkdir -p /dev/shm
+chmod 1777 /dev/shm 2>/dev/null || true
+mount -t tmpfs -o mode=1777,nosuid,nodev,size=256m tmpfs /dev/shm 2>/dev/null || true
 
 if command -v modprobe >/dev/null 2>&1; then
   # Prefer the virtio DRM path in QEMU, but keep booting if modules are absent.

@@ -9,6 +9,10 @@ SERVO_SOURCE_BUILD="${SERVO_SOURCE_BUILD:-1}"
 SERVO_FORCE_REBUILD="${SERVO_FORCE_REBUILD:-0}"
 SERVO_RELEASE_TAG="${SERVO_RELEASE_TAG:-v0.0.6}"
 SERVO_RUNTIME_DIR="${OUT_DIR}/servo-runtime-root"
+# Alpine appliance uses musl natively; default is a musl-linked servoshell (no gcompat glibc shim).
+# Set SERVO_LINUX_LIBC=gnu to use the legacy Debian Bookworm glibc build + runtime bundle instead.
+SERVO_LINUX_LIBC="${SERVO_LINUX_LIBC:-musl}"
+SERVO_BUILD_IMAGE="${SERVO_BUILD_IMAGE:-rust:1.95-alpine}"
 
 require_tool() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -52,6 +56,16 @@ sold_matches_runtime() {
         *"interpreter /lib/ld-musl-aarch64.so.1"*) return 0 ;;
       esac
       ;;
+  esac
+  return 1
+}
+
+servo_native_musl() {
+  bin_path="$1"
+  file_info="$(file "${bin_path}")"
+  case "${file_info}" in
+    *"interpreter /lib/ld-musl-x86_64.so.1"*) return 0 ;;
+    *"interpreter /lib/ld-musl-aarch64.so.1"*) return 0 ;;
   esac
   return 1
 }
@@ -111,7 +125,7 @@ build_sold_linux() {
     --platform "${docker_platform}" \
     -v "${ROOT_DIR}:/work" \
     -w /work \
-    rust:1.85-alpine sh -lc "
+    rust:1.95-alpine sh -lc "
       set -eu
       export PATH=/usr/local/cargo/bin:\$PATH
       apk add --no-cache musl-dev
@@ -120,7 +134,57 @@ build_sold_linux() {
     " >&2
 }
 
-build_servo_linux_from_source() {
+# Native musl servoshell for Alpine (rust:alpine default target = *-unknown-linux-musl).
+build_servo_linux_musl_from_source() {
+  require_tool docker
+
+  case "${QEMU_ARCH}" in
+    x86_64) docker_platform="linux/amd64" ;;
+    aarch64|arm64) docker_platform="linux/arm64" ;;
+    *)
+      echo "no musl Servo source build for QEMU_ARCH=${QEMU_ARCH}" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "Building Servo (musl) from local source for ${QEMU_ARCH} using ${SERVO_BUILD_IMAGE}..." >&2
+  docker run --rm \
+    --platform "${docker_platform}" \
+    -e QEMU_ARCH="${QEMU_ARCH}" \
+    -v "${ROOT_DIR}:/work" \
+    "${SERVO_BUILD_IMAGE}" sh -lc "
+      set -eu
+      export PATH=\"/usr/lib/llvm21/bin:/usr/local/cargo/bin:\${PATH}\"
+      export LIBCLANG_PATH=\"/usr/lib/llvm21/lib\"
+      # Default musl rustc uses +crt-static; bindgen then cannot dlopen libclang. Disable for this build.
+      export RUSTFLAGS=\"-C target-feature=-crt-static\"
+      apk update >/dev/null
+      apk add --no-cache \
+        build-base musl-dev git python3 py3-pip pkgconf cmake gcc g++ lld llvm21 llvm-dev clang-dev clang21-libclang \
+        openssl-dev fontconfig-dev freetype-dev harfbuzz-dev glib-dev dbus-dev eudev-dev \
+        libx11-dev libxcb-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev \
+        libxkbcommon-dev mesa-dev gst-plugins-base-dev gstreamer-dev \
+        gst-plugins-bad-dev wayland-dev perl nasm rsync bash wget unzip zip \
+        autoconf automake gawk
+      rm -rf /tmp/servo-src
+      mkdir -p /tmp/servo-src
+      rsync -a --delete /work/third_party/servo/ /tmp/servo-src/
+      rm -rf /src /examples
+      ln -s /work/src /src
+      ln -s /work/examples /examples
+      cd /tmp/servo-src
+      export CC=gcc
+      export CXX=g++
+      cargo build --release \
+        --locked \
+        --manifest-path ports/servoshell/Cargo.toml \
+        --target-dir target/linux-servoshell-musl
+      cp target/linux-servoshell-musl/release/servoshell /work/build/alpine/artifacts/linux-\${QEMU_ARCH}/servo
+    " >&2
+}
+
+# Legacy glibc servoshell (Debian); requires servo-runtime-root bundle on Alpine.
+build_servo_linux_gnu_from_source() {
   require_tool docker
 
   case "${QEMU_ARCH}" in
@@ -128,17 +192,17 @@ build_servo_linux_from_source() {
       docker_platform="linux/amd64"
       ;;
     *)
-      echo "no source Servo Linux build configured for QEMU_ARCH=${QEMU_ARCH}" >&2
+      echo "no glibc Servo Linux build configured for QEMU_ARCH=${QEMU_ARCH}" >&2
       exit 1
       ;;
   esac
 
-  echo "Building Servo Linux binary from local source for ${QEMU_ARCH}..." >&2
+  echo "Building Servo (glibc) from local source for ${QEMU_ARCH}..." >&2
   docker run --rm \
     --platform "${docker_platform}" \
     -e QEMU_ARCH="${QEMU_ARCH}" \
     -v "${ROOT_DIR}:/work" \
-    rust:1.85-bookworm bash -lc '
+    rust:1.95-bookworm bash -lc '
       set -eu
       export DEBIAN_FRONTEND=noninteractive
       export PATH=/usr/local/cargo/bin:$HOME/.local/bin:$PATH
@@ -353,13 +417,22 @@ if [ -n "${SERVO_BIN_LINUX:-}" ]; then
     exit 1
   fi
   cp "${SERVO_BIN_LINUX}" "${OUT_DIR}/servo"
-elif [ "${SERVO_FORCE_REBUILD}" != "1" ] && [ -f "${OUT_DIR}/servo" ] && file_matches_arch "${OUT_DIR}/servo"; then
-  echo "Reusing Linux Servo binary: ${OUT_DIR}/servo" >&2
-elif [ -f "${SERVO_SRC_BIN}" ] && file_matches_arch "${SERVO_SRC_BIN}"; then
-  echo "Using in-tree Linux Servo binary: ${SERVO_SRC_BIN}" >&2
+  if [ "${SERVO_LINUX_LIBC}" != "gnu" ] && ! servo_native_musl "${OUT_DIR}/servo"; then
+    echo "SERVO_BIN_LINUX must be musl-linked when SERVO_LINUX_LIBC=musl (default)." >&2
+    echo "detected: $(file "${OUT_DIR}/servo")" >&2
+    echo "Use SERVO_LINUX_LIBC=gnu for glibc servoshell + runtime bundle, or omit SERVO_BIN_LINUX." >&2
+    exit 1
+  fi
+elif [ "${SERVO_FORCE_REBUILD}" != "1" ] && [ -f "${OUT_DIR}/servo" ] && file_matches_arch "${OUT_DIR}/servo" && servo_native_musl "${OUT_DIR}/servo"; then
+  echo "Reusing Linux musl Servo binary: ${OUT_DIR}/servo" >&2
+elif [ -f "${SERVO_SRC_BIN}" ] && file_matches_arch "${SERVO_SRC_BIN}" && servo_native_musl "${SERVO_SRC_BIN}"; then
+  echo "Using in-tree musl Servo binary: ${SERVO_SRC_BIN}" >&2
   cp "${SERVO_SRC_BIN}" "${OUT_DIR}/servo"
 elif [ "${SERVO_SOURCE_BUILD}" = "1" ] && [ -f "${ROOT_DIR}/third_party/servo/ports/servoshell/Cargo.toml" ]; then
-  build_servo_linux_from_source
+  case "${SERVO_LINUX_LIBC}" in
+    gnu) build_servo_linux_gnu_from_source ;;
+    *) build_servo_linux_musl_from_source ;;
+  esac
 else
   fetch_servo_release_linux
 fi

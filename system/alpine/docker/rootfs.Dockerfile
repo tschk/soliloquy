@@ -1,6 +1,6 @@
 FROM alpine:3.21
 
-RUN apk add --no-cache bash openrc alpine-baselayout busybox
+RUN apk add --no-cache bash openrc alpine-baselayout busybox alpine-keys
 
 WORKDIR /work
 COPY system/alpine /work/system/alpine
@@ -8,6 +8,8 @@ COPY system/alpine /work/system/alpine
 RUN mkdir -p /out/rootfs && \
     mkdir -p /out/rootfs/etc/apk && \
     cp /etc/apk/repositories /out/rootfs/etc/apk/repositories && \
+    mkdir -p /out/rootfs/etc/apk/keys && \
+    cp -a /etc/apk/keys/. /out/rootfs/etc/apk/keys/ && \
     apk --root /out/rootfs \
       --initdb \
       --update-cache \

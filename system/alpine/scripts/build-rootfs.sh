@@ -12,7 +12,11 @@ rootfs_manifest_changed() {
   [ ! -f "${ROOTFS_TAR}" ] && return 1
   for manifest in \
     "${ALPINE_DIR}/packages-v0.txt" \
-    "${ALPINE_DIR}/docker/rootfs.Dockerfile"
+    "${ALPINE_DIR}/docker/rootfs.Dockerfile" \
+    "${ALPINE_DIR}/rootfs-overlay/init" \
+    "${ALPINE_DIR}/scripts/configure-rootfs.sh" \
+    "${ALPINE_DIR}/scripts/sol-session-start" \
+    "${ALPINE_DIR}/scripts/sol-servo-wrapper"
   do
     [ "${manifest}" -nt "${ROOTFS_TAR}" ] && return 0
   done

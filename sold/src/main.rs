@@ -447,6 +447,7 @@ struct WsQuery {
 struct AppState {
     sessions: SessionMap,
     files_dir: PathBuf,
+    bundle_dir: PathBuf,
     runtime_env_path: PathBuf,
     token: Option<String>,
     http: reqwest::Client,
@@ -487,10 +488,14 @@ async fn main() {
     let service_registry = Arc::new(load_service_registry());
     let update_policy = Arc::new(load_update_policy());
     let update_state_path = Arc::new(system_update_state_path());
+    let bundle_dir = std::env::var_os("SOL_BUNDLE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("bundle"));
 
     let state = AppState {
         sessions: Arc::new(DashMap::new()),
         files_dir,
+        bundle_dir: bundle_dir.clone(),
         runtime_env_path,
         token,
         http: reqwest::Client::builder()
@@ -523,6 +528,7 @@ async fn main() {
         .route("/api/os", get(os_status))
         // os://terminal landing + PTY bridge
         .route("/terminal", get(serve_terminal_page))
+        .route("/terminal/", get(serve_terminal_page))
         .route("/v1/term/session", post(create_term_session))
         .route("/v1/term/session/{id}/ws", get(term_ws))
         // Files API
@@ -548,8 +554,8 @@ async fn main() {
         .route("/v1/status/battery", get(get_battery_status))
         .route("/v1/power/{action}", post(power_action))
         .route("/v1/notify", post(notify))
-        // Static bundle (index.html, terminal/*, etc.)
-        .fallback_service(ServeDir::new("bundle"))
+        // Static bundle (index.html, terminal/*, wasm, etc.)
+        .fallback_service(ServeDir::new(bundle_dir))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -582,8 +588,17 @@ async fn prepare_files_dir(files_dir: PathBuf) -> PathBuf {
 
 // ── terminal handlers ─────────────────────────────────────────────────────────
 
-async fn serve_terminal_page() -> Html<&'static str> {
-    Html(include_str!("../../bundle/terminal/index.html"))
+async fn serve_terminal_page(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
+    let path = state.bundle_dir.join("terminal/index.html");
+    match fs::read_to_string(&path).await {
+        Ok(html) => Ok(Html(html)),
+        Err(err) => {
+            eprintln!("sold: terminal page missing at {}: {err}", path.display());
+            Ok(Html(
+                include_str!("../../bundle/terminal/index.html").to_string(),
+            ))
+        },
+    }
 }
 
 async fn browse_page(

@@ -63,12 +63,10 @@ require_linux_elf_binary "${SERVO_BIN}"
 cp "${SERVO_BIN}" "${ROOTFS}/usr/local/bin/servo"
 chmod +x "${ROOTFS}/usr/local/bin/servo"
 
-if [ -n "${SERVO_RUNTIME_DIR}" ]; then
-  if [ ! -d "${SERVO_RUNTIME_DIR}" ]; then
-    echo "servo runtime bundle not found: ${SERVO_RUNTIME_DIR}" >&2
-    exit 1
-  fi
+if [ -n "${SERVO_RUNTIME_DIR}" ] && [ -d "${SERVO_RUNTIME_DIR}" ]; then
   cp -R "${SERVO_RUNTIME_DIR}/." "${ROOTFS}/"
+elif [ -n "${SERVO_RUNTIME_DIR}" ]; then
+  echo "warning: SERVO_RUNTIME_DIR is set but not a directory (${SERVO_RUNTIME_DIR}); skipping glibc bundle copy" >&2
 fi
 
 if [ ! -f "${SOLD_BIN}" ]; then

@@ -13,14 +13,18 @@ Modes:
   dev          Run scripts/dev.sh for local development
 
 Options:
-  --build-only Prepare QEMU artifacts, skip VM launch
+  --build-only Prepare QEMU artifacts, skip VM launch (same as QEMU_RUN=0)
   --headless   Run QEMU in headless serial mode
   -h, --help   Show this help
 
-Environment:
+Environment (passed through to system/alpine/scripts/qemu-v0.sh):
   QEMU_ARCH=x86_64
   SERVO_FORCE_REBUILD=1
+  FORCE_ROOTFS_REBUILD=1   full Docker rootfs when packages/overlay scripts change
   SOL_START_URL=os://terminal
+  SOL_LAUNCH_URL=http://127.0.0.1:8080/terminal   override first Servo URL
+  SOL_SERVO_VERBOSE=1   noisy servoshell / wget / env logging
+  SOL_SESSION_X11_FALLBACK=0   disable XWayland retry after a failed Wayland session
 USAGE
 }
 

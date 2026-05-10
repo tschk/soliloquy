@@ -1,4 +1,5 @@
 SOLD_BIND="127.0.0.1:8080"
+SOL_BUNDLE_DIR="/usr/local/share/soliloquy/bundle"
 SOLD_UI_DIR="/usr/local/share/soliloquy/ui"
-RUST_LOG="sold=debug,axum=info,tower_http=info"
+RUST_LOG="warn,sold=info,axum=warn,tower_http=warn"
 RUST_BACKTRACE="1"
