@@ -681,7 +681,16 @@
       bridge.feedBytes(msg);
       statusRight.textContent = 'no PTY';
     } else {
-      const ws = openPtyWs(sessionId);
+      let ws = openPtyWs(sessionId);
+
+      const closePtyWs = () => {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+          ws.close(1000, 'page unload');
+        }
+      };
+
+      window.addEventListener('pagehide', closePtyWs);
+      window.addEventListener('beforeunload', closePtyWs);
 
       ws.binaryType = 'arraybuffer';
 

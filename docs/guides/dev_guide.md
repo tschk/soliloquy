@@ -23,7 +23,7 @@ bun run build
 ./tools/soliloquy/smoke_macos.sh
 ```
 
-This is the non-persistent macOS load check. It validates the Svelte bundle and the `soliloquy_desktop` GPUI build that uses `../crepuscularity` for the native chrome layer.
+This is the non-persistent macOS load check. It validates the Svelte bundle, checks the non-GPUI desktop binary, and dry-runs the `sold` plus Servo launch contract.
 
 ## Runtime Loop
 

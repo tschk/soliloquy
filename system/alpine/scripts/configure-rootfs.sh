@@ -66,6 +66,7 @@ mkdir -p \
   "${ROOTFS}/var/lib/soliloquy/browser/state" \
   "${ROOTFS}/var/lib/soliloquy/browser/logs" \
   "${ROOTFS}/var/lib/soliloquy/browser/terminal" \
+  "${ROOTFS}/var/lib/soliloquy/files" \
   "${ROOTFS}/var/lib/soliloquy/system" \
   "${ROOTFS}/var/lib/soliloquy/system/plugins" \
   "${ROOTFS}/var/lib/soliloquy/wax"
@@ -77,8 +78,12 @@ chmod 700 \
   "${ROOTFS}/var/lib/soliloquy/browser/state" \
   "${ROOTFS}/var/lib/soliloquy/browser/logs" \
   "${ROOTFS}/var/lib/soliloquy/browser/terminal" \
+  "${ROOTFS}/var/lib/soliloquy/files" \
   "${ROOTFS}/var/lib/soliloquy/system" \
   "${ROOTFS}/var/lib/soliloquy/system/plugins"
+
+chown -R "${SOLILOQUY_UID}:${SOLILOQUY_GID}" "${ROOTFS}/var/lib/soliloquy/browser" >/dev/null 2>&1 || true
+chown -R "${SOLD_UID}:${SOLD_GID}" "${ROOTFS}/var/lib/soliloquy/files" "${ROOTFS}/var/lib/soliloquy/system" >/dev/null 2>&1 || true
 
 mkdir -p "${ROOTFS}/tmp"
 chmod 755 "${ROOTFS}/tmp"
@@ -299,6 +304,7 @@ cat > "${ROOTFS}/etc/local.d/soliloquy-firstboot.start" <<'EOF'
 set -eu
 
 chown -R soliloquy:soliloquy /var/lib/soliloquy/browser >/dev/null 2>&1 || true
+chown -R sold:sold /var/lib/soliloquy/files >/dev/null 2>&1 || true
 chown -R sold:sold /var/lib/soliloquy/system >/dev/null 2>&1 || true
 
 if command -v rc-update >/dev/null 2>&1; then

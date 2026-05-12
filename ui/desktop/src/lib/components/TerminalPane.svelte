@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 
 	export let open = false;
 	export let mode: 'overlay' | 'inline' = 'overlay';
@@ -8,7 +8,6 @@
 	const apiToken = import.meta.env.VITE_SOL_TOKEN ?? 'dev-token-change-me';
 
 	let output = '';
-	let commandLine = '';
 	let sessionId: string | null = null;
 	let socket: WebSocket | null = null;
 	let ready = false;
@@ -29,7 +28,17 @@
 
 	function resetTerminal() {
 		output = '';
-		commandLine = '';
+	}
+
+	function focusTerminal() {
+		void tick().then(() => terminalRef?.focus());
+	}
+
+	function sendBytes(value: string) {
+		if (!socket || socket.readyState !== WebSocket.OPEN || !value) {
+			return;
+		}
+		socket.send(textEncoder.encode(value));
 	}
 
 	async function connectSession() {
@@ -59,6 +68,8 @@
 			socket.onopen = () => {
 				ready = true;
 				appendOutput('connected to terminal\n');
+				socket?.send(JSON.stringify({ type: 'resize', cols: 96, rows: 28 }));
+				focusTerminal();
 			};
 			socket.onmessage = async (event) => {
 				if (event.data instanceof ArrayBuffer) {
@@ -98,28 +109,45 @@
 		}
 	}
 
-	function sendInput(value: string) {
-		if (!socket || socket.readyState !== WebSocket.OPEN || !value) {
-			return;
-		}
-		socket.send(textEncoder.encode(`${value}\r`));
-	}
-
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter') {
-			event.preventDefault();
-			sendInput(commandLine.trimEnd());
-			commandLine = '';
-			return;
-		}
 		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
 			event.preventDefault();
 			resetTerminal();
 			return;
 		}
-		if (event.key === 'Tab') {
+
+		if (!ready) {
+			return;
+		}
+
+		const ctrlKey = event.ctrlKey && event.key.length === 1;
+		if (ctrlKey) {
 			event.preventDefault();
-			commandLine += '\t';
+			const code = event.key.toUpperCase().charCodeAt(0) - 64;
+			if (code > 0 && code < 32) sendBytes(String.fromCharCode(code));
+			return;
+		}
+
+		const controlKeys: Record<string, string> = {
+			Enter: '\r',
+			Backspace: '\x7f',
+			Tab: '\t',
+			Escape: '\x1b',
+			ArrowUp: '\x1b[A',
+			ArrowDown: '\x1b[B',
+			ArrowRight: '\x1b[C',
+			ArrowLeft: '\x1b[D',
+			Delete: '\x1b[3~',
+			Home: '\x1b[H',
+			End: '\x1b[F',
+			PageUp: '\x1b[5~',
+			PageDown: '\x1b[6~'
+		};
+
+		const bytes = controlKeys[event.key] ?? (event.key.length === 1 ? event.key : '');
+		if (bytes) {
+			event.preventDefault();
+			sendBytes(bytes);
 		}
 	}
 
@@ -157,23 +185,17 @@
 		<div class={mode === 'inline' ? 'h-full p-4' : 'p-4'}>
 			<div
 				bind:this={terminalRef}
+				role="textbox"
+				aria-label="Terminal"
+				aria-multiline="true"
+				tabindex="0"
 				class={mode === 'inline'
-					? 'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-black font-mono text-sm text-emerald-300'
-					: 'flex h-80 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black font-mono text-sm text-emerald-300'}
+					? 'h-full min-h-0 overflow-auto rounded-lg border border-white/10 bg-black p-4 font-mono text-sm text-emerald-300 outline-none focus:border-emerald-300/50'
+					: 'h-80 overflow-auto rounded-2xl border border-white/10 bg-black p-4 font-mono text-sm text-emerald-300 outline-none focus:border-emerald-300/50'}
+				on:click={focusTerminal}
+				on:keydown={handleKeydown}
 			>
-				<pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4">{output || 'booting terminal...\n'}</pre>
-				<label class="flex items-center gap-2 border-t border-white/10 px-4 py-3 text-white">
-					<span class="shrink-0 text-emerald-300">soliloquy%</span>
-					<input
-						bind:value={commandLine}
-						class="min-w-0 flex-1 border-0 bg-transparent font-mono text-sm text-white outline-none placeholder:text-white/30"
-						placeholder={ready ? 'type a command' : 'terminal unavailable'}
-						autocomplete="off"
-						spellcheck="false"
-						disabled={!ready}
-						on:keydown={handleKeydown}
-					/>
-				</label>
+				<pre class="whitespace-pre-wrap break-words">{output || 'booting terminal...\n'}</pre>
 			</div>
 		</div>
 	</div>

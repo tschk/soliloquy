@@ -3,7 +3,6 @@
 description="Soliloquy local server"
 
 command="/usr/local/bin/sold"
-command_user="sold"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
 export SOL_BUNDLE_DIR="/usr/local/share/soliloquy/bundle"
@@ -17,6 +16,6 @@ export SOLILOQUY_UPDATE_STATE_FILE="/var/lib/soliloquy/system/update-state.json"
 export SOLILOQUY_PACKAGE_MANAGER_FILE="/etc/soliloquy/package-manager.json"
 
 depend() {
-    need localmount
+    need localmount networking
     after seatd
 }

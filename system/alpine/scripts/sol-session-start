@@ -63,6 +63,25 @@ log() {
   printf '[sol-session] %s\n' "$1" >&2
 }
 
+wait_for_sold() {
+  origin="${SOL_SOLD_ORIGIN:-http://127.0.0.1:8080}"
+  retries="${SOL_SOLD_READY_RETRIES:-600}"
+  i=0
+  if ! command -v wget >/dev/null 2>&1; then
+    log "wget not found; skipping sold readiness probe"
+    return
+  fi
+  while ! wget -q -O /dev/null -T 1 -t 1 "${origin}/health" 2>/dev/null; do
+    i=$((i + 1))
+    if [ "${i}" -ge "${retries}" ]; then
+      log "sold not ready before session launch (${origin}/health)"
+      return
+    fi
+    sleep 0.1
+  done
+  log "sold ready (${origin}/health)"
+}
+
 has_drm_device() {
   [ -e /dev/dri/card0 ] || [ -e /dev/dri/renderD128 ]
 }
@@ -126,6 +145,7 @@ if [ "${WLR_BACKENDS}" = "headless" ]; then
 else
   log "DRM device found; using cage (Wayland)"
 fi
+wait_for_sold
 set +e
 launch_session "${WLR_BACKENDS:-drm,libinput}"
 status=$?

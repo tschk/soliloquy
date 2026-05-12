@@ -142,7 +142,7 @@ if command -v wget >/dev/null 2>&1; then
   probe_i=0
   while ! wget -q -O /dev/null -T 1 -t 1 "${PROBE_URL}" 2>/dev/null; do
     probe_i=$((probe_i + 1))
-    if [ "${probe_i}" -ge "${SOL_SOLD_PROBE_RETRIES:-150}" ]; then
+    if [ "${probe_i}" -ge "${SOL_SOLD_PROBE_RETRIES:-600}" ]; then
       log "warn: sold probe failed (${PROBE_URL}); continuing"
       if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
         wget -S -O /dev/null -T 5 -t 1 "${PROBE_URL}" 2>&1 | while IFS= read -r line; do log "wget: ${line}"; done || true
@@ -151,7 +151,7 @@ if command -v wget >/dev/null 2>&1; then
     fi
     sleep 0.1
   done
-  if [ "${probe_i}" -lt "${SOL_SOLD_PROBE_RETRIES:-150}" ]; then
+  if [ "${probe_i}" -lt "${SOL_SOLD_PROBE_RETRIES:-600}" ]; then
     log "sold reachable (${PROBE_URL})"
   fi
 fi

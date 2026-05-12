@@ -597,7 +597,7 @@ async fn serve_terminal_page(State(state): State<AppState>) -> Result<Html<Strin
             Ok(Html(
                 include_str!("../../bundle/terminal/index.html").to_string(),
             ))
-        },
+        }
     }
 }
 
@@ -908,6 +908,8 @@ async fn handle_term_ws(mut socket: WebSocket, id: String, master_fd: i32, state
             }
         }
     }
+
+    let _ = socket.send(Message::Close(None)).await;
 
     // Cleanup: SIGHUP shell, remove session (Drop closes master_fd).
     if let Some((_, session)) = state.sessions.remove(&id) {
