@@ -12,7 +12,7 @@ SOL_SOLD_ORIGIN="${SOL_SOLD_ORIGIN:-http://127.0.0.1:8080}"
 case "${START_URL}" in
   os://*)
     PROBE_URL="${SOL_SOLD_ORIGIN}/health"
-    LAUNCH_URL="${SOL_LAUNCH_URL:-${SOL_SOLD_ORIGIN}/terminal}"
+    LAUNCH_URL="${SOL_LAUNCH_URL:-${SOL_SOLD_ORIGIN}/?url=${START_URL}}"
     ;;
   *)
     PROBE_URL="${START_URL}"
@@ -139,13 +139,20 @@ if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
 fi
 
 if command -v wget >/dev/null 2>&1; then
-  if wget -q -O /dev/null -T 5 -t 1 "${PROBE_URL}" 2>/dev/null; then
-    log "sold reachable (${PROBE_URL})"
-  else
-    log "warn: sold probe failed (${PROBE_URL}); continuing"
-    if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
-      wget -S -O /dev/null -T 5 -t 1 "${PROBE_URL}" 2>&1 | while IFS= read -r line; do log "wget: ${line}"; done || true
+  probe_i=0
+  while ! wget -q -O /dev/null -T 1 -t 1 "${PROBE_URL}" 2>/dev/null; do
+    probe_i=$((probe_i + 1))
+    if [ "${probe_i}" -ge "${SOL_SOLD_PROBE_RETRIES:-150}" ]; then
+      log "warn: sold probe failed (${PROBE_URL}); continuing"
+      if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
+        wget -S -O /dev/null -T 5 -t 1 "${PROBE_URL}" 2>&1 | while IFS= read -r line; do log "wget: ${line}"; done || true
+      fi
+      break
     fi
+    sleep 0.1
+  done
+  if [ "${probe_i}" -lt "${SOL_SOLD_PROBE_RETRIES:-150}" ]; then
+    log "sold reachable (${PROBE_URL})"
   fi
 fi
 

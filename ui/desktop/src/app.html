@@ -5,6 +5,33 @@
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width" />
 		<title>Soliloquy Shell</title>
+		<script>
+			if (!('IntersectionObserver' in window)) {
+				window.IntersectionObserver = class {
+					constructor(callback) {
+						this.callback = callback;
+					}
+					observe(target) {
+						this.callback([
+							{
+								target,
+								isIntersecting: true,
+								intersectionRatio: 1,
+								time: Date.now(),
+								boundingClientRect: target.getBoundingClientRect(),
+								intersectionRect: target.getBoundingClientRect(),
+								rootBounds: document.documentElement.getBoundingClientRect()
+							}
+						]);
+					}
+					unobserve() {}
+					disconnect() {}
+					takeRecords() {
+						return [];
+					}
+				};
+			}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover" class="h-full bg-gray-900 text-white">

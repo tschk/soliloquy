@@ -88,6 +88,11 @@ servo_needs_glibc_runtime() {
   return 1
 }
 
+servo_supports_soliloquy_chrome_mode() {
+  bin_path="$1"
+  strings "${bin_path}" 2>/dev/null | grep -q -- "no-browser-chrome"
+}
+
 servo_runtime_bundle_ready() {
   case "${QEMU_ARCH}" in
     x86_64)
@@ -423,9 +428,9 @@ if [ -n "${SERVO_BIN_LINUX:-}" ]; then
     echo "Use SERVO_LINUX_LIBC=gnu for glibc servoshell + runtime bundle, or omit SERVO_BIN_LINUX." >&2
     exit 1
   fi
-elif [ "${SERVO_FORCE_REBUILD}" != "1" ] && [ -f "${OUT_DIR}/servo" ] && file_matches_arch "${OUT_DIR}/servo" && servo_native_musl "${OUT_DIR}/servo"; then
+elif [ "${SERVO_FORCE_REBUILD}" != "1" ] && [ -f "${OUT_DIR}/servo" ] && file_matches_arch "${OUT_DIR}/servo" && servo_native_musl "${OUT_DIR}/servo" && servo_supports_soliloquy_chrome_mode "${OUT_DIR}/servo"; then
   echo "Reusing Linux musl Servo binary: ${OUT_DIR}/servo" >&2
-elif [ -f "${SERVO_SRC_BIN}" ] && file_matches_arch "${SERVO_SRC_BIN}" && servo_native_musl "${SERVO_SRC_BIN}"; then
+elif [ -f "${SERVO_SRC_BIN}" ] && file_matches_arch "${SERVO_SRC_BIN}" && servo_native_musl "${SERVO_SRC_BIN}" && servo_supports_soliloquy_chrome_mode "${SERVO_SRC_BIN}"; then
   echo "Using in-tree musl Servo binary: ${SERVO_SRC_BIN}" >&2
   cp "${SERVO_SRC_BIN}" "${OUT_DIR}/servo"
 elif [ "${SERVO_SOURCE_BUILD}" = "1" ] && [ -f "${ROOT_DIR}/third_party/servo/ports/servoshell/Cargo.toml" ]; then
@@ -435,6 +440,12 @@ elif [ "${SERVO_SOURCE_BUILD}" = "1" ] && [ -f "${ROOT_DIR}/third_party/servo/po
   esac
 else
   fetch_servo_release_linux
+fi
+
+if ! servo_supports_soliloquy_chrome_mode "${OUT_DIR}/servo"; then
+  echo "Servo binary does not support --no-browser-chrome: ${OUT_DIR}/servo" >&2
+  echo "Rebuild the local Servo fork so Soliloquy's desktop chrome is the only browser UI." >&2
+  exit 1
 fi
 
 if servo_needs_glibc_runtime "${OUT_DIR}/servo"; then
