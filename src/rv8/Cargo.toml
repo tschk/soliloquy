@@ -2,7 +2,7 @@
 name = "rv8"
 version = "0.1.0"
 edition = "2021"
-description = "rover, a modern browser engine with Servo rendering and V8 JavaScript"
+description = "rv8, a modern browser engine with Servo rendering and V8 JavaScript"
 license-file.workspace = true
 rust-version = "1.75.0"
 authors = ["ATechnology Company"]
@@ -11,7 +11,7 @@ keywords = ["browser", "servo", "v8", "webengine", "rendering"]
 categories = ["web-programming", "rendering", "gui"]
 
 [lib]
-name = "roverate"
+name = "rv8"
 path = "lib.rs"
 
 [[bin]]

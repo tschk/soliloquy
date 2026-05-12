@@ -26,6 +26,7 @@ SOLILOQUY_JS_ENGINE="${SOLILOQUY_JS_ENGINE:-v8-experimental}"
 SOL_SERVO_HEADLESS="${SOL_SERVO_HEADLESS:-0}"
 SOL_SERVO_DEBUG_DUMP="${SOL_SERVO_DEBUG_DUMP:-0}"
 SOL_SERVO_VERBOSE="${SOL_SERVO_VERBOSE:-0}"
+SOL_SERVO_NO_BROWSER_CHROME="${SOL_SERVO_NO_BROWSER_CHROME:-1}"
 
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
 export LIBGL_DRI3_DISABLE="${LIBGL_DRI3_DISABLE:-1}"
@@ -154,6 +155,9 @@ if [ ! -x "${SERVO_BIN}" ]; then
 fi
 
 set -- "${SERVO_BIN}"
+case "${SOL_SERVO_NO_BROWSER_CHROME}" in
+  1|true|TRUE|yes|YES) set -- "$@" --no-browser-chrome ;;
+esac
 case "${SOL_SERVO_HEADLESS}" in
   1|true|TRUE|yes|YES) set -- "$@" --headless ;;
 esac

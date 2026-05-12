@@ -29,6 +29,7 @@ At the top level, the repo currently breaks down like this:
 - `src/shell/` - shell runtime, Servo embedder glue, V8 bridge, networking, platform code
 - `src/` - browser optimization library: memory residency, cache, GPU compositor/layout, prefetching, V8 integration
 - `src/rv8/` - experimental multi-process browser/runtime work with IPC, renderer, JS, parser, and optimization modules
+- `../rv8/` - standalone local Git repo seeded from `src/rv8`; keep it aligned when browser-engine work is meant to graduate out of Soliloquy
 - `sold/` - local HTTP service that serves the bundled UI and simple file/settings APIs
 - `system/alpine/` - immutable-rootfs appliance assembly, service layout, artifact staging, and QEMU helpers
 - `bundle/` - static UI assets served by `sold`
@@ -88,6 +89,7 @@ Alpine/QEMU flow:
 - `src/Cargo.toml` - optimization library crate
 - `src/shell/Cargo.toml` - shell crate
 - `src/rv8/Cargo.toml` - RV8 crate
+- `../rv8/Cargo.toml` - standalone RV8 repo manifest using `../soliloquy/src` for shared optimization code
 - `sold/Cargo.toml` - local service crate
 - `system/alpine/README.md` - most concrete appliance/runtime documentation
 - `docs/` - broader architecture and contributor docs, some of which are stale
@@ -96,6 +98,7 @@ Alpine/QEMU flow:
 
 - The root workspace is not a 25-member workspace in this checkout.
 - `third_party/servo` is a nested repository and should be treated as an actively patched fork for `rv8`.
+- `../rover` is not the RV8 split target.
 - `system/alpine/scripts/sol-servo-wrapper` has had local work in this branch history; verify the current status before editing it.
 
 ## Working Assumptions

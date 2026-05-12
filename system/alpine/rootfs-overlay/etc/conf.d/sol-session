@@ -1,5 +1,7 @@
 SOL_START_URL="os://terminal"
+SOL_SERVO_NO_BROWSER_CHROME=1
 # If native Wayland fails, retry once via XWayland + winit x11 (optional).
 SOL_SESSION_X11_FALLBACK=1
+SOL_SESSION_HEADLESS_FALLBACK=1
 # Seconds to sleep on non-zero session exit before inittab respawns (reduces bootloop CPU/log spam).
 SOL_SESSION_FAILURE_DELAY=8

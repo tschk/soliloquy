@@ -1,6 +1,6 @@
-# Soliloquy / Rover Contract
+# Soliloquy / RV8 Contract
 
-This repo now treats `rover-desktop` as the host boundary for engine access.
+This repo treats RV8 as the browser-engine boundary for page loading, tab state, and runtime integration. Soliloquy owns the appliance shell and desktop chrome.
 
 ## Services
 
@@ -26,6 +26,6 @@ This repo now treats `rover-desktop` as the host boundary for engine access.
 
 ## Ownership
 
-- `rover`: engine loop, scheduler, tab/session model, service contracts, optional FFI
-- `rover-desktop`: host windowing, compositor/input integration, control plane
+- `rv8`: engine loop, scheduler, tab/session model, service contracts, optional FFI
+- `ui/desktop`: host browser chrome, desktop modes, compositor/input integration, control plane
 - `soliloquy`: appliance runtime, policy layer, local tools, and Alpine packaging

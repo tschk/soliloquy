@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 
 	export let open = false;
+	export let mode: 'overlay' | 'inline' = 'overlay';
 
 	const apiBase = import.meta.env.VITE_SOL_API_BASE_URL ?? 'http://127.0.0.1:8080';
 	const apiToken = import.meta.env.VITE_SOL_TOKEN ?? 'dev-token-change-me';
@@ -13,7 +14,7 @@
 	let ready = false;
 	let terminalRef: HTMLDivElement | null = null;
 	let connecting = false;
-	const commandInputId = 'terminal-command-input';
+	let connectionAttempted = false;
 	const textEncoder = new TextEncoder();
 	const textDecoder = new TextDecoder();
 
@@ -32,9 +33,10 @@
 	}
 
 	async function connectSession() {
-		if (connecting || socket || !open) {
+		if (connecting || socket || !open || connectionAttempted) {
 			return;
 		}
+		connectionAttempted = true;
 		connecting = true;
 		ready = false;
 		try {
@@ -91,6 +93,9 @@
 			socket = null;
 		}
 		sessionId = null;
+		if (!open) {
+			connectionAttempted = false;
+		}
 	}
 
 	function sendInput(value: string) {
@@ -132,39 +137,43 @@
 </script>
 
 {#if open}
-	<div class="fixed inset-x-6 bottom-6 z-50 overflow-hidden rounded-3xl border border-white/10 bg-black/90 shadow-2xl backdrop-blur-xl">
-		<div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
-			<div>
-				<p class="text-xs font-semibold uppercase tracking-[0.4em] text-white/50">Terminal</p>
-				<p class="text-sm text-white/70">{ready ? 'zellij / ash' : 'connecting...'}</p>
+	<div
+		class={mode === 'inline'
+			? 'h-full overflow-hidden bg-black'
+			: 'fixed inset-x-6 bottom-6 z-50 overflow-hidden rounded-3xl border border-white/10 bg-black/90 shadow-2xl backdrop-blur-xl'}
+	>
+		{#if mode === 'overlay'}
+			<div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.4em] text-white/50">Terminal</p>
+					<p class="text-sm text-white/70">{ready ? 'zellij / ash' : 'connecting...'}</p>
+				</div>
+				<button type="button" class="text-sm text-white/50 hover:text-white" on:click={disconnectSession}>
+					Close
+				</button>
 			</div>
-			<button type="button" class="text-sm text-white/50 hover:text-white" on:click={disconnectSession}>
-				Close
-			</button>
-		</div>
+		{/if}
 
-		<div class="grid gap-3 p-4 lg:grid-cols-[1fr_360px]">
+		<div class={mode === 'inline' ? 'h-full p-4' : 'p-4'}>
 			<div
 				bind:this={terminalRef}
-				class="h-72 overflow-auto rounded-2xl border border-white/10 bg-black p-4 font-mono text-sm text-emerald-300"
+				class={mode === 'inline'
+					? 'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-black font-mono text-sm text-emerald-300'
+					: 'flex h-80 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black font-mono text-sm text-emerald-300'}
 			>
-				<pre class="whitespace-pre-wrap break-words">{output || 'booting terminal...\n'}</pre>
-			</div>
-
-			<div class="space-y-3">
-				<label for={commandInputId} class="block text-xs font-semibold uppercase tracking-[0.4em] text-white/50">
-					Command
+				<pre class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4">{output || 'booting terminal...\n'}</pre>
+				<label class="flex items-center gap-2 border-t border-white/10 px-4 py-3 text-white">
+					<span class="shrink-0 text-emerald-300">soliloquy%</span>
+					<input
+						bind:value={commandLine}
+						class="min-w-0 flex-1 border-0 bg-transparent font-mono text-sm text-white outline-none placeholder:text-white/30"
+						placeholder={ready ? 'type a command' : 'terminal unavailable'}
+						autocomplete="off"
+						spellcheck="false"
+						disabled={!ready}
+						on:keydown={handleKeydown}
+					/>
 				</label>
-				<textarea
-					id={commandInputId}
-					bind:value={commandLine}
-					class="h-56 w-full rounded-2xl border border-white/10 bg-white/5 p-4 font-mono text-sm text-white outline-none placeholder:text-white/30"
-					placeholder="type a command and press Enter"
-					on:keydown={handleKeydown}
-				></textarea>
-				<p class="text-xs text-white/40">
-					This terminal connects to the PTY bridge in <code>sold</code> and defaults to zellij.
-				</p>
 			</div>
 		</div>
 	</div>

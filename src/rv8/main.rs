@@ -3,13 +3,13 @@
 //! Launches the RV8 browser with multi-process architecture.
 
 use log::{error, info};
-use roverate::compositor;
-use roverate::networking;
+use rv8::compositor;
+use rv8::networking;
 use std::env;
 
-use roverate::core::{Browser, BrowserConfig};
-use roverate::ipc::{self, IpcSender, RendererMessage};
-use roverate::renderer;
+use rv8::core::{Browser, BrowserConfig};
+use rv8::ipc::{self, IpcSender, RendererMessage};
+use rv8::renderer;
 
 fn main() {
     // Initialize logging with tracing
@@ -23,7 +23,7 @@ fn main() {
         .with_thread_ids(true)
         .init();
 
-    info!("roverate v0.1");
+    info!("rv8 v0.1");
 
     // Parse command line args
     let args: Vec<String> = env::args().collect();
@@ -144,7 +144,7 @@ fn run_renderer_process(args: &[String]) {
             }
         });
 
-        let config = roverate::servo_embed::ServoConfig {
+        let config = rv8::servo_embed::ServoConfig {
             user_agent: "RV8/0.1.0".to_string(),
             ..Default::default()
         };

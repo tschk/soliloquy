@@ -11,6 +11,12 @@ cargo test -p soliloquy-shell --lib
 cargo test -p rv8
 ```
 
+The standalone sibling RV8 repo can also be checked directly:
+
+```bash
+cargo test --manifest-path ../rv8/Cargo.toml
+```
+
 ## UI
 
 ```bash
@@ -25,6 +31,8 @@ bun run build
 ```bash
 ./tools/soliloquy/start.sh
 ```
+
+The appliance session defaults to `SOL_SERVO_NO_BROWSER_CHROME=1`. Keep Soliloquy's desktop shell as the single visible browser chrome; Servo should render page content only. Browser UI modes are available from the desktop chrome: Zen sidebar, compact, split columns, split rows, and grid.
 
 ## Alpine Appliance
 

@@ -26,12 +26,12 @@
 //! ## Example
 //!
 //! ```no_run
-//! use rv8::Browser;
+//! use rv8::{Browser, BrowserConfig};
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let browser = Browser::new().await.expect("Failed to create browser");
-//!     browser.navigate("https://example.com").await.expect("Navigation failed");
+//!     let mut browser = Browser::new(BrowserConfig::default()).await.expect("Failed to create browser");
+//!     browser.new_tab("https://example.com").await.expect("Navigation failed");
 //!     browser.run().await;
 //! }
 //! ```

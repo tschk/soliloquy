@@ -15,6 +15,7 @@ export WLR_RENDERER_ALLOW_SOFTWARE="${WLR_RENDERER_ALLOW_SOFTWARE:-1}"
 # Avoid hardware cursor paths that occasionally break under virtio/llvmpipe in VMs.
 export WLR_NO_HARDWARE_CURSORS="${WLR_NO_HARDWARE_CURSORS:-1}"
 export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
 export SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-wayland}"
 export WINIT_UNIX_BACKEND="${WINIT_UNIX_BACKEND:-wayland}"
 export EGL_PLATFORM="${EGL_PLATFORM:-wayland}"
@@ -100,11 +101,17 @@ log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
 log "SOLILOQUY_SYSTEM_CONFIG=${SOLILOQUY_SYSTEM_CONFIG}"
 
 if ! has_drm_device; then
-  log "no DRM device found; cannot start Wayland appliance"
-  exit 1
+  if [ "${SOL_SESSION_HEADLESS_FALLBACK:-1}" = "1" ]; then
+    export WLR_BACKENDS=headless
+    export WLR_LIBINPUT_NO_DEVICES=1
+    log "no DRM device found; using wlroots headless backend"
+  else
+    log "no DRM device found; cannot start Wayland appliance"
+    exit 1
+  fi
 fi
 
-if ! has_seatd_socket; then
+if ! has_seatd_socket && [ "${WLR_BACKENDS}" != "headless" ]; then
   log "seatd socket not found at /run/seatd.sock; cannot start Wayland appliance"
   exit 1
 fi
@@ -114,9 +121,15 @@ if ! command -v cage >/dev/null 2>&1; then
   exit 1
 fi
 
-log "DRM device found; using cage (Wayland)"
+if [ "${WLR_BACKENDS}" = "headless" ]; then
+  log "using cage with wlroots headless backend"
+else
+  log "DRM device found; using cage (Wayland)"
+fi
+set +e
 launch_session "${WLR_BACKENDS:-drm,libinput}"
 status=$?
+set -e
 
 # If the session was started with native Wayland winit, retry once with X11 (XWayland).
 if [ "${status}" != 0 ] && [ "${SOL_SESSION_X11_FALLBACK:-1}" = "1" ] && [ "${WINIT_UNIX_BACKEND}" != "x11" ]; then
@@ -124,8 +137,10 @@ if [ "${status}" != 0 ] && [ "${SOL_SESSION_X11_FALLBACK:-1}" = "1" ] && [ "${WI
   export WINIT_UNIX_BACKEND=x11
   export DISPLAY="${DISPLAY:-:0}"
   export EGL_PLATFORM="${SOL_SESSION_X11_EGL_PLATFORM:-x11}"
+  set +e
   launch_session "${WLR_BACKENDS:-drm,libinput}"
   status=$?
+  set -e
 fi
 
 log "Wayland session exited with status ${status}"

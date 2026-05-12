@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use roverate::js::JsEngine;
+use rv8::js::JsEngine;
 use tokio::runtime::Runtime;
 
 fn js_execution_benchmark(c: &mut Criterion) {

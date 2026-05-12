@@ -2,6 +2,10 @@
 
 Current docs cover the active Cargo, Bun, Alpine, Servo/RV8, and `sold` paths.
 
+RV8 browser-engine work has a standalone local sibling repo at `../rv8`; Soliloquy still keeps the in-tree `src/rv8` crate active until a remote Git submodule or dependency replaces it.
+
+The desktop browser shell owns the visible browser chrome. Servo is launched with its browser chrome disabled for the appliance path so `os://terminal`, tabs, modes, and navigation controls do not double up.
+
 ## Core
 
 - [Index](./INDEX.md)

@@ -17,6 +17,7 @@ return COMMAND_DISABLED_ROOTS.some((root) =>
 
 $: currentPath = $page.url.pathname;
 $: commandsDisabled = isCommandsDisabled(currentPath);
+$: showCommandButton = !commandsDisabled && currentPath !== '/';
 
 function toggleCommandPalette(force?: boolean) {
 if (commandsDisabled) return;
@@ -56,7 +57,7 @@ window.removeEventListener('soliloquy:command:toggle', externalToggle as EventLi
 <div class="relative min-h-screen bg-black text-white">
 <slot />
 
-{#if !commandsDisabled}
+{#if showCommandButton}
 <button
 class="command-button fixed bottom-6 right-6 z-40"
 aria-label="Open command palette"
