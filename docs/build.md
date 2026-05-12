@@ -26,6 +26,14 @@ bun run check
 bun run build
 ```
 
+## macOS Desktop Smoke
+
+```bash
+./tools/soliloquy/smoke_macos.sh
+```
+
+This builds the Svelte desktop bundle and checks the `soliloquy_desktop` binary with the `gpui` feature enabled. The GPUI feature uses `../crepuscularity/crates/crepuscularity-gpui` for the macOS desktop shell chrome. The smoke command does not launch a persistent GUI.
+
 ## Local Runtime
 
 ```bash

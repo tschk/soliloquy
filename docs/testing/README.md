@@ -24,6 +24,14 @@ bun run check
 bun run build
 ```
 
+For macOS desktop shell smoke checks:
+
+```bash
+./tools/soliloquy/smoke_macos.sh
+```
+
+The macOS smoke path checks the UI and compiles `soliloquy_desktop` with `--features gpui` against `../crepuscularity/crates/crepuscularity-gpui`. It is intended for pre-launch validation and does not keep a GUI process open.
+
 For Servo/RV8 bridge checks:
 
 ```bash
