@@ -42,6 +42,8 @@ glob = "0.3"
 
 # Windowing
 winit = "0.30"
+crepuscularity-gpui = { path = "../../../crepuscularity/crates/crepuscularity-gpui", optional = true }
+gpui = { version = "=0.2.2", default-features = false, features = ["font-kit"], optional = true }
 
 [dev-dependencies]
 tokio-test.workspace = true
@@ -49,6 +51,7 @@ tokio-test.workspace = true
 [features]
 default = ["desktop"]
 desktop = []
+gpui = ["dep:crepuscularity-gpui", "dep:gpui"]
 mobile = []
 
 [lib]
@@ -62,3 +65,7 @@ path = "main.rs"
 [[bin]]
 name = "soliloquy_shell_simple"
 path = "main_simple.rs"
+
+[[bin]]
+name = "soliloquy_desktop"
+path = "main_desktop.rs"

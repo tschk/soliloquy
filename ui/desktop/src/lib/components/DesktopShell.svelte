@@ -22,34 +22,28 @@
 	import { batteryStore, weatherStore } from '$lib/stores/device';
 	import TerminalPane from '$lib/components/TerminalPane.svelte';
 	import { browserStore, activeTab, workspaceTabs, activeWorkspace } from '$lib/stores/browser';
+	import {
+		assertCrepuscularityChromeContract,
+		crepuscularityChromeCssVars,
+		crepuscularityChromeModes,
+		crepuscularityChromeRoutes,
+		type BrowserMode,
+		type ChromeRouteKey
+	} from '$lib/crepuscularity/browserChrome';
 
-	type ChromeRoute = {
-		label: string;
-		url: string;
-		icon: typeof Terminal;
+	const routeIcons: Record<ChromeRouteKey, typeof Terminal> = {
+		terminal: Terminal,
+		files: Folder,
+		settings: Settings
 	};
 
-	type BrowserMode = 'zen' | 'compact' | 'split-horizontal' | 'split-vertical' | 'grid';
-
-	type BrowserModeOption = {
-		id: BrowserMode;
-		label: string;
-		icon: typeof Square;
+	const modeIcons: Record<BrowserMode, typeof Square> = {
+		zen: PanelLeft,
+		compact: PanelTop,
+		'split-horizontal': Columns2,
+		'split-vertical': Rows3,
+		grid: Grid2X2
 	};
-
-	const chromeRoutes: ChromeRoute[] = [
-		{ label: 'Terminal', url: 'os://terminal', icon: Terminal },
-		{ label: 'Files', url: 'os://files', icon: Folder },
-		{ label: 'Settings', url: 'os://settings', icon: Settings }
-	];
-
-	const browserModes: BrowserModeOption[] = [
-		{ id: 'zen', label: 'Zen', icon: PanelLeft },
-		{ id: 'compact', label: 'Compact', icon: PanelTop },
-		{ id: 'split-horizontal', label: 'Split columns', icon: Columns2 },
-		{ id: 'split-vertical', label: 'Split rows', icon: Rows3 },
-		{ id: 'grid', label: 'Grid', icon: Grid2X2 }
-	];
 
 	const dateFormatter = new Intl.DateTimeFormat('en-US', {
 		weekday: 'short',
@@ -72,6 +66,7 @@
 	let heroStatus = '';
 	let browserMode: BrowserMode = 'zen';
 	let frameRefreshToken = 0;
+	const chromeContractReady = assertCrepuscularityChromeContract();
 
 	$: currentTab = $activeTab;
 	$: tabs = $workspaceTabs;
@@ -203,7 +198,13 @@
 	});
 </script>
 
-<main class="desktop-browser mode-{browserMode}" transition:fade={{ duration: 160 }}>
+<main
+	class="desktop-browser mode-{browserMode}"
+	class:chrome-contract-ready={chromeContractReady}
+	style={crepuscularityChromeCssVars}
+	data-crepuscularity-component="SoliloquyBrowserChrome"
+	transition:fade={{ duration: 160 }}
+>
 	<header class="browser-chrome">
 		<div class="window-strip">
 			<div class="traffic" aria-hidden="true">
@@ -246,7 +247,7 @@
 			</form>
 
 			<nav class="route-buttons" aria-label="System routes">
-				{#each chromeRoutes as route}
+				{#each crepuscularityChromeRoutes as route}
 					<button
 						type="button"
 						class:active={currentTab?.url === route.url}
@@ -254,13 +255,13 @@
 						title={route.label}
 						on:click={() => navigate(route.url)}
 					>
-						<svelte:component this={route.icon} size={16} strokeWidth={2} />
+						<svelte:component this={routeIcons[route.key]} size={16} strokeWidth={2} />
 					</button>
 				{/each}
 			</nav>
 
 			<nav class="mode-buttons" aria-label="Browser modes">
-				{#each browserModes as mode}
+				{#each crepuscularityChromeModes as mode}
 					<button
 						type="button"
 						class:active={browserMode === mode.id}
@@ -268,7 +269,7 @@
 						title={mode.label}
 						on:click={() => (browserMode = mode.id)}
 					>
-						<svelte:component this={mode.icon} size={16} strokeWidth={2} />
+						<svelte:component this={modeIcons[mode.id]} size={16} strokeWidth={2} />
 					</button>
 				{/each}
 			</nav>
@@ -305,7 +306,7 @@
 	{#if hasSidebar}
 		<aside class="zen-sidebar" aria-label="Browser sidebar">
 			<div class="sidebar-routes">
-				{#each chromeRoutes as route}
+				{#each crepuscularityChromeRoutes as route}
 					<button
 						type="button"
 						class:active={currentTab?.url === route.url}
@@ -313,7 +314,7 @@
 						title={route.label}
 						on:click={() => navigate(route.url)}
 					>
-						<svelte:component this={route.icon} size={17} strokeWidth={2} />
+						<svelte:component this={routeIcons[route.key]} size={17} strokeWidth={2} />
 					</button>
 				{/each}
 			</div>
@@ -386,15 +387,15 @@
 		display: grid;
 		grid-template-columns: auto 1fr;
 		grid-template-rows: auto 1fr;
-		background: #070807;
-		color: #f8f7f2;
+		background: var(--crepus-canvas);
+		color: var(--crepus-text);
 		overflow: hidden;
 	}
 
 	.browser-chrome {
 		grid-column: 1 / -1;
-		background: #11120f;
-		border-bottom: 1px solid rgb(248 247 242 / 0.12);
+		background: var(--crepus-chrome);
+		border-bottom: 1px solid var(--crepus-line);
 		box-shadow: 0 18px 48px rgb(0 0 0 / 0.28);
 	}
 
@@ -410,7 +411,7 @@
 	.window-strip {
 		min-height: 38px;
 		justify-content: space-between;
-		border-bottom: 1px solid rgb(248 247 242 / 0.08);
+		border-bottom: 1px solid var(--crepus-line);
 	}
 
 	.traffic {
@@ -431,7 +432,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		color: rgb(248 247 242 / 0.68);
+		color: var(--crepus-muted-text);
 		font-size: 12px;
 		font-weight: 600;
 	}
@@ -467,9 +468,9 @@
 		align-items: center;
 		justify-content: center;
 		border: 1px solid transparent;
-		border-radius: 7px;
+		border-radius: var(--crepus-button-radius);
 		background: transparent;
-		color: rgb(248 247 242 / 0.72);
+		color: var(--crepus-muted-text);
 		transition:
 			background 140ms ease,
 			border-color 140ms ease,
@@ -483,8 +484,8 @@
 	.mode-buttons button.active,
 	.new-tab-button:hover {
 		background: rgb(248 247 242 / 0.08);
-		border-color: rgb(248 247 242 / 0.12);
-		color: #f8f7f2;
+		border-color: var(--crepus-line);
+		color: var(--crepus-text);
 	}
 
 	.nav-buttons button:disabled {
@@ -499,15 +500,15 @@
 		align-items: center;
 		gap: 9px;
 		padding: 0 12px;
-		border: 1px solid rgb(248 247 242 / 0.12);
+		border: 1px solid var(--crepus-line);
 		border-radius: 8px;
-		background: #070807;
+		background: var(--crepus-canvas);
 		color: rgb(248 247 242 / 0.56);
 	}
 
 	.address-shell:focus-within {
-		border-color: rgb(128 185 164 / 0.68);
-		color: #f8f7f2;
+		border-color: var(--crepus-accent);
+		color: var(--crepus-text);
 	}
 
 	.address-shell input {
@@ -516,7 +517,7 @@
 		border: 0;
 		outline: 0;
 		background: transparent;
-		color: #f8f7f2;
+		color: var(--crepus-text);
 		font-size: 14px;
 		letter-spacing: 0;
 	}
@@ -524,7 +525,7 @@
 	.tab-strip {
 		min-height: 43px;
 		overflow-x: auto;
-		border-top: 1px solid rgb(248 247 242 / 0.08);
+		border-top: 1px solid var(--crepus-line);
 		scrollbar-width: none;
 	}
 
@@ -548,16 +549,16 @@
 		justify-content: space-between;
 		gap: 10px;
 		padding: 0 8px 0 11px;
-		border: 1px solid rgb(248 247 242 / 0.08);
-		border-radius: 7px 7px 0 0;
+		border: 1px solid var(--crepus-line);
+		border-radius: var(--crepus-button-radius) var(--crepus-button-radius) 0 0;
 		background: #171814;
-		color: rgb(248 247 242 / 0.66);
+		color: var(--crepus-muted-text);
 	}
 
 	.tab-chip.active {
 		background: #23241f;
 		border-color: rgb(128 185 164 / 0.34);
-		color: #f8f7f2;
+		color: var(--crepus-text);
 	}
 
 	.tab-title {
@@ -588,13 +589,14 @@
 		grid-column: 1;
 		grid-row: 2;
 		width: 58px;
+		width: var(--crepus-sidebar-width);
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 12px;
 		padding: 12px 8px;
-		background: #0d0e0c;
+		background: var(--crepus-sidebar);
 		border-right: 1px solid rgb(248 247 242 / 0.1);
 	}
 
@@ -629,7 +631,7 @@
 		border: 1px solid transparent;
 		border-radius: 8px;
 		background: transparent;
-		color: rgb(248 247 242 / 0.66);
+		color: var(--crepus-muted-text);
 		transition:
 			background 140ms ease,
 			border-color 140ms ease,
@@ -643,8 +645,8 @@
 	.sidebar-add:hover,
 	.empty-pane button:hover {
 		background: rgb(248 247 242 / 0.08);
-		border-color: rgb(248 247 242 / 0.12);
-		color: #f8f7f2;
+		border-color: var(--crepus-line);
+		color: var(--crepus-text);
 	}
 
 	.sidebar-tab span {
@@ -658,7 +660,7 @@
 		position: relative;
 		min-height: 0;
 		display: grid;
-		background: #000;
+		background: black;
 		gap: 1px;
 	}
 
@@ -683,11 +685,11 @@
 		min-width: 0;
 		min-height: 0;
 		position: relative;
-		background: #000;
+		background: black;
 	}
 
 	.content-pane.active {
-		outline: 1px solid rgb(128 185 164 / 0.42);
+		outline: 1px solid var(--crepus-active-line);
 		outline-offset: -1px;
 	}
 
@@ -700,14 +702,14 @@
 	.page-frame iframe {
 		display: block;
 		border: 0;
-		background: #000;
+		background: black;
 	}
 
 	.empty-pane {
 		min-height: 0;
 		display: grid;
 		place-items: center;
-		background: #000;
+		background: black;
 	}
 
 	.load-line {
@@ -717,7 +719,7 @@
 		left: 0;
 		width: 0;
 		height: 2px;
-		background: #80b9a4;
+		background: var(--crepus-accent);
 		opacity: 0;
 	}
 

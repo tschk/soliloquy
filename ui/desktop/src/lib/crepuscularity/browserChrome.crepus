@@ -1,0 +1,53 @@
++++
+[SoliloquyBrowserChrome]
+description = "Soliloquy mac browser chrome source template"
+
+[SoliloquyBrowserChrome.defaults]
+workspace = "Workspace"
+mode = "Zen"
+address = "os://terminal"
+status = "macOS"
+temperature = "18"
+battery = "100"
+active = "Terminal"
++++
+
+--- SoliloquyBrowserChrome
+div w-full h-full bg-[#070807] text-[#f8f7f2] flex flex-col font-['Instrument_Sans']
+  div h-[38px] px-4 border-b border-white/10 flex items-center justify-between bg-[#11120f]
+    div flex gap-2 items-center
+      div w-[11px] h-[11px] rounded-full border border-white/20 bg-[#2a2b26]
+      div w-[11px] h-[11px] rounded-full border border-white/20 bg-[#2a2b26]
+      div w-[11px] h-[11px] rounded-full border border-white/20 bg-[#2a2b26]
+    div text-xs font-bold text-white/70
+      "{workspace} / {mode}"
+    div text-xs font-bold text-white/60
+      "{status}"
+  div h-[56px] px-4 border-b border-white/10 bg-[#11120f] flex items-center gap-3
+    button w-[32px] h-[32px] rounded-[7px] border border-white/10 flex items-center justify-center text-white/70
+      "back"
+    button w-[32px] h-[32px] rounded-[7px] border border-white/10 flex items-center justify-center text-white/70
+      "forward"
+    button w-[32px] h-[32px] rounded-[7px] border border-white/10 flex items-center justify-center text-white/70
+      "reload"
+    div flex-1 h-[36px] rounded-[8px] border border-white/10 bg-[#070807] flex items-center px-3 text-sm font-bold text-white
+      "{address}"
+    button w-[32px] h-[32px] rounded-[7px] border border-[#80b9a4]/40 bg-white/10 flex items-center justify-center text-white
+      "{mode}"
+    button w-[32px] h-[32px] rounded-[7px] border border-white/10 flex items-center justify-center text-white/70
+      "new"
+  div flex-1 min-h-0 flex
+    div w-[58px] bg-[#0d0e0c] border-r border-white/10 flex flex-col items-center gap-3 py-3
+      button w-[36px] h-[36px] rounded-[8px] border border-white/10 bg-white/10 flex items-center justify-center text-white
+        "terminal"
+      button w-[36px] h-[36px] rounded-[8px] flex items-center justify-center text-white/70
+        "files"
+      button w-[36px] h-[36px] rounded-[8px] flex items-center justify-center text-white/70
+        "settings"
+      div flex-1
+      button w-[36px] h-[36px] rounded-[8px] flex items-center justify-center text-white/70
+        "new tab"
+    div flex-1 bg-black
+      slot
+        div w-full h-full bg-black flex items-center justify-center text-white/50
+          "{active}"
