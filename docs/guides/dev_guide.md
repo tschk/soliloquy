@@ -23,7 +23,7 @@ bun run build
 ./tools/soliloquy/smoke_macos.sh
 ```
 
-This is the non-persistent macOS load check. It validates the Svelte bundle, checks the non-GPUI desktop binary, and dry-runs the `sold` plus Servo launch contract.
+This is the non-persistent macOS load check. It checks the non-GPUI desktop binary and dry-runs the browser-only Servo launch contract. It does not start `sold` or use the Svelte appliance chrome.
 
 ## Runtime Loop
 

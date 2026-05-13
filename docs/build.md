@@ -32,9 +32,9 @@ bun run build
 ./tools/soliloquy/smoke_macos.sh
 ```
 
-This builds the Svelte desktop bundle, checks the non-GPUI desktop binary, and dry-runs the macOS Servo launch contract. The supported macOS browser path is `sold` plus Servo with `--no-browser-chrome`, loading Soliloquy's desktop chrome from the Svelte bundle. The smoke command does not launch a persistent GUI.
+This checks the non-GPUI desktop binary and dry-runs the macOS Servo launch contract. The supported macOS desktop path is browser-only Servo with `--no-browser-chrome`; it must not start `sold` or load the Svelte appliance chrome. `sold` and the Svelte desktop bundle belong to the Alpine appliance path.
 
-To launch the macOS browser shell:
+To launch the macOS browser:
 
 ```bash
 ./tools/soliloquy/start_macos.sh
