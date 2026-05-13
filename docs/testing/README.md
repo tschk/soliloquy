@@ -47,4 +47,4 @@ sh -n system/alpine/scripts/*.sh
 ```
 
 Wayland appliance boot should show Cage/Wayland, `sold` health, and Servo startup in serial logs.
-The default appliance config sets `SOL_SERVO_NO_BROWSER_CHROME=1`; visual checks should show only Soliloquy's desktop browser chrome, not Servo's built-in toolbar.
+The default appliance config sets `SOL_SERVO_NO_BROWSER_CHROME=1`; visual checks should show only Soliloquy's Svelte appliance browser chrome, not Servo's built-in toolbar.

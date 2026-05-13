@@ -27,8 +27,9 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - RV8's local V8 DOM handles now support basic mutation/event behavior: `appendChild`, `removeChild`, `setAttribute`, `getAttribute`, `textContent`, `querySelector`, and `addEventListener`.
 - RV8's compositor now keeps a bounded present-pass queue alongside recent damage history.
 - A standalone local `../rv8` repository exists for browser-engine work; Soliloquy still builds the in-tree `src/rv8` crate until that sibling becomes a Git submodule or dependency.
-- The appliance session launches Servo with its built-in browser chrome disabled so the desktop shell provides the only browser UI surface.
-- The desktop browser shell now has Zen-style vertical tabs, compact mode, split columns, split rows, and grid modes.
+- The appliance session launches Servo with its built-in browser chrome disabled so the Svelte appliance shell provides the only browser UI surface.
+- The Svelte appliance shell now has Zen-style vertical tabs, compact mode, split columns, split rows, and grid modes.
+- The macOS desktop path launches browser-only Servo with `--no-browser-chrome`; it does not start `sold` or the Svelte appliance shell.
 - Unsupported evaluation paths still fall back to Servo's existing `mozjs` path.
 
 ## What Has Been Done
