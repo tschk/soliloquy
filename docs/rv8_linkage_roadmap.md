@@ -9,14 +9,15 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - `servoshell` is already patched in-tree and connected to Soliloquy optimization hooks.
 - Phase 1 of the bridge extraction has started: live DOM snapshot storage and typed bridge operations now live in `third_party/servo/components/servo/soliloquy_bridge.rs`.
 - `WebView::evaluate_javascript()` has a Soliloquy dispatcher for:
-  - simple literals and `+` expressions
+  - general ECMAScript evaluation through `rusty_v8` when `soliloquy_v8` is enabled
+  - persistent V8 contexts keyed per WebView for embedder-driven evaluation state
   - structured command calls through `window.__soliloquyEval(...)`
   - live snapshot-backed reads for `document.title`, `location.href`, and `document.readyState`
   - snapshot-backed writes for `document.title` and absolute / relative `location.href`
   - stable command result envelopes for ok, error, and unsupported outcomes
-- The `v8-experimental` dispatch backend now owns an explicit dispatch-only V8 isolate owner stub so the status surface can distinguish bridge dispatch from a real isolate.
+- The `v8-experimental` dispatch backend now owns an explicit V8 isolate owner so the status surface can distinguish dispatch-only builds from real `rusty_v8` builds.
 - Servo now publishes the bridge command schema from `soliloquy_bridge_schema.json`; the shell-side V8 mock includes the same file when reporting bridge capabilities.
-- Servo now has an opt-in `soliloquy_v8` feature that wires the V8 owner stub to `rusty_v8` platform and thread-local isolate initialization while leaving the default dispatch-only path unchanged.
+- Servo now has an opt-in `soliloquy_v8` feature that wires the V8 owner to `rusty_v8` platform, thread-local isolate initialization, and per-WebView V8 contexts while leaving the default dispatch-only path unchanged.
 - The shell-side V8 mock now understands the same typed bridge command surface and keeps a small DOM snapshot in sync with shell navigations.
 - The local Servo `rv8` branch has been merged forward to upstream Servo `main` at `3949e2f46`, with the Soliloquy `rusty_v8`, bridge, `os://`, and QEMU boot patches retained.
 - The local `surfman 0.11.0` patch remains pinned intentionally; upstream Servo currently points at `surfman 0.12.0`, but using that directly would bypass the Soliloquy QEMU/X11 boot fixes.
@@ -29,8 +30,8 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - A standalone local `../rv8` repository exists for browser-engine work; Soliloquy still builds the in-tree `src/rv8` crate until that sibling becomes a Git submodule or dependency.
 - The appliance session launches Servo with its built-in browser chrome disabled so the Svelte appliance shell provides the only browser UI surface.
 - The Svelte appliance shell now has Zen-style vertical tabs, compact mode, split columns, split rows, and grid modes.
-- The macOS desktop path launches browser-only Servo with `--no-browser-chrome`; it does not start `sold` or the Svelte appliance shell.
-- Unsupported evaluation paths still fall back to Servo's existing `mozjs` path.
+- The macOS desktop path launches Crepuscularity GPUI chrome from `../crepuscularity` and starts Servo with `--no-browser-chrome`; it does not start `sold` or the Svelte appliance shell.
+- Browser-global evaluation paths still fall back to Servo's existing `mozjs` path until DOM/Web IDL ownership moves to V8.
 
 ## What Has Been Done
 
@@ -46,7 +47,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Added the initial Servo-side script backend trait with `mozjs` fallback and `v8-experimental` dispatch implementations.
 - Added a dispatch-only V8 isolate owner stub behind the `v8-experimental` backend and exposed it through `engine.status`.
 - Added a shared bridge schema JSON and exposed it through `dom.capabilities` on both the Servo bridge and shell V8 mock.
-- Added an opt-in `soliloquy_v8` feature that initializes a real `rusty_v8` platform and thread-local isolate for the V8 owner status path.
+- Added an opt-in `soliloquy_v8` feature that initializes a real `rusty_v8` platform, thread-local isolate, and persistent per-WebView contexts for embedder-driven JavaScript evaluation.
 - Fixed the Servo bridge test compile path against Servo's composite `WebViewId`, Rust 2024 environment mutation rules, and the `HistoryChanged` WebView ownership path.
 - Kept the `rv8` dispatcher local-first, with fallback to Servo's existing `mozjs` path for unsupported operations.
 - Kept the shell-side JS engine status plumbing aligned with `SOLILOQUY_JS_ENGINE`.
@@ -69,8 +70,8 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 
 ## What Is Still Missing
 
-- A real V8 isolate running inside Servo-owned evaluation paths.
 - A typed host bridge between Servo script operations and the Soliloquy V8 runtime.
+- Browser-global bindings for `window`, `document`, navigation, storage, timers, events, and fetch in the V8-owned path.
 - Full DOM object identity, handle lifetime, and cross-runtime serialization rules beyond the local RV8 handle prototype.
 - Mutation routing from V8-owned calls into the actual Servo script / DOM thread beyond the local RV8 mutation log.
 - Event delivery from Servo into the V8 side for navigation, load, timers, and DOM changes beyond the local RV8 listener prototype.
@@ -117,12 +118,13 @@ RV8 should mirror those architecture choices in Rust / WGPU terms:
   - added a Servo-side trait for script execution backends
   - added a `mozjs` fallback implementation that declines local execution
   - moved the current Soliloquy V8 dispatch path behind a `v8-experimental` backend implementation
-  - added a dispatch-only V8 isolate owner stub so backend status can report `isolateOwner` and `realIsolate`
+  - added a V8 isolate owner so backend status can report `isolateOwner` and `realIsolate`
   - added an opt-in `soliloquy_v8` feature that bootstraps `rusty_v8` platform / thread-local isolate ownership
+  - added persistent per-WebView V8 contexts for general embedder-driven ECMAScript evaluation
 - Still to do:
   - define isolate lifetime, value transport, and error propagation contracts
-  - route only the narrow Servo bridge operations through V8 first
-  - keep direct DOM execution out of scope until value transport, error propagation, and isolate lifetime are stable
+  - install typed browser globals into V8 contexts
+  - keep direct DOM execution scoped until value transport, error propagation, and isolate lifetime are stable
 
 ### Phase 3: Add DOM Handle Semantics
 

@@ -16,4 +16,5 @@ require_command cargo
 cd "${PROJECT_ROOT}"
 
 cargo check -p soliloquy-shell --bin soliloquy_desktop --no-default-features --features desktop
+cargo check -p soliloquy-shell --bin soliloquy_desktop --no-default-features --features "desktop gpui"
 SOL_MACOS_DRY_RUN=1 ./tools/soliloquy/start_macos.sh

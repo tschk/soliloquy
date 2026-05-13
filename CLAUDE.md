@@ -18,7 +18,7 @@ There are four active Rust packages in the root Cargo workspace:
 There are also substantial adjacent areas in-tree, including:
 
 - `system/alpine/` - Alpine appliance build, staging, and QEMU boot flow
-- `ui/desktop/` - Svelte desktop UI
+- `ui/desktop/` - Svelte appliance UI
 - `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
 - `third_party/servo/components/servo/soliloquy_bridge.rs` - typed snapshot bridge for the current `rv8` Servo/V8 work
 

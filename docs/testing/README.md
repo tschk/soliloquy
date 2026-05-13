@@ -30,7 +30,7 @@ For macOS desktop shell smoke checks:
 ./tools/soliloquy/smoke_macos.sh
 ```
 
-The macOS smoke path compiles the non-GPUI desktop path and dry-runs the browser-only Servo launch contract. It is intended for pre-launch validation and does not keep a GUI process open. Svelte and `sold` checks are appliance checks, not desktop browser checks.
+The macOS smoke path compiles the non-GPUI desktop path, compiles the Crepuscularity GPUI desktop path, and dry-runs the desktop launch contract. It is intended for pre-launch validation and does not keep a GUI process open. Svelte and `sold` checks are appliance checks, not desktop browser checks.
 
 For Servo/RV8 bridge checks:
 

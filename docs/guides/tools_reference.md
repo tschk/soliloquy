@@ -5,8 +5,8 @@
 - `tools/soliloquy/start.sh` starts `sold` and the UI dev server.
 - `tools/soliloquy/build_ui.sh` builds the Svelte bundle with Bun.
 - `tools/soliloquy/dev_ui.sh` starts the UI dev server with Bun.
-- `tools/soliloquy/smoke_macos.sh` checks the non-GPUI macOS desktop build and Servo browser launch contract without launching a persistent GUI.
-- `tools/soliloquy/start_macos.sh` launches browser-only Servo on macOS with Servo's built-in chrome disabled.
+- `tools/soliloquy/smoke_macos.sh` checks the non-GPUI and Crepuscularity GPUI macOS desktop builds and dry-runs the launch contract without launching a persistent GUI.
+- `tools/soliloquy/start_macos.sh` launches Crepuscularity GPUI chrome on macOS and starts Servo with Servo's built-in chrome disabled.
 
 ## Bridge
 

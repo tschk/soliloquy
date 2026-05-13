@@ -12,6 +12,6 @@ The current component contract is `SoliloquyBrowserChrome`. It defines the mac b
 - Zen/sidebar, compact, split columns, split rows, and grid mode variants
 - black content surface owned by RV8/Servo page rendering
 
-For mac-native loading, use `tools/soliloquy/start_macos.sh`. That path launches browser-only Servo with `--no-browser-chrome`. It must not start `sold` or serve the Svelte appliance chrome. The old GPUI chrome is not the supported browser-engine path.
+For mac-native loading, use `tools/soliloquy/start_macos.sh`. That path launches the Crepuscularity GPUI chrome from `../crepuscularity` and starts Servo with `--no-browser-chrome` as the browser renderer. It must not start `sold` or serve the Svelte appliance chrome.
 
-Servo's built-in chrome remains disabled in the appliance path. The only visible browser controls should come from this Crepuscularity-authored Soliloquy chrome.
+Servo's built-in chrome remains disabled in the desktop and appliance paths. The only visible browser controls should come from a Crepuscularity-authored Soliloquy chrome.

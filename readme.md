@@ -16,7 +16,7 @@ The root workspace currently contains four Rust packages:
 Other important top-level areas:
 
 - `system/alpine/` - appliance rootfs assembly, staging, and QEMU scripts
-- `ui/desktop/` - Svelte desktop UI used by the dev flow and Alpine staging
+- `ui/desktop/` - Svelte appliance UI used by the dev flow and Alpine staging
 - `bundle/` - static UI assets served by `sold`
 - `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
 - `docs/` - project docs for the current Cargo, Bun, Alpine, Servo/RV8, and `sold` paths

@@ -1,19 +1,58 @@
 use crepuscularity_gpui::prelude::*;
+use std::process::{Child, Command, Stdio};
 
 struct SoliloquyWindow {
     address: SharedString,
     mode: SharedString,
     tab_title: SharedString,
+    servo_child: Option<Child>,
 }
 
 impl SoliloquyWindow {
     fn new(_cx: &mut Context<Self>) -> Self {
+        let address =
+            std::env::var("SOL_START_URL").unwrap_or_else(|_| "https://example.com".to_string());
+        let servo_child = spawn_servo_renderer(&address);
+
         Self {
-            address: "os://terminal".into(),
+            address: address.into(),
             mode: "Zen".into(),
-            tab_title: "Terminal".into(),
+            tab_title: "Servo".into(),
+            servo_child,
         }
     }
+}
+
+impl Drop for SoliloquyWindow {
+    fn drop(&mut self) {
+        if let Some(child) = self.servo_child.as_mut() {
+            let _ = child.kill();
+        }
+    }
+}
+
+fn spawn_servo_renderer(address: &str) -> Option<Child> {
+    if std::env::var("SOL_SERVO_CHILD_DISABLED").ok().as_deref() == Some("1") {
+        return None;
+    }
+
+    let servo_bin = std::env::var("SERVO_BIN")
+        .unwrap_or_else(|_| "third_party/servo/target/release/servoshell".to_string());
+    let window_size = std::env::var("SOL_WINDOW_SIZE").unwrap_or_else(|_| "1280x820".to_string());
+    let js_engine =
+        std::env::var("SOLILOQUY_JS_ENGINE").unwrap_or_else(|_| "v8-experimental".to_string());
+
+    Command::new(servo_bin)
+        .arg("--no-browser-chrome")
+        .arg("--window-size")
+        .arg(window_size)
+        .arg(address)
+        .env("SOLILOQUY_JS_ENGINE", js_engine)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()
 }
 
 impl Render for SoliloquyWindow {
