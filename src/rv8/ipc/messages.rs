@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use soliloquy_browser_optimizations::runtime::{SurfaceDescriptor, SurfaceId, SurfaceSize};
 
 use crate::js::JsValue;
+use crate::renderer::RenderFrame;
 
 /// Messages from renderer to browser process
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +17,8 @@ pub enum BrowserMessage {
     TitleChanged { tab_id: u64, title: String },
     /// Page finished loading
     LoadComplete { tab_id: u64 },
+    /// Software-rendered frame ready for presentation
+    FrameReady { tab_id: u64, frame: RenderFrame },
     /// Request reload
     Reload { tab_id: u64 },
     /// Stop loading

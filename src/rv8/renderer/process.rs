@@ -169,7 +169,15 @@ impl RendererProcess {
             return;
         }
 
-        // Notify browser of completion
+        let title = self.embedder.title().to_string();
+        if !title.is_empty() {
+            let _ = self.browser_channel.send_title_changed(&title);
+        }
+
+        if let Some(frame) = self.embedder.get_render_frame() {
+            let _ = self.browser_channel.send_frame_ready(frame);
+        }
+
         let _ = self.browser_channel.send_load_complete();
     }
 

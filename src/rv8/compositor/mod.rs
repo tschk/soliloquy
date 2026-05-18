@@ -58,6 +58,7 @@ struct CompositorState {
     last_present: Option<Instant>,
     damage_history: VecDeque<DamageRegion>,
     present_queue: VecDeque<RenderPass>,
+    latest_frame: Option<RenderFrame>,
 }
 
 impl CompositorState {
@@ -69,6 +70,7 @@ impl CompositorState {
             last_present: None,
             damage_history: VecDeque::with_capacity(DAMAGE_HISTORY_LEN),
             present_queue: VecDeque::with_capacity(PRESENT_QUEUE_LEN),
+            latest_frame: None,
         }
     }
 
@@ -158,19 +160,24 @@ impl Compositor {
     pub async fn submit_frame(&self, frame: RenderFrame) {
         let mut state = self.state.lock().await;
         let damage = DamageRegion::full_frame(frame.width, frame.height);
+        let frame_id = frame.id;
+        let width = frame.width;
+        let height = frame.height;
         state.submitted_frames += 1;
-        state.last_frame_id = Some(frame.id);
+        state.last_frame_id = Some(frame_id);
         state.last_present = Some(Instant::now());
+        state.latest_frame = Some(frame);
         state.push_damage(damage);
         state.push_present_pass(RenderPass {
-            frame_id: frame.id,
+            frame_id,
             damage,
         });
         state.pending_frame = false;
-        debug!(
-            "Submitted frame {} ({}x{})",
-            frame.id, frame.width, frame.height
-        );
+        debug!("Submitted frame {} ({}x{})", frame_id, width, height);
+    }
+
+    pub async fn latest_frame(&self) -> Option<RenderFrame> {
+        self.state.lock().await.latest_frame.clone()
     }
 
     pub async fn drain_present_queue(&self) -> Vec<RenderPass> {

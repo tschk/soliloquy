@@ -80,13 +80,17 @@ cocoa = "0.26"
 objc2 = "0.5"
 
 [features]
-default = ["multi-process"]
+default = ["multi-process", "software-paint"]
 multi-process = []
 single-process = []
 x11 = ["x11rb"]
 wayland = ["wayland-client"]
 gpu-compositing = []
 hardware-acceleration = []
+# Enable Servo WebRender via the sibling ../rv8 checkout (see ../../rv8/Cargo.toml).
+# In-tree build keeps source in sync; full Servo linkage builds from projects/rv8.
+servo-render = []
+software-paint = []
 
 [dev-dependencies]
 criterion = "0.5"
@@ -110,3 +114,4 @@ panic = "abort"
 [profile.release-with-debug]
 inherits = "release"
 debug = true
+

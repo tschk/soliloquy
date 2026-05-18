@@ -29,7 +29,7 @@ At the top level, the repo currently breaks down like this:
 - `src/shell/` - shell runtime, Servo embedder glue, V8 bridge, networking, platform code
 - `src/` - browser optimization library: memory residency, cache, GPU compositor/layout, prefetching, V8 integration
 - `src/rv8/` - experimental multi-process browser/runtime work with IPC, renderer, JS, parser, and optimization modules
-- `../rv8/` - standalone local Git repo seeded from `src/rv8`; keep it aligned when browser-engine work is meant to graduate out of Soliloquy
+- `../rv8/` - standalone `atechnology-company/rv8` repo seeded from `src/rv8`; keep it aligned for engine work
 - `sold/` - local HTTP service that serves the bundled UI and simple file/settings APIs
 - `system/alpine/` - immutable-rootfs appliance assembly, service layout, artifact staging, and QEMU helpers
 - `bundle/` - static UI assets served by `sold`
@@ -98,7 +98,7 @@ Alpine/QEMU flow:
 
 - The root workspace is not a 25-member workspace in this checkout.
 - `third_party/servo` is a nested repository and should be treated as an actively patched fork for `rv8`.
-- `../rover` is not the RV8 split target.
+- `atechnology-company/rv8` is the engine split target; an unrelated macOS launcher may also live at `../rover`.
 - `system/alpine/scripts/sol-servo-wrapper` has had local work in this branch history; verify the current status before editing it.
 
 ## Working Assumptions

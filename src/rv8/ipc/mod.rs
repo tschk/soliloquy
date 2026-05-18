@@ -178,6 +178,15 @@ impl RendererChannel {
             .map_err(|e| e.to_string())
     }
 
+    pub fn send_frame_ready(&self, frame: crate::renderer::RenderFrame) -> Result<(), String> {
+        self.to_browser
+            .send(BrowserMessage::FrameReady {
+                tab_id: self.tab_id,
+                frame,
+            })
+            .map_err(|e| e.to_string())
+    }
+
     pub fn send_reload(&self) -> Result<(), String> {
         self.to_browser
             .send(BrowserMessage::Reload {

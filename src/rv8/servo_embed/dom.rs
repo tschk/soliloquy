@@ -272,6 +272,58 @@ impl DomTree {
         self.document_id
     }
 
+    pub fn document_title(&self) -> Option<String> {
+        for (&id, node) in &self.nodes {
+            if node.tag_name.as_deref() == Some("title") {
+                let text = self.text_content(id);
+                if !text.is_empty() {
+                    return Some(text);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn body_root(&self) -> Option<NodeId> {
+        if let Some(id) = self.find_element_tag(self.document_id, "body") {
+            return Some(id);
+        }
+        self.find_element_tag(self.document_id, "html")
+    }
+
+    pub fn text_content(&self, node_id: NodeId) -> String {
+        let mut out = String::new();
+        self.append_text(node_id, &mut out);
+        out.trim().to_string()
+    }
+
+    fn append_text(&self, node_id: NodeId, out: &mut String) {
+        let Some(node) = self.nodes.get(&node_id) else {
+            return;
+        };
+        if let Some(ref text) = node.text_content {
+            out.push_str(text);
+        }
+        for &child in &node.children {
+            self.append_text(child, out);
+        }
+    }
+
+    fn find_element_tag(&self, start: NodeId, tag: &str) -> Option<NodeId> {
+        let Some(node) = self.nodes.get(&start) else {
+            return None;
+        };
+        if node.tag_name.as_deref() == Some(tag) {
+            return Some(start);
+        }
+        for &child in &node.children {
+            if let Some(found) = self.find_element_tag(child, tag) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
     pub fn take_mutations(&mut self) -> Vec<DomMutation> {
         std::mem::take(&mut self.mutations)
     }

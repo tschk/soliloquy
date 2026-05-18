@@ -1,7 +1,9 @@
 //! Render frame representation
 
+use serde::{Deserialize, Serialize};
+
 /// A rendered frame ready for compositing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderFrame {
     /// Frame ID
     pub id: u64,

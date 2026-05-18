@@ -18,7 +18,11 @@ use crate::js::{JsEngine, JsValue};
 use crate::renderer::RenderFrame;
 
 pub mod dom;
+#[cfg(feature = "software-paint")]
+pub mod paint;
 pub mod parser;
+#[cfg(feature = "servo-render")]
+mod servo_renderer;
 pub mod web_apis;
 
 use self::dom::{DomEvent, DomTree};
@@ -81,6 +85,10 @@ pub struct ServoEmbedder {
     loading: bool,
     /// Load progress (0-100)
     load_progress: u8,
+    /// Monotonic frame id for embed consumers
+    frame_generation: u64,
+    #[cfg(feature = "servo-render")]
+    servo: Option<servo_renderer::ServoRenderer>,
 }
 
 impl ServoEmbedder {
@@ -108,6 +116,12 @@ impl ServoEmbedder {
             session_storage.clone(),
         ));
 
+        #[cfg(feature = "servo-render")]
+        let servo = Some(
+            servo_renderer::ServoRenderer::new(config.width, config.height)
+                .map_err(|e| format!("Servo renderer init failed: {e}"))?,
+        );
+
         Ok(ServoEmbedder {
             config,
             js_engine: Arc::new(Mutex::new(js_engine)),
@@ -120,6 +134,9 @@ impl ServoEmbedder {
             title: String::new(),
             loading: false,
             load_progress: 0,
+            frame_generation: 0,
+            #[cfg(feature = "servo-render")]
+            servo,
         })
     }
 
@@ -131,6 +148,22 @@ impl ServoEmbedder {
         self.loading = true;
         self.load_progress = 0;
 
+        #[cfg(feature = "servo-render")]
+        {
+            let servo = self
+                .servo
+                .as_mut()
+                .ok_or_else(|| "Servo renderer not initialized".to_string())?;
+            let result = tokio::task::block_in_place(|| servo.navigate(url));
+            self.loading = false;
+            self.load_progress = 100;
+            self.frame_generation = self.frame_generation.saturating_add(1);
+            self.title = servo.title();
+            return result;
+        }
+
+        #[cfg(feature = "software-paint")]
+        {
         // Fetch HTML
         info!("Fetching URL: {}", url);
         match reqwest::get(url).await {
@@ -152,6 +185,10 @@ impl ServoEmbedder {
                             *dom = DomTree::new();
 
                             parser::parse_html(&html, &mut *dom);
+                            self.title = dom
+                                .document_title()
+                                .filter(|t| !t.is_empty())
+                                .unwrap_or_else(|| paint::display_host(url));
                         }
                         info!("HTML parsing complete");
                     }
@@ -174,8 +211,16 @@ impl ServoEmbedder {
 
         self.loading = false;
         self.load_progress = 100;
+        self.frame_generation = self.frame_generation.saturating_add(1);
 
         Ok(())
+        }
+
+        #[cfg(all(not(feature = "servo-render"), not(feature = "software-paint")))]
+        {
+            let _ = url;
+            Err("rv8 built without servo-render or software-paint".to_string())
+        }
     }
 
     /// Execute JavaScript in the context of the current document
@@ -190,16 +235,47 @@ impl ServoEmbedder {
         engine.execute(script)
     }
 
-    /// Get the current render frame
-    pub fn get_render_frame(&self) -> Option<RenderFrame> {
-        // TODO: Get frame from Servo's compositor
-        Some(RenderFrame::new(self.config.width, self.config.height))
+    /// Get the current render frame from Servo (or software paint fallback).
+    pub fn get_render_frame(&mut self) -> Option<RenderFrame> {
+        #[cfg(feature = "servo-render")]
+        if let Some(servo) = self.servo.as_mut() {
+            return servo.capture_frame(self.frame_generation);
+        }
+
+        #[cfg(feature = "software-paint")]
+        {
+            let mut frame = RenderFrame::new(self.config.width, self.config.height);
+            frame.id = self.frame_generation;
+            let dom = self.dom_tree.read();
+            paint::paint_document_frame(
+                &mut frame,
+                &dom,
+                &paint::PaintContext {
+                    url: &self.current_url,
+                    title: &self.title,
+                    loading: self.loading,
+                },
+            );
+            return Some(frame);
+        }
+
+        #[allow(unreachable_code)]
+        None
+    }
+
+    pub fn frame_generation(&self) -> u64 {
+        self.frame_generation
     }
 
     /// Resize the viewport
     pub fn resize(&mut self, width: u32, height: u32) {
         self.config.width = width;
         self.config.height = height;
+        self.frame_generation = self.frame_generation.saturating_add(1);
+        #[cfg(feature = "servo-render")]
+        if let Some(servo) = self.servo.as_mut() {
+            servo.resize(width, height);
+        }
         debug!("Viewport resized to {}x{}", width, height);
     }
 

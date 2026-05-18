@@ -2,7 +2,7 @@
 
 Current docs cover the active Cargo, Bun, Alpine, Servo/RV8, and `sold` paths.
 
-RV8 browser-engine work has a standalone local sibling repo at `../rv8`; Soliloquy still keeps the in-tree `src/rv8` crate active until a remote Git submodule or dependency replaces it.
+Browser-engine work lives in `atechnology-company/rv8` (`../rv8` locally, seeded from `src/rv8`). Soliloquy still keeps the in-tree `src/rv8` crate active until a submodule or path dependency replaces it. See [Repo Split Plan](./repo_split_plan.md).
 
 The Alpine appliance owns the Svelte browser chrome and `sold` bridge. Servo is launched with its browser chrome disabled there so `os://terminal`, tabs, modes, and navigation controls do not double up.
 

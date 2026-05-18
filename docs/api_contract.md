@@ -1,4 +1,4 @@
-# Soliloquy / RV8 Contract
+# Soliloquy / Engine Contract
 
 This repo treats RV8 as the browser-engine boundary for page loading, tab state, and runtime integration. Soliloquy owns the Alpine appliance shell and browser chrome.
 
