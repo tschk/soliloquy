@@ -265,7 +265,7 @@ impl ServoEmbedder {
         // Create Servo webview
         let webview = ServoWebview {
             url: Some(url.to_string()),
-            title: None,
+            title: Some(url.to_string()),
             is_loading: true,
         };
         self.webview = Some(Arc::new(Mutex::new(webview)));

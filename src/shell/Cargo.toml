@@ -57,6 +57,7 @@ mobile = []
 [lib]
 name = "soliloquy_shell"
 path = "lib.rs"
+doctest = false
 
 [[bin]]
 name = "soliloquy_shell"

@@ -213,6 +213,15 @@ impl V8Runtime {
             let context = v8::Context::new(scope);
             let scope = &mut v8::ContextScope::new(scope, context);
 
+            let prelude = self.browser_prelude();
+            let prelude_source = v8::String::new(scope, &prelude)
+                .ok_or_else(|| "V8: failed to create prelude string".to_string())?;
+            let prelude_script = v8::Script::compile(scope, prelude_source, None)
+                .ok_or_else(|| "JavaScript prelude syntax error".to_string())?;
+            prelude_script
+                .run(scope)
+                .ok_or_else(|| "JavaScript prelude evaluation failure".to_string())?;
+
             let source = v8::String::new(scope, script)
                 .ok_or_else(|| "V8: failed to create script string".to_string())?;
 
@@ -225,6 +234,15 @@ impl V8Runtime {
 
             Ok(v8_value_to_string(scope, value))
         })
+    }
+
+    fn browser_prelude(&self) -> String {
+        let href = js_string(self.dom_snapshot.url.as_deref());
+        let title = js_string(self.dom_snapshot.title.as_deref());
+        let ready_state = js_string(self.dom_snapshot.ready_state.as_deref());
+        format!(
+            "globalThis.window = globalThis.window || {{}}; globalThis.window.location = globalThis.window.location || {{}}; globalThis.window.location.href = {href}; globalThis.document = globalThis.document || {{}}; globalThis.document.title = {title}; globalThis.document.readyState = {ready_state}; globalThis.console = globalThis.console || {{ log() {{}} }};"
+        )
     }
 
     // ── bridge dispatch ───────────────────────────────────────────────────────
@@ -415,6 +433,10 @@ fn v8_value_to_string(scope: &mut v8::HandleScope, value: v8::Local<v8::Value>) 
             .map(|s| s.to_rust_string_lossy(scope))
             .unwrap_or_default()
     }
+}
+
+fn js_string(value: Option<&str>) -> String {
+    serde_json::to_string(value.unwrap_or_default()).unwrap_or_else(|_| "\"\"".to_string())
 }
 
 fn env_requests_v8() -> bool {
