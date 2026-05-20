@@ -32,9 +32,11 @@ export SOLILOQUY_DOWNLOADS_DIR="${SOLILOQUY_DOWNLOADS_DIR:-${SOLILOQUY_HOME}/bro
 export SOLILOQUY_STATE_DIR="${SOLILOQUY_STATE_DIR:-${SOLILOQUY_HOME}/browser/state}"
 export SOLILOQUY_LOG_DIR="${SOLILOQUY_LOG_DIR:-${SOLILOQUY_HOME}/browser/logs}"
 export SOLILOQUY_TERMINAL_STATE_DIR="${SOLILOQUY_TERMINAL_STATE_DIR:-${SOLILOQUY_HOME}/browser/terminal}"
+export SOLILOQUY_RUNTIME_STATE_ENV="${SOLILOQUY_RUNTIME_STATE_ENV:-/run/soliloquy/runtime-state.env}"
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 
 mkdir -p "${XDG_RUNTIME_DIR}"
+mkdir -p "$(dirname "${SOLILOQUY_RUNTIME_STATE_ENV}")"
 mkdir -p \
   "${XDG_DATA_HOME}" \
   "${XDG_CACHE_HOME}" \
@@ -63,6 +65,32 @@ log() {
   printf '[sol-session] %s\n' "$1" >&2
 }
 
+now_unix_ms() {
+  printf '%s000\n' "$(date +%s)"
+}
+
+record_runtime_state() {
+  key="$1"
+  value="$2"
+  tmp="${SOLILOQUY_RUNTIME_STATE_ENV}.$$"
+  if [ -f "${SOLILOQUY_RUNTIME_STATE_ENV}" ]; then
+    grep -v "^${key}=" "${SOLILOQUY_RUNTIME_STATE_ENV}" >"${tmp}" || true
+  else
+    : >"${tmp}"
+  fi
+  printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
+  mv "${tmp}" "${SOLILOQUY_RUNTIME_STATE_ENV}"
+}
+
+attach_to_cgroup() {
+  group="$1"
+  pid="$2"
+  path="/sys/fs/cgroup/soliloquy/${group}"
+  if [ -f /sys/fs/cgroup/cgroup.controllers ] && mkdir -p "${path}" 2>/dev/null; then
+    printf '%s\n' "${pid}" >"${path}/cgroup.procs" 2>/dev/null || true
+  fi
+}
+
 wait_for_sold() {
   origin="${SOL_SOLD_ORIGIN:-http://127.0.0.1:8080}"
   retries="${SOL_SOLD_READY_RETRIES:-600}"
@@ -80,6 +108,7 @@ wait_for_sold() {
     sleep 0.1
   done
   log "sold ready (${origin}/health)"
+  record_runtime_state SOLILOQUY_SOLD_READY_UNIX_MS "$(now_unix_ms)"
 }
 
 has_drm_device() {
@@ -118,6 +147,8 @@ launch_session() {
 
 log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
 log "SOLILOQUY_SYSTEM_CONFIG=${SOLILOQUY_SYSTEM_CONFIG}"
+record_runtime_state SOLILOQUY_SESSION_START_UNIX_MS "$(now_unix_ms)"
+attach_to_cgroup browser "$$"
 
 if ! has_drm_device; then
   if [ "${SOL_SESSION_HEADLESS_FALLBACK:-1}" = "1" ]; then

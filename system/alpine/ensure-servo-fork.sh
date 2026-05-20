@@ -16,7 +16,4 @@ cargo build --release --target x86_64-unknown-linux-musl --bin soliloquy_shell
 echo "Building sold..."
 cargo build --release --target x86_64-unknown-linux-musl --bin sold
 
-echo "Building rv8..."
-cargo build --release --target x86_64-unknown-linux-musl --bin rv8
-
 echo "Rust binaries built successfully."

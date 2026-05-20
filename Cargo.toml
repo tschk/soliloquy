@@ -4,8 +4,8 @@
 [workspace]
 resolver = "2"
 members = [
+    "src",
     "src/shell",
-    "src/rv8",
     "sold",
 ]
 

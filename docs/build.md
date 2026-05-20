@@ -8,10 +8,9 @@ Soliloquy uses Cargo for Rust, Bun for the Svelte UI, and `system/alpine/scripts
 cargo build
 cargo test -p sold
 cargo test -p soliloquy-shell --lib
-cargo test -p rv8
 ```
 
-The standalone sibling RV8 repo can also be checked directly:
+The sibling RV8 repo is checked directly:
 
 ```bash
 cargo test --manifest-path ../rv8/Cargo.toml

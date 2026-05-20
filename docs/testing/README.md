@@ -7,7 +7,6 @@ Current test coverage is centered on Rust, Bun, the local `sold` bridge, and tar
 ```bash
 cargo test -p sold
 cargo test -p soliloquy-shell --lib
-cargo test -p rv8
 ```
 
 The sibling RV8 repo is available at `../rv8`:

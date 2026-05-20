@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::os::unix::io::{AsRawFd, BorrowedFd, IntoRawFd};
@@ -350,8 +351,10 @@ struct DeviceActionResult {
 struct RuntimeStatus {
     service: &'static str,
     vinix: VinixReferenceStatus,
+    browser: BrowserRuntimeStatus,
     javascript: JavascriptRuntimeStatus,
     display: DisplayRuntimeStatus,
+    kernel_policy: KernelPolicyStatus,
     optimizations: Vec<RuntimeOptimizationStatus>,
 }
 
@@ -360,6 +363,36 @@ struct VinixReferenceStatus {
     mode: &'static str,
     license: &'static str,
     url: &'static str,
+}
+
+#[derive(Serialize)]
+struct BrowserRuntimeStatus {
+    engine_source: &'static str,
+    boot_complete_target: &'static str,
+    service_graph: Vec<BrowserRuntimeNode>,
+    boot_metrics: BrowserBootMetrics,
+}
+
+#[derive(Serialize)]
+struct BrowserRuntimeNode {
+    id: String,
+    label: String,
+    depends_on: Vec<String>,
+    critical: bool,
+    status: String,
+}
+
+#[derive(Serialize)]
+struct BrowserBootMetrics {
+    session_start_unix_ms: Option<u128>,
+    sold_start_unix_ms: Option<u128>,
+    sold_ready_unix_ms: Option<u128>,
+    servo_spawn_unix_ms: Option<u128>,
+    first_frame_unix_ms: Option<u128>,
+    interactive_unix_ms: Option<u128>,
+    renderer_pid: Option<u64>,
+    renderer_restarts: Option<u64>,
+    last_renderer_exit: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -388,6 +421,25 @@ struct RuntimeOptimizationStatus {
     configured: bool,
     active: bool,
     status: &'static str,
+}
+
+#[derive(Serialize)]
+struct KernelPolicyStatus {
+    cgroup_v2_available: bool,
+    groups: Vec<KernelPolicyGroupStatus>,
+    renderer_pid: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct KernelPolicyGroupStatus {
+    id: &'static str,
+    path: &'static str,
+    active: bool,
+}
+
+#[derive(Default)]
+struct RuntimeState {
+    values: HashMap<String, String>,
 }
 
 #[derive(Serialize)]
@@ -449,6 +501,7 @@ struct AppState {
     files_dir: PathBuf,
     bundle_dir: PathBuf,
     runtime_env_path: PathBuf,
+    runtime_state_env_path: PathBuf,
     token: Option<String>,
     http: reqwest::Client,
     page_cache: Arc<DashMap<String, CachedPage>>,
@@ -473,6 +526,9 @@ async fn main() {
     let runtime_env_path = std::env::var_os("SOLILOQUY_RUNTIME_ENV")
         .map(PathBuf::from)
         .unwrap_or_else(|| files_dir.join("runtime.env"));
+    let runtime_state_env_path = std::env::var_os("SOLILOQUY_RUNTIME_STATE_ENV")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/run/soliloquy/runtime-state.env"));
     let token = std::env::var("SOL_TOKEN").ok().and_then(|value| {
         let trimmed = value.trim().to_string();
         if trimmed.is_empty() || trimmed == "dev-token-change-me" {
@@ -497,6 +553,7 @@ async fn main() {
         files_dir,
         bundle_dir: bundle_dir.clone(),
         runtime_env_path,
+        runtime_state_env_path,
         token,
         http: reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(3))
@@ -695,7 +752,12 @@ async fn device_action(
 
 async fn runtime_status(State(state): State<AppState>) -> Json<RuntimeStatus> {
     let settings = load_settings(&state).await;
-    Json(build_runtime_status(&settings))
+    let runtime_state = read_runtime_state(state.runtime_state_env_path.as_ref());
+    Json(build_runtime_status(
+        &settings,
+        state.service_registry.as_ref(),
+        &runtime_state,
+    ))
 }
 
 async fn os_status(State(state): State<AppState>) -> Json<OsStatus> {
@@ -709,7 +771,8 @@ async fn os_status(State(state): State<AppState>) -> Json<OsStatus> {
     let network = read_network_status().await;
     let battery = read_battery_status().await;
     let settings = load_settings(&state).await;
-    let runtime = build_runtime_status(&settings);
+    let runtime_state = read_runtime_state(state.runtime_state_env_path.as_ref());
+    let runtime = build_runtime_status(&settings, state.service_registry.as_ref(), &runtime_state);
     Json(OsStatus {
         config,
         package_manager,
@@ -1074,7 +1137,11 @@ fn shell_escape(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
-fn build_runtime_status(settings: &Settings) -> RuntimeStatus {
+fn build_runtime_status(
+    settings: &Settings,
+    service_registry: &ServiceRegistry,
+    runtime_state: &RuntimeState,
+) -> RuntimeStatus {
     let env_engine = std::env::var("SOLILOQUY_JS_ENGINE").unwrap_or_default();
     let requested_engine = if env_engine.trim().is_empty() {
         settings.js_engine.clone()
@@ -1084,12 +1151,37 @@ fn build_runtime_status(settings: &Settings) -> RuntimeStatus {
     let active_backend = std::env::var("XDG_SESSION_TYPE")
         .or_else(|_| std::env::var("SERVO_DISPLAY_BACKEND"))
         .unwrap_or_else(|_| settings.display_backend.clone());
+    let renderer_pid = runtime_state.u64("SOLILOQUY_RENDERER_PID");
     RuntimeStatus {
         service: "sold",
         vinix: VinixReferenceStatus {
             mode: "reference-only",
             license: "GPL-2.0",
             url: "https://github.com/vlang/vinix",
+        },
+        browser: BrowserRuntimeStatus {
+            engine_source: "sibling-cargo-path",
+            boot_complete_target: "browser-interactive",
+            service_graph: browser_service_graph(service_registry),
+            boot_metrics: BrowserBootMetrics {
+                session_start_unix_ms: runtime_state.u128("SOLILOQUY_SESSION_START_UNIX_MS"),
+                sold_start_unix_ms: runtime_state
+                    .u128("SOLILOQUY_SOLD_START_UNIX_MS")
+                    .or_else(|| env_u128("SOLILOQUY_SOLD_START_UNIX_MS")),
+                sold_ready_unix_ms: runtime_state.u128("SOLILOQUY_SOLD_READY_UNIX_MS"),
+                servo_spawn_unix_ms: runtime_state.u128("SOLILOQUY_SERVO_SPAWN_UNIX_MS"),
+                first_frame_unix_ms: runtime_state
+                    .u128("SOLILOQUY_FIRST_FRAME_UNIX_MS")
+                    .or_else(|| env_u128("SOLILOQUY_FIRST_FRAME_UNIX_MS")),
+                interactive_unix_ms: runtime_state
+                    .u128("SOLILOQUY_BROWSER_INTERACTIVE_UNIX_MS")
+                    .or_else(|| env_u128("SOLILOQUY_BROWSER_INTERACTIVE_UNIX_MS")),
+                renderer_pid,
+                renderer_restarts: runtime_state
+                    .u64("SOLILOQUY_RENDERER_RESTARTS")
+                    .or_else(|| env_u64("SOLILOQUY_RENDERER_RESTARTS")),
+                last_renderer_exit: runtime_state.i64("SOLILOQUY_LAST_RENDERER_EXIT"),
+            },
         },
         javascript: JavascriptRuntimeStatus {
             requested_engine: requested_engine.clone(),
@@ -1106,6 +1198,7 @@ fn build_runtime_status(settings: &Settings) -> RuntimeStatus {
             x11_fallback: false,
             headless: env_flag("SOL_SERVO_HEADLESS"),
         },
+        kernel_policy: build_kernel_policy_status(renderer_pid),
         optimizations: vec![
             RuntimeOptimizationStatus {
                 id: "v8-flags",
@@ -1153,6 +1246,113 @@ fn build_runtime_status(settings: &Settings) -> RuntimeStatus {
     }
 }
 
+fn browser_service_graph(service_registry: &ServiceRegistry) -> Vec<BrowserRuntimeNode> {
+    let mut nodes: Vec<BrowserRuntimeNode> = service_registry
+        .services
+        .iter()
+        .map(|service| BrowserRuntimeNode {
+            id: service.id.clone(),
+            label: service.display_name.clone(),
+            depends_on: service.dependencies.clone(),
+            critical: !service.optional,
+            status: if service.optional {
+                "optional".to_string()
+            } else {
+                "configured".to_string()
+            },
+        })
+        .collect();
+    nodes.push(BrowserRuntimeNode {
+        id: "servo".to_string(),
+        label: "Page renderer surface".to_string(),
+        depends_on: vec!["sol-session".to_string()],
+        critical: true,
+        status: "runtime-managed".to_string(),
+    });
+    nodes.push(BrowserRuntimeNode {
+        id: "rv8".to_string(),
+        label: "Browser engine runtime".to_string(),
+        depends_on: vec!["servo".to_string()],
+        critical: true,
+        status: "external-sibling".to_string(),
+    });
+    nodes
+}
+
+fn build_kernel_policy_status(renderer_pid: Option<u64>) -> KernelPolicyStatus {
+    let cgroup_v2_available = FsPath::new("/sys/fs/cgroup/cgroup.controllers").exists();
+    let groups = vec![
+        kernel_policy_group("system", "soliloquy/system", cgroup_v2_available),
+        kernel_policy_group("browser", "soliloquy/browser", cgroup_v2_available),
+        kernel_policy_group("renderer", "soliloquy/renderer", cgroup_v2_available),
+    ];
+    KernelPolicyStatus {
+        cgroup_v2_available,
+        groups,
+        renderer_pid,
+    }
+}
+
+fn kernel_policy_group(
+    id: &'static str,
+    path: &'static str,
+    cgroup_v2_available: bool,
+) -> KernelPolicyGroupStatus {
+    KernelPolicyGroupStatus {
+        id,
+        path,
+        active: cgroup_v2_available && FsPath::new("/sys/fs/cgroup").join(path).exists(),
+    }
+}
+
+fn read_runtime_state(path: &FsPath) -> RuntimeState {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return RuntimeState::default();
+    };
+    parse_runtime_state(&raw)
+}
+
+fn parse_runtime_state(raw: &str) -> RuntimeState {
+    let mut values = HashMap::new();
+    for line in raw.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        values.insert(key.to_string(), unquote_env_value(value.trim()));
+    }
+    RuntimeState { values }
+}
+
+fn unquote_env_value(value: &str) -> String {
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        if (bytes[0] == b'\'' && bytes[value.len() - 1] == b'\'')
+            || (bytes[0] == b'"' && bytes[value.len() - 1] == b'"')
+        {
+            return value[1..value.len() - 1].to_string();
+        }
+    }
+    value.to_string()
+}
+
+impl RuntimeState {
+    fn u128(&self, key: &str) -> Option<u128> {
+        self.values.get(key)?.trim().parse().ok()
+    }
+
+    fn u64(&self, key: &str) -> Option<u64> {
+        self.values.get(key)?.trim().parse().ok()
+    }
+
+    fn i64(&self, key: &str) -> Option<i64> {
+        self.values.get(key)?.trim().parse().ok()
+    }
+}
+
 fn env_flag(name: &str) -> bool {
     matches!(
         std::env::var(name),
@@ -1162,6 +1362,14 @@ fn env_flag(name: &str) -> bool {
                 "1" | "true" | "yes"
             )
     )
+}
+
+fn env_u128(name: &str) -> Option<u128> {
+    std::env::var(name).ok()?.trim().parse().ok()
+}
+
+fn env_u64(name: &str) -> Option<u64> {
+    std::env::var(name).ok()?.trim().parse().ok()
 }
 
 fn default_system_config() -> SystemConfig {
@@ -1233,6 +1441,24 @@ fn load_package_manager_config() -> PackageManagerConfig {
 fn default_service_registry() -> ServiceRegistry {
     ServiceRegistry {
         services: vec![
+            ServiceDefinition {
+                id: "networking".to_string(),
+                display_name: "Network".to_string(),
+                run_as: "root".to_string(),
+                restart: "system".to_string(),
+                dependencies: Vec::new(),
+                optional: false,
+                state_paths: Vec::new(),
+            },
+            ServiceDefinition {
+                id: "seatd".to_string(),
+                display_name: "Seat Management".to_string(),
+                run_as: "root".to_string(),
+                restart: "always".to_string(),
+                dependencies: Vec::new(),
+                optional: false,
+                state_paths: vec!["/run/seatd.sock".to_string()],
+            },
             ServiceDefinition {
                 id: "sold".to_string(),
                 display_name: "Soliloquy Local Server".to_string(),
@@ -2052,12 +2278,44 @@ mod tests {
 
     #[test]
     fn runtime_status_is_honest_about_v8_bridge() {
-        let runtime = build_runtime_status(&Settings::default());
+        let registry = default_service_registry();
+        let state = parse_runtime_state(
+            "SOLILOQUY_SESSION_START_UNIX_MS=1000\nSOLILOQUY_RENDERER_PID=42\nSOLILOQUY_RENDERER_RESTARTS=2\n",
+        );
+        let runtime = build_runtime_status(&Settings::default(), &registry, &state);
         assert_eq!(runtime.javascript.requested_engine, "v8-experimental");
         assert_eq!(runtime.javascript.active_engine, "mozjs");
         assert!(!runtime.javascript.bridge_ready);
         assert!(runtime.javascript.servo_controls_javascript);
         assert!(!runtime.display.x11_fallback);
+        assert_eq!(runtime.browser.engine_source, "sibling-cargo-path");
+        assert_eq!(runtime.browser.boot_complete_target, "browser-interactive");
+        assert!(runtime
+            .browser
+            .service_graph
+            .iter()
+            .any(|node| node.id == "rv8"));
+        assert!(runtime
+            .browser
+            .service_graph
+            .iter()
+            .any(|node| node.id == "networking"));
+        assert_eq!(
+            runtime.browser.boot_metrics.session_start_unix_ms,
+            Some(1000)
+        );
+        assert_eq!(runtime.browser.boot_metrics.renderer_pid, Some(42));
+        assert_eq!(runtime.browser.boot_metrics.renderer_restarts, Some(2));
+        assert_eq!(runtime.kernel_policy.renderer_pid, Some(42));
+    }
+
+    #[test]
+    fn runtime_state_parses_shell_env_values() {
+        let state = parse_runtime_state(
+            "SOLILOQUY_SOLD_READY_UNIX_MS='2000'\nSOLILOQUY_LAST_RENDERER_EXIT=1\nignored\n",
+        );
+        assert_eq!(state.u128("SOLILOQUY_SOLD_READY_UNIX_MS"), Some(2000));
+        assert_eq!(state.i64("SOLILOQUY_LAST_RENDERER_EXIT"), Some(1));
     }
 
     #[tokio::test]

@@ -12,6 +12,7 @@ ALPINE_DIR="$(CDPATH='' cd -- "${SCRIPT_DIR}/.." && pwd)"
 OVERLAY_DIR="${ALPINE_DIR}/rootfs-overlay"
 OPENRC_DIR="${ALPINE_DIR}/openrc"
 BIN_SRC="${ALPINE_DIR}/scripts"
+SERVICE_REGISTRY_SRC="${ALPINE_DIR}/services.json"
 SOLILOQUY_UID="770"
 SOLILOQUY_GID="770"
 SOLD_UID="771"
@@ -89,6 +90,7 @@ mkdir -p "${ROOTFS}/tmp"
 chmod 755 "${ROOTFS}/tmp"
 
 cp -R "${OVERLAY_DIR}/." "${ROOTFS}/"
+cp "${OPENRC_DIR}/seatd" "${ROOTFS}/etc/init.d/seatd"
 cp "${OPENRC_DIR}/sol-session" "${ROOTFS}/etc/init.d/sol-session"
 if [ -f "${OPENRC_DIR}/sold" ]; then
   cp "${OPENRC_DIR}/sold" "${ROOTFS}/etc/init.d/sold"
@@ -97,6 +99,7 @@ cp "${BIN_SRC}/sol-session-start" "${ROOTFS}/usr/local/bin/sol-session-start"
 cp "${BIN_SRC}/sol-servo-wrapper" "${ROOTFS}/usr/local/bin/sol-servo-wrapper"
 
 chmod +x \
+  "${ROOTFS}/etc/init.d/seatd" \
   "${ROOTFS}/etc/init.d/sol-session" \
   "${ROOTFS}/etc/init.d/sold" \
   "${ROOTFS}/usr/local/bin/sol-session-start" \
@@ -206,12 +209,6 @@ cat > "${ROOTFS}/etc/soliloquy/plugins/remote-sync.json" <<'EOF'
     "clipboard": false
   },
   "packages": [
-    {
-      "version": "0.1.0",
-      "filename": "remote-sync-0.1.0.sqplug",
-      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "signature": "dev-signature-placeholder"
-    }
   ]
 }
 EOF
@@ -222,45 +219,7 @@ cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-installs.json" <<'EOF'
 }
 EOF
 
-cat > "${ROOTFS}/etc/soliloquy/services.json" <<'EOF'
-{
-  "services": [
-    {
-      "id": "sold",
-      "display_name": "Soliloquy Local Server",
-      "run_as": "sold",
-      "restart": "always",
-      "dependencies": ["networking"],
-      "state_paths": [
-        "/var/lib/soliloquy/system",
-        "/var/log/soliloquy"
-      ]
-    },
-    {
-      "id": "sol-session",
-      "display_name": "Soliloquy Session",
-      "run_as": "root",
-      "restart": "always",
-      "dependencies": ["sold", "seatd"],
-      "state_paths": [
-        "/run/user/0",
-        "/var/lib/soliloquy/browser"
-      ]
-    },
-    {
-      "id": "remote-sync",
-      "display_name": "Remote Sync Plugin",
-      "run_as": "sold",
-      "restart": "on-failure",
-      "dependencies": ["sold"],
-      "optional": true,
-      "state_paths": [
-        "/var/lib/soliloquy/system/plugins"
-      ]
-    }
-  ]
-}
-EOF
+cp "${SERVICE_REGISTRY_SRC}" "${ROOTFS}/etc/soliloquy/services.json"
 
 cat > "${ROOTFS}/etc/soliloquy/update-policy.json" <<'EOF'
 {
@@ -323,7 +282,7 @@ chmod +x "${ROOTFS}/etc/local.d/soliloquy-firstboot.start"
 # Make default runlevel explicit and minimal.
 mkdir -p "${ROOTFS}/etc/runlevels/default"
 find "${ROOTFS}/etc/runlevels/default" -mindepth 1 -maxdepth 1 -exec rm -f {} +
-for svc in local networking seatd sold; do
+for svc in local networking seatd sold sol-session; do
   if [ -f "${ROOTFS}/etc/init.d/${svc}" ]; then
     ln -sf "/etc/init.d/${svc}" "${ROOTFS}/etc/runlevels/default/${svc}"
   fi

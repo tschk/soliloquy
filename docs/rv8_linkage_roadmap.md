@@ -27,7 +27,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - RV8 now returns typed `ExecuteScript` results over renderer IPC instead of logging string-only callback placeholders.
 - RV8's local V8 DOM handles now support basic mutation/event behavior: `appendChild`, `removeChild`, `setAttribute`, `getAttribute`, `textContent`, `querySelector`, and `addEventListener`.
 - RV8's compositor now keeps a bounded present-pass queue alongside recent damage history.
-- A standalone local `../rv8` repository exists for browser-engine work; Soliloquy still builds the in-tree `src/rv8` crate until that sibling becomes a Git submodule or dependency.
+- A standalone local `../rv8` repository is the canonical browser-engine checkout; Soliloquy no longer builds an in-repo RV8 crate as an active workspace member.
 - The appliance session launches Servo with its built-in browser chrome disabled so the Svelte appliance shell provides the only browser UI surface.
 - The Svelte appliance shell now has Zen-style vertical tabs, compact mode, split columns, split rows, and grid modes.
 - The macOS desktop path launches Crepuscularity GPUI chrome from `../crepuscularity` and starts Servo with `--no-browser-chrome`; it does not start `sold` or the Svelte appliance shell.

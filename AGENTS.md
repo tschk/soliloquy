@@ -31,7 +31,7 @@ Build paths currently coexist:
     src/shell/          Rust shell: servo_embedder, v8_runtime, engine_bridge, platform/*
     src/shell/net/      Networking: quic.rs, resource_loader.rs, connection_manager.rs,
                         speculation.rs, code_cache.rs
-    src/rv8/            RV8 browser engine: core/, ipc/, renderer/, js/, servo_embed/
+    ../rv8/             Canonical RV8 browser engine: core/, ipc/, renderer/, js/, servo_embed/
     src/memory/         Tab residency, compression, pressure monitoring, disk storage
     src/gpu/            layout_compute.rs, compositor.rs, wgpu_integration.rs
     src/cache/          unified.rs (LRU), texture_atlas.rs, disk_cache.rs
@@ -50,7 +50,7 @@ Shell (src/shell/Cargo.toml):
 - Networking: quinn 0.11 (QUIC), rustls 0.23, hyper 1.4, reqwest 0.12
 - FIDL stubs in gen/fidl/ (mock impls for host builds)
 
-RV8 (src/rv8/):
+RV8 (../rv8/):
 - ipc-channel for real multi-process IPC (bootstrap server pattern)
 - html5ever for HTML tokenization/parsing
 

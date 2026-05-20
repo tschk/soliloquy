@@ -5,6 +5,8 @@ SOLILOQUY_RUNTIME_ENV="${SOLILOQUY_RUNTIME_ENV:-/var/lib/soliloquy/files/runtime
 if [ -f "${SOLILOQUY_RUNTIME_ENV}" ]; then
   . "${SOLILOQUY_RUNTIME_ENV}"
 fi
+SOLILOQUY_RUNTIME_STATE_ENV="${SOLILOQUY_RUNTIME_STATE_ENV:-/run/soliloquy/runtime-state.env}"
+mkdir -p "$(dirname "${SOLILOQUY_RUNTIME_STATE_ENV}")"
 
 START_URL="${SOL_START_URL:-os://terminal}"
 # Terminal UI from sold (same HTML as bundle/terminal — black chrome + canvas). Override with SOL_LAUNCH_URL.
@@ -81,6 +83,39 @@ export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 # One sink only: parent (cage) usually redirects stderr to serial — avoid duplicate lines.
 log() {
   printf '[sol-servo] %s\n' "$1" >&2
+}
+
+now_unix_ms() {
+  printf '%s000\n' "$(date +%s)"
+}
+
+record_runtime_state() {
+  key="$1"
+  value="$2"
+  tmp="${SOLILOQUY_RUNTIME_STATE_ENV}.$$"
+  if [ -f "${SOLILOQUY_RUNTIME_STATE_ENV}" ]; then
+    grep -v "^${key}=" "${SOLILOQUY_RUNTIME_STATE_ENV}" >"${tmp}" || true
+  else
+    : >"${tmp}"
+  fi
+  printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
+  mv "${tmp}" "${SOLILOQUY_RUNTIME_STATE_ENV}"
+}
+
+runtime_state_value() {
+  key="$1"
+  if [ -f "${SOLILOQUY_RUNTIME_STATE_ENV}" ]; then
+    grep "^${key}=" "${SOLILOQUY_RUNTIME_STATE_ENV}" | tail -n 1 | cut -d= -f2-
+  fi
+}
+
+attach_to_cgroup() {
+  group="$1"
+  pid="$2"
+  path="/sys/fs/cgroup/soliloquy/${group}"
+  if [ -f /sys/fs/cgroup/cgroup.controllers ] && mkdir -p "${path}" 2>/dev/null; then
+    printf '%s\n' "${pid}" >"${path}/cgroup.procs" 2>/dev/null || true
+  fi
 }
 
 dump_servo_process_state() {
@@ -177,6 +212,9 @@ else
   "$@" &
 fi
 servo_pid=$!
+record_runtime_state SOLILOQUY_SERVO_SPAWN_UNIX_MS "$(now_unix_ms)"
+record_runtime_state SOLILOQUY_RENDERER_PID "${servo_pid}"
+attach_to_cgroup renderer "${servo_pid}"
 
 if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
   log "servo pid=${servo_pid} (verbose poll)"
@@ -195,8 +233,16 @@ if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
   fi
 fi
 
+set +e
 wait "${servo_pid}"
 status=$?
+set -e
+record_runtime_state SOLILOQUY_LAST_RENDERER_EXIT "${status}"
+renderer_restarts="$(runtime_state_value SOLILOQUY_RENDERER_RESTARTS)"
+case "${renderer_restarts}" in
+  ''|*[!0-9]*) renderer_restarts=0 ;;
+esac
+record_runtime_state SOLILOQUY_RENDERER_RESTARTS "$((renderer_restarts + 1))"
 if [ "${status}" != 0 ] || [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
   log "servo exited status ${status}"
 fi

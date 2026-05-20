@@ -14,6 +14,45 @@ export SOLILOQUY_PLUGIN_MANIFEST_DIR="/etc/soliloquy/plugins"
 export SOLILOQUY_UPDATE_POLICY_FILE="/etc/soliloquy/update-policy.json"
 export SOLILOQUY_UPDATE_STATE_FILE="/var/lib/soliloquy/system/update-state.json"
 export SOLILOQUY_PACKAGE_MANAGER_FILE="/etc/soliloquy/package-manager.json"
+export SOLILOQUY_RUNTIME_STATE_ENV="${SOLILOQUY_RUNTIME_STATE_ENV:-/run/soliloquy/runtime-state.env}"
+
+now_unix_ms() {
+    printf '%s000\n' "$(date +%s)"
+}
+
+record_runtime_state() {
+    key="$1"
+    value="$2"
+    dir="$(dirname "${SOLILOQUY_RUNTIME_STATE_ENV}")"
+    tmp="${SOLILOQUY_RUNTIME_STATE_ENV}.$$"
+    mkdir -p "${dir}"
+    if [ -f "${SOLILOQUY_RUNTIME_STATE_ENV}" ]; then
+        grep -v "^${key}=" "${SOLILOQUY_RUNTIME_STATE_ENV}" >"${tmp}" || true
+    else
+        : >"${tmp}"
+    fi
+    printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
+    mv "${tmp}" "${SOLILOQUY_RUNTIME_STATE_ENV}"
+}
+
+attach_to_cgroup() {
+    group="$1"
+    pid="$2"
+    path="/sys/fs/cgroup/soliloquy/${group}"
+    if [ -f /sys/fs/cgroup/cgroup.controllers ] && mkdir -p "${path}" 2>/dev/null; then
+        printf '%s\n' "${pid}" >"${path}/cgroup.procs" 2>/dev/null || true
+    fi
+}
+
+start_pre() {
+    record_runtime_state SOLILOQUY_SOLD_START_UNIX_MS "$(now_unix_ms)"
+}
+
+start_post() {
+    if [ -f "${pidfile}" ]; then
+        attach_to_cgroup system "$(cat "${pidfile}")"
+    fi
+}
 
 depend() {
     need localmount networking

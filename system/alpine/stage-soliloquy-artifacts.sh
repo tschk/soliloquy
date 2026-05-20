@@ -15,28 +15,14 @@ cd "${PROJECT_ROOT}"
 echo "Copying binaries..."
 cp "target/x86_64-unknown-linux-musl/release/soliloquy_shell" "${ROOTFS_DIR}/usr/local/bin/"
 cp "target/x86_64-unknown-linux-musl/release/sold" "${ROOTFS_DIR}/usr/local/bin/"
-cp "target/x86_64-unknown-linux-musl/release/rv8" "${ROOTFS_DIR}/usr/local/bin/"
+cp "${SCRIPT_DIR}/scripts/sol-session-start" "${ROOTFS_DIR}/usr/local/bin/sol-session-start"
+cp "${SCRIPT_DIR}/scripts/sol-servo-wrapper" "${ROOTFS_DIR}/usr/local/bin/sol-servo-wrapper"
+chmod +x "${ROOTFS_DIR}/usr/local/bin/sol-session-start" "${ROOTFS_DIR}/usr/local/bin/sol-servo-wrapper"
 
 WAX_BIN="${PROJECT_ROOT}/../wax/build/wax"
 if [ -x "${WAX_BIN}" ]; then
     cp "${WAX_BIN}" "${ROOTFS_DIR}/usr/local/bin/wax"
 fi
-
-# Create sol-session script
-cat > "${ROOTFS_DIR}/usr/local/bin/sol-session" << 'EOF'
-#!/bin/sh
-# Soliloquy session launcher
-
-# Wait for sold to be ready
-while ! wget -q -O /dev/null http://127.0.0.1:8080/health; do
-    sleep 1
-done
-
-# Launch cage with Servo
-exec cage -- soliloquy_shell --url http://127.0.0.1:8080
-EOF
-
-chmod +x "${ROOTFS_DIR}/usr/local/bin/sol-session"
 
 # Stage browser bundle
 rm -rf "${ROOTFS_DIR}/usr/local/share/soliloquy/bundle"
