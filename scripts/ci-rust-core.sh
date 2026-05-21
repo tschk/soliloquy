@@ -3,11 +3,14 @@ set -eu
 
 REPO_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
+CREPUSCULARITY_GPUI="${REPO_ROOT}/../crepuscularity/crates/crepuscularity-gpui/Cargo.toml"
 
 fail() {
   printf 'ci-rust-core: %s\n' "$1" >&2
   exit 1
 }
+
+[ -f "${CREPUSCULARITY_GPUI}" ] || fail "missing sibling crepuscularity checkout at ../crepuscularity"
 
 metadata="$(cargo metadata --no-deps --format-version 1)"
 printf '%s\n' "${metadata}" | grep -q '"name":"rv8"' && fail "rv8 must not be a root workspace package"

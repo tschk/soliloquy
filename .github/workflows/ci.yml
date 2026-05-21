@@ -24,5 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Check out Crepuscularity path dependency
+        run: git clone --depth 1 https://github.com/tschk/crepuscularity.git ../crepuscularity
       - name: Check Rust core
         run: scripts/ci-rust-core.sh
