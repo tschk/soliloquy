@@ -112,6 +112,10 @@ runtime_state_value() {
 attach_to_cgroup() {
   group="$1"
   pid="$2"
+  if [ -x /usr/local/bin/sol-kernelctl ]; then
+    /usr/local/bin/sol-kernelctl attach --group "${group}" --pid "${pid}" >/dev/null 2>&1 || true
+    return
+  fi
   path="/sys/fs/cgroup/soliloquy/${group}"
   if [ -f /sys/fs/cgroup/cgroup.controllers ] && mkdir -p "${path}" 2>/dev/null; then
     printf '%s\n' "${pid}" >"${path}/cgroup.procs" 2>/dev/null || true

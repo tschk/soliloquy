@@ -93,20 +93,24 @@ chmod 755 "${ROOTFS}/tmp"
 cp -R "${OVERLAY_DIR}/." "${ROOTFS}/"
 cp "${OPENRC_DIR}/seatd" "${ROOTFS}/etc/init.d/seatd"
 cp "${OPENRC_DIR}/sol-kernel-policy" "${ROOTFS}/etc/init.d/sol-kernel-policy"
+cp "${OPENRC_DIR}/sol-zram" "${ROOTFS}/etc/init.d/sol-zram"
 cp "${OPENRC_DIR}/sol-session" "${ROOTFS}/etc/init.d/sol-session"
 if [ -f "${OPENRC_DIR}/sold" ]; then
   cp "${OPENRC_DIR}/sold" "${ROOTFS}/etc/init.d/sold"
 fi
 cp "${BIN_SRC}/apply-kernel-policy.sh" "${ROOTFS}/usr/local/bin/apply-kernel-policy.sh"
+cp "${BIN_SRC}/apply-zram-policy.sh" "${ROOTFS}/usr/local/bin/apply-zram-policy.sh"
 cp "${BIN_SRC}/sol-session-start" "${ROOTFS}/usr/local/bin/sol-session-start"
 cp "${BIN_SRC}/sol-servo-wrapper" "${ROOTFS}/usr/local/bin/sol-servo-wrapper"
 
 chmod +x \
   "${ROOTFS}/etc/init.d/seatd" \
   "${ROOTFS}/etc/init.d/sol-kernel-policy" \
+  "${ROOTFS}/etc/init.d/sol-zram" \
   "${ROOTFS}/etc/init.d/sol-session" \
   "${ROOTFS}/etc/init.d/sold" \
   "${ROOTFS}/usr/local/bin/apply-kernel-policy.sh" \
+  "${ROOTFS}/usr/local/bin/apply-zram-policy.sh" \
   "${ROOTFS}/usr/local/bin/sol-session-start" \
   "${ROOTFS}/usr/local/bin/sol-servo-wrapper" \
   "${ROOTFS}/init"
@@ -300,6 +304,7 @@ if command -v rc-update >/dev/null 2>&1; then
   rc-update add networking default >/dev/null 2>&1 || true
   rc-update add seatd default >/dev/null 2>&1 || true
   rc-update add sol-kernel-policy default >/dev/null 2>&1 || true
+  rc-update add sol-zram default >/dev/null 2>&1 || true
 fi
 EOF
 
@@ -308,7 +313,7 @@ chmod +x "${ROOTFS}/etc/local.d/soliloquy-firstboot.start"
 # Make default runlevel explicit and minimal.
 mkdir -p "${ROOTFS}/etc/runlevels/default"
 find "${ROOTFS}/etc/runlevels/default" -mindepth 1 -maxdepth 1 -exec rm -f {} +
-for svc in networking seatd sol-kernel-policy sold sol-session; do
+for svc in networking seatd sol-kernel-policy sol-zram sold sol-session; do
   if [ -f "${ROOTFS}/etc/init.d/${svc}" ]; then
     ln -sf "/etc/init.d/${svc}" "${ROOTFS}/etc/runlevels/default/${svc}"
   fi

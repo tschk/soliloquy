@@ -22,6 +22,8 @@ if [ -w /proc/sys/net/core/wmem_default ]; then
   echo 8388608 >/proc/sys/net/core/wmem_default 2>/dev/null || true
 fi
 mount -t sysfs sysfs /sys || true
+mkdir -p /sys/fs/cgroup
+mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null || true
 mount -t tmpfs tmpfs /run || true
 mount -t tmpfs -o mode=755,nosuid,nodev tmpfs /tmp || true
 

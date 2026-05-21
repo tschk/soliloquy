@@ -48,6 +48,8 @@ test -L CLAUDE.md || fail "CLAUDE.md must be a symlink"
 for path in \
   system/alpine/scripts/configure-rootfs.sh \
   system/alpine/scripts/apply-kernel-policy.sh \
+  system/alpine/scripts/apply-zram-policy.sh \
+  system/alpine/scripts/audit-package-budget.sh \
   system/alpine/scripts/build-native-policy-modules.sh \
   system/alpine/scripts/sol-session-start \
   system/alpine/scripts/sol-servo-wrapper \
@@ -55,6 +57,7 @@ for path in \
   system/alpine/openrc/sold \
   system/alpine/openrc/sol-session \
   system/alpine/openrc/sol-kernel-policy \
+  system/alpine/openrc/sol-zram \
   system/alpine/openrc/seatd
 do
   assert_file "${path}"
@@ -78,7 +81,14 @@ assert_contains system/alpine/openrc/sol-session '^respawn=YES$'
 assert_contains system/alpine/openrc/sol-session 'need sold seatd'
 assert_contains system/alpine/openrc/sold 'need localmount networking'
 assert_contains system/alpine/openrc/sol-kernel-policy 'apply-kernel-policy.sh'
+assert_contains system/alpine/openrc/sol-zram 'apply-zram-policy.sh'
 assert_contains system/alpine/openrc/seatd '^command_background="yes"$'
+assert_file system/alpine/rootfs-overlay/etc/modprobe.d/soliloquy-browser-appliance.conf
+assert_file system/alpine/rootfs-overlay/etc/modules-load.d/soliloquy-browser-appliance.conf
+assert_contains system/alpine/rootfs-overlay/etc/modprobe.d/soliloquy-browser-appliance.conf '^blacklist bluetooth$'
+assert_contains system/alpine/rootfs-overlay/etc/modprobe.d/soliloquy-browser-appliance.conf '^blacklist usb_storage$'
+assert_contains system/alpine/rootfs-overlay/etc/modules-load.d/soliloquy-browser-appliance.conf '^zram$'
+assert_contains system/alpine/rootfs-overlay/init 'mount -t cgroup2 cgroup2 /sys/fs/cgroup'
 assert_contains system/alpine/rootfs-overlay/etc/inittab '^::wait:/sbin/openrc default$'
 assert_not_contains system/alpine/rootfs-overlay/etc/inittab 'sol-session-start'
 
@@ -87,13 +97,24 @@ assert_contains system/alpine/scripts/apply-kernel-policy.sh 'sol-kernelctl'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'cgroup.subtree_control'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'memory.high'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'io.weight'
+assert_contains system/alpine/scripts/apply-zram-policy.sh 'modprobe zram'
+assert_contains system/alpine/scripts/apply-zram-policy.sh 'swapon -p 100 /dev/zram0'
+assert_contains system/alpine/scripts/audit-package-budget.sh 'SOLILOQUY_MAX_RUNTIME_PACKAGES'
 assert_contains system/alpine/packages-v0.txt '^font-dejavu$'
 assert_not_contains system/alpine/packages-v0.txt '^xwayland$|^gcompat$|^font-noto$'
 assert_contains system/alpine/scripts/sol-session-start 'SOLILOQUY_RUNTIME_STATE_ENV'
+assert_contains system/alpine/scripts/sol-session-start 'SOL_KERNEL_POLICY_REQUIRED'
+assert_contains system/alpine/rootfs-overlay/etc/conf.d/sol-session '^SOL_KERNEL_POLICY_REQUIRED=1$'
+assert_contains system/alpine/rootfs-overlay/etc/conf.d/sol-session '^SOL_SESSION_X11_FALLBACK=0$'
+assert_contains system/alpine/scripts/sol-session-start 'WLR_XWAYLAND'
+assert_contains system/alpine/scripts/sol-session-start 'sol-kernelctl attach --group'
 assert_contains system/alpine/scripts/sol-session-start 'attach_to_cgroup browser'
 assert_contains system/alpine/scripts/sol-servo-wrapper 'attach_to_cgroup renderer'
+assert_contains system/alpine/scripts/sol-servo-wrapper 'sol-kernelctl attach --group'
 assert_contains system/alpine/openrc/sold 'attach_to_cgroup system'
+assert_contains system/alpine/openrc/sold 'sol-kernelctl attach --group'
 assert_contains system/alpine/services.json '"id": "networking"'
+assert_contains system/alpine/services.json '"id": "sol-zram"'
 assert_contains system/alpine/services.json '"id": "sold"'
 assert_contains system/alpine/services.json '"id": "sol-session"'
 assert_not_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'src/rv8|release/rv8|cargo .*rv8'
@@ -111,7 +132,7 @@ done
 
 system/alpine/scripts/configure-rootfs.sh "${tmp_root}" >/dev/null
 
-for service in networking seatd sol-kernel-policy sold sol-session; do
+for service in networking seatd sol-kernel-policy sol-zram sold sol-session; do
   assert_runlevel_service "${tmp_root}" "${service}"
 done
 
@@ -121,15 +142,20 @@ assert_file "${tmp_root}/etc/soliloquy/kernel-policy.json"
 assert_file "${tmp_root}/etc/soliloquy/package-manager.json"
 assert_file "${tmp_root}/var/lib/soliloquy/system/plugin-installs.json"
 assert_executable "${tmp_root}/etc/init.d/sol-kernel-policy"
+assert_executable "${tmp_root}/etc/init.d/sol-zram"
 assert_executable "${tmp_root}/usr/local/bin/apply-kernel-policy.sh"
+assert_executable "${tmp_root}/usr/local/bin/apply-zram-policy.sh"
 assert_executable "${tmp_root}/usr/local/bin/sol-session-start"
 assert_executable "${tmp_root}/usr/local/bin/sol-servo-wrapper"
 assert_not_contains "${tmp_root}/etc/inittab" 'sol-session-start'
 assert_contains "${tmp_root}/etc/rc.conf" '^rc_parallel="YES"$'
 assert_contains "${tmp_root}/etc/sysctl.d/99-soliloquy-internet-os.conf" '^net.core.somaxconn=4096$'
+assert_contains "${tmp_root}/etc/modprobe.d/soliloquy-browser-appliance.conf" '^blacklist usb_storage$'
+assert_contains "${tmp_root}/etc/modules-load.d/soliloquy-browser-appliance.conf" '^zram$'
 assert_contains "${tmp_root}/var/lib/soliloquy/system/plugin-installs.json" '"plugins": \[\]'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "seatd"'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-kernel-policy"'
+assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-zram"'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-session"'
 [ ! -e "${tmp_root}/etc/runlevels/default/local" ] || fail "local must not block browser appliance boot"
 

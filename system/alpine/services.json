@@ -36,7 +36,8 @@
       "restart": "always",
       "dependencies": [
         "networking",
-        "sol-kernel-policy"
+        "sol-kernel-policy",
+        "sol-zram"
       ],
       "state_paths": [
         "/var/lib/soliloquy/system",
@@ -50,11 +51,26 @@
       "restart": "always",
       "dependencies": [
         "sold",
-        "seatd"
+        "seatd",
+        "sol-zram"
       ],
       "state_paths": [
         "/run/user/0",
         "/var/lib/soliloquy/browser"
+      ]
+    },
+    {
+      "id": "sol-zram",
+      "display_name": "Compressed Swap",
+      "run_as": "root",
+      "restart": "system",
+      "dependencies": [
+        "sol-kernel-policy"
+      ],
+      "state_paths": [
+        "/dev/zram0",
+        "/proc/swaps",
+        "/run/soliloquy/runtime-state.env"
       ]
     },
     {

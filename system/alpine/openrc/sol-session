@@ -6,7 +6,7 @@ command="/usr/local/bin/sol-session-start"
 command_user="root"
 
 depend() {
-    need sold seatd sol-kernel-policy
+    need sold seatd sol-kernel-policy sol-zram
 }
 
 respawn=YES
