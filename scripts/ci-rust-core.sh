@@ -4,20 +4,31 @@ set -eu
 REPO_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "${REPO_ROOT}"
 CREPUSCULARITY_GPUI="${REPO_ROOT}/../crepuscularity/crates/crepuscularity-gpui/Cargo.toml"
+CARGO_CONFIG_BACKUP=""
 
 fail() {
   printf 'ci-rust-core: %s\n' "$1" >&2
   exit 1
 }
 
-cargo_ci() {
-  cargo \
-    --config 'target.x86_64-unknown-linux-gnu.linker="cc"' \
-    --config 'target.x86_64-unknown-linux-gnu.rustflags=[]' \
-    "$@"
+restore_cargo_config() {
+  if [ -n "${CARGO_CONFIG_BACKUP}" ] && [ -f "${CARGO_CONFIG_BACKUP}" ]; then
+    mv "${CARGO_CONFIG_BACKUP}" .cargo/config.toml
+  fi
 }
 
+cargo_ci() {
+  cargo "$@"
+}
+
+trap restore_cargo_config EXIT INT TERM
+
 [ -f "${CREPUSCULARITY_GPUI}" ] || fail "missing sibling crepuscularity checkout at ../crepuscularity"
+
+if [ -f .cargo/config.toml ]; then
+  CARGO_CONFIG_BACKUP=".cargo/config.toml.ci-disabled"
+  mv .cargo/config.toml "${CARGO_CONFIG_BACKUP}"
+fi
 
 metadata="$(cargo_ci metadata --no-deps --format-version 1)"
 printf '%s\n' "${metadata}" | grep -q '"name":"rv8"' && fail "rv8 must not be a root workspace package"
