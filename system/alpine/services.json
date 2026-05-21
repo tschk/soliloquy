@@ -19,12 +19,24 @@
       ]
     },
     {
+      "id": "sol-kernel-policy",
+      "display_name": "Kernel Policy",
+      "run_as": "root",
+      "restart": "system",
+      "dependencies": [],
+      "state_paths": [
+        "/sys/fs/cgroup/soliloquy",
+        "/run/soliloquy/runtime-state.env"
+      ]
+    },
+    {
       "id": "sold",
       "display_name": "Soliloquy Local Server",
       "run_as": "sold",
       "restart": "always",
       "dependencies": [
-        "networking"
+        "networking",
+        "sol-kernel-policy"
       ],
       "state_paths": [
         "/var/lib/soliloquy/system",

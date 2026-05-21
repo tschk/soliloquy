@@ -13,6 +13,7 @@ OVERLAY_DIR="${ALPINE_DIR}/rootfs-overlay"
 OPENRC_DIR="${ALPINE_DIR}/openrc"
 BIN_SRC="${ALPINE_DIR}/scripts"
 SERVICE_REGISTRY_SRC="${ALPINE_DIR}/services.json"
+KERNEL_POLICY_SRC="${ALPINE_DIR}/kernel-policy.json"
 SOLILOQUY_UID="770"
 SOLILOQUY_GID="770"
 SOLD_UID="771"
@@ -91,17 +92,21 @@ chmod 755 "${ROOTFS}/tmp"
 
 cp -R "${OVERLAY_DIR}/." "${ROOTFS}/"
 cp "${OPENRC_DIR}/seatd" "${ROOTFS}/etc/init.d/seatd"
+cp "${OPENRC_DIR}/sol-kernel-policy" "${ROOTFS}/etc/init.d/sol-kernel-policy"
 cp "${OPENRC_DIR}/sol-session" "${ROOTFS}/etc/init.d/sol-session"
 if [ -f "${OPENRC_DIR}/sold" ]; then
   cp "${OPENRC_DIR}/sold" "${ROOTFS}/etc/init.d/sold"
 fi
+cp "${BIN_SRC}/apply-kernel-policy.sh" "${ROOTFS}/usr/local/bin/apply-kernel-policy.sh"
 cp "${BIN_SRC}/sol-session-start" "${ROOTFS}/usr/local/bin/sol-session-start"
 cp "${BIN_SRC}/sol-servo-wrapper" "${ROOTFS}/usr/local/bin/sol-servo-wrapper"
 
 chmod +x \
   "${ROOTFS}/etc/init.d/seatd" \
+  "${ROOTFS}/etc/init.d/sol-kernel-policy" \
   "${ROOTFS}/etc/init.d/sol-session" \
   "${ROOTFS}/etc/init.d/sold" \
+  "${ROOTFS}/usr/local/bin/apply-kernel-policy.sh" \
   "${ROOTFS}/usr/local/bin/sol-session-start" \
   "${ROOTFS}/usr/local/bin/sol-servo-wrapper" \
   "${ROOTFS}/init"
@@ -220,6 +225,27 @@ cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-installs.json" <<'EOF'
 EOF
 
 cp "${SERVICE_REGISTRY_SRC}" "${ROOTFS}/etc/soliloquy/services.json"
+cp "${KERNEL_POLICY_SRC}" "${ROOTFS}/etc/soliloquy/kernel-policy.json"
+
+mkdir -p "${ROOTFS}/etc/sysctl.d"
+cat > "${ROOTFS}/etc/sysctl.d/99-soliloquy-internet-os.conf" <<'EOF'
+net.core.somaxconn=4096
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+net.ipv4.tcp_fastopen=3
+net.ipv4.tcp_fin_timeout=15
+net.ipv4.tcp_keepalive_time=60
+net.ipv4.tcp_mtu_probing=1
+net.ipv4.tcp_syncookies=1
+net.ipv4.tcp_tw_reuse=1
+net.ipv4.ip_forward=0
+net.ipv4.conf.all.accept_redirects=0
+net.ipv4.conf.all.rp_filter=2
+net.ipv4.conf.all.send_redirects=0
+vm.swappiness=20
+vm.vfs_cache_pressure=50
+kernel.unprivileged_bpf_disabled=1
+EOF
 
 cat > "${ROOTFS}/etc/soliloquy/update-policy.json" <<'EOF'
 {
@@ -271,9 +297,9 @@ if command -v rc-update >/dev/null 2>&1; then
   for svc in acpid avahi-daemon bluetooth cron cupsd hwdrivers localmount machine-id nftables syslog wpa_supplicant; do
     rc-update del "${svc}" default >/dev/null 2>&1 || true
   done
-  rc-update add local default >/dev/null 2>&1 || true
   rc-update add networking default >/dev/null 2>&1 || true
   rc-update add seatd default >/dev/null 2>&1 || true
+  rc-update add sol-kernel-policy default >/dev/null 2>&1 || true
 fi
 EOF
 
@@ -282,7 +308,7 @@ chmod +x "${ROOTFS}/etc/local.d/soliloquy-firstboot.start"
 # Make default runlevel explicit and minimal.
 mkdir -p "${ROOTFS}/etc/runlevels/default"
 find "${ROOTFS}/etc/runlevels/default" -mindepth 1 -maxdepth 1 -exec rm -f {} +
-for svc in local networking seatd sold sol-session; do
+for svc in networking seatd sol-kernel-policy sold sol-session; do
   if [ -f "${ROOTFS}/etc/init.d/${svc}" ]; then
     ln -sf "/etc/init.d/${svc}" "${ROOTFS}/etc/runlevels/default/${svc}"
   fi

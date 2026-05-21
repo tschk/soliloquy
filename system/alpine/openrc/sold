@@ -55,6 +55,6 @@ start_post() {
 }
 
 depend() {
-    need localmount networking
+    need localmount networking sol-kernel-policy
     after seatd
 }

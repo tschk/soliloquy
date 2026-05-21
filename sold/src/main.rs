@@ -425,16 +425,78 @@ struct RuntimeOptimizationStatus {
 
 #[derive(Serialize)]
 struct KernelPolicyStatus {
+    profile: String,
     cgroup_v2_available: bool,
+    cgroups_state: Option<String>,
     groups: Vec<KernelPolicyGroupStatus>,
     renderer_pid: Option<u64>,
 }
 
 #[derive(Serialize)]
 struct KernelPolicyGroupStatus {
-    id: &'static str,
-    path: &'static str,
+    id: String,
+    path: String,
     active: bool,
+    cpu_weight: Option<u64>,
+    io_weight: Option<u64>,
+    memory_high: Option<String>,
+    memory_max: Option<String>,
+    pids_max: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(default)]
+struct KernelPolicyConfig {
+    profile: String,
+    groups: Vec<KernelPolicyGroupConfig>,
+}
+
+#[derive(Deserialize, Clone)]
+struct KernelPolicyGroupConfig {
+    id: String,
+    path: String,
+    cpu_weight: Option<u64>,
+    io_weight: Option<u64>,
+    memory_high: Option<String>,
+    memory_max: Option<String>,
+    pids_max: Option<u64>,
+}
+
+impl Default for KernelPolicyConfig {
+    fn default() -> Self {
+        Self {
+            profile: "internet-appliance".to_string(),
+            groups: vec![
+                KernelPolicyGroupConfig {
+                    id: "system".to_string(),
+                    path: "soliloquy/system".to_string(),
+                    cpu_weight: Some(100),
+                    io_weight: Some(100),
+                    memory_high: Some("256M".to_string()),
+                    memory_max: None,
+                    pids_max: Some(128),
+                },
+                KernelPolicyGroupConfig {
+                    id: "browser".to_string(),
+                    path: "soliloquy/browser".to_string(),
+                    cpu_weight: Some(300),
+                    io_weight: Some(300),
+                    memory_high: Some("768M".to_string()),
+                    memory_max: None,
+                    pids_max: Some(256),
+                },
+                KernelPolicyGroupConfig {
+                    id: "renderer".to_string(),
+                    path: "soliloquy/renderer".to_string(),
+                    cpu_weight: Some(800),
+                    io_weight: Some(800),
+                    memory_high: Some("1536M".to_string()),
+                    memory_max: Some("2304M".to_string()),
+                    pids_max: Some(512),
+                },
+            ],
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1198,7 +1260,7 @@ fn build_runtime_status(
             x11_fallback: false,
             headless: env_flag("SOL_SERVO_HEADLESS"),
         },
-        kernel_policy: build_kernel_policy_status(renderer_pid),
+        kernel_policy: build_kernel_policy_status(renderer_pid, runtime_state),
         optimizations: vec![
             RuntimeOptimizationStatus {
                 id: "v8-flags",
@@ -1279,30 +1341,51 @@ fn browser_service_graph(service_registry: &ServiceRegistry) -> Vec<BrowserRunti
     nodes
 }
 
-fn build_kernel_policy_status(renderer_pid: Option<u64>) -> KernelPolicyStatus {
+fn build_kernel_policy_status(
+    renderer_pid: Option<u64>,
+    runtime_state: &RuntimeState,
+) -> KernelPolicyStatus {
+    let config = read_kernel_policy_config();
     let cgroup_v2_available = FsPath::new("/sys/fs/cgroup/cgroup.controllers").exists();
-    let groups = vec![
-        kernel_policy_group("system", "soliloquy/system", cgroup_v2_available),
-        kernel_policy_group("browser", "soliloquy/browser", cgroup_v2_available),
-        kernel_policy_group("renderer", "soliloquy/renderer", cgroup_v2_available),
-    ];
+    let groups = config
+        .groups
+        .iter()
+        .map(|group| kernel_policy_group(group, cgroup_v2_available))
+        .collect();
     KernelPolicyStatus {
+        profile: runtime_state
+            .string("SOLILOQUY_KERNEL_POLICY_PROFILE")
+            .unwrap_or(config.profile),
         cgroup_v2_available,
+        cgroups_state: runtime_state.string("SOLILOQUY_KERNEL_POLICY_CGROUPS"),
         groups,
         renderer_pid,
     }
 }
 
 fn kernel_policy_group(
-    id: &'static str,
-    path: &'static str,
+    config: &KernelPolicyGroupConfig,
     cgroup_v2_available: bool,
 ) -> KernelPolicyGroupStatus {
     KernelPolicyGroupStatus {
-        id,
-        path,
-        active: cgroup_v2_available && FsPath::new("/sys/fs/cgroup").join(path).exists(),
+        id: config.id.clone(),
+        path: config.path.clone(),
+        active: cgroup_v2_available && FsPath::new("/sys/fs/cgroup").join(&config.path).exists(),
+        cpu_weight: config.cpu_weight,
+        io_weight: config.io_weight,
+        memory_high: config.memory_high.clone(),
+        memory_max: config.memory_max.clone(),
+        pids_max: config.pids_max,
     }
+}
+
+fn read_kernel_policy_config() -> KernelPolicyConfig {
+    let path = std::env::var("SOLILOQUY_KERNEL_POLICY_FILE")
+        .unwrap_or_else(|_| "/etc/soliloquy/kernel-policy.json".to_string());
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return KernelPolicyConfig::default();
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
 }
 
 fn read_runtime_state(path: &FsPath) -> RuntimeState {
@@ -1350,6 +1433,15 @@ impl RuntimeState {
 
     fn i64(&self, key: &str) -> Option<i64> {
         self.values.get(key)?.trim().parse().ok()
+    }
+
+    fn string(&self, key: &str) -> Option<String> {
+        let value = self.values.get(key)?.trim();
+        if value.is_empty() {
+            None
+        } else {
+            Some(value.to_string())
+        }
     }
 }
 
@@ -2306,7 +2398,13 @@ mod tests {
         );
         assert_eq!(runtime.browser.boot_metrics.renderer_pid, Some(42));
         assert_eq!(runtime.browser.boot_metrics.renderer_restarts, Some(2));
+        assert_eq!(runtime.kernel_policy.profile, "internet-appliance");
         assert_eq!(runtime.kernel_policy.renderer_pid, Some(42));
+        assert!(runtime
+            .kernel_policy
+            .groups
+            .iter()
+            .any(|group| group.id == "renderer" && group.memory_high.as_deref() == Some("1536M")));
     }
 
     #[test]

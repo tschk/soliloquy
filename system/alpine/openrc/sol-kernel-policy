@@ -1,0 +1,11 @@
+#!/sbin/openrc-run
+
+description="Soliloquy kernel policy"
+
+command="/usr/local/bin/apply-kernel-policy.sh"
+command_background="no"
+
+depend() {
+    need localmount
+    before networking sold sol-session
+}
