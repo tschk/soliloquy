@@ -14,7 +14,7 @@ jobs:
     name: OS appliance gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check appliance OS policy
         run: scripts/ci-os-appliance.sh
 
@@ -22,7 +22,7 @@ jobs:
     name: Rust core gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - name: Check out Crepuscularity path dependency
         run: git clone --depth 1 https://github.com/tschk/crepuscularity.git ../crepuscularity
