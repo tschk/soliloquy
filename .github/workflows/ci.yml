@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - name: Check appliance OS policy
         run: scripts/ci-os-appliance.sh
 
@@ -23,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - name: Check out Crepuscularity path dependency
         run: git clone --depth 1 https://github.com/tschk/crepuscularity.git ../crepuscularity
