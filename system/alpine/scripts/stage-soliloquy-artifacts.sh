@@ -12,6 +12,10 @@ SERVO_BIN="${SERVO_BIN:-${REPO_ROOT}/third_party/servo/target/release/servoshell
 SERVO_RUNTIME_DIR="${SERVO_RUNTIME_DIR:-}"
 SOLD_BIN="${SOLD_BIN:-${REPO_ROOT}/target/release/sold}"
 SOL_KERNELCTL_BIN="${SOL_KERNELCTL_BIN:-${REPO_ROOT}/target/release/sol-kernelctl}"
+NATIVE_POLICY_BUILD_SCRIPT="${NATIVE_POLICY_BUILD_SCRIPT:-${REPO_ROOT}/system/alpine/scripts/build-native-policy-modules.sh}"
+NATIVE_POLICY_DIR="${NATIVE_POLICY_DIR:-${REPO_ROOT}/build/alpine/native-policy-v}"
+NATIVE_POLICY_LIB="${NATIVE_POLICY_LIB:-${NATIVE_POLICY_DIR}/libsoliloquy_native_policy_v.so}"
+NATIVE_POLICY_REQUIRED="${NATIVE_POLICY_REQUIRED:-0}"
 UI_BUILD_DIR="${UI_BUILD_DIR:-${REPO_ROOT}/ui/desktop/build}"
 TARGET_ARCH="${QEMU_ARCH:-x86_64}"
 
@@ -83,6 +87,53 @@ if [ -f "${SOL_KERNELCTL_BIN}" ]; then
   require_linux_elf_binary "${SOL_KERNELCTL_BIN}"
   cp "${SOL_KERNELCTL_BIN}" "${ROOTFS}/usr/local/bin/sol-kernelctl"
   chmod +x "${ROOTFS}/usr/local/bin/sol-kernelctl"
+fi
+
+if [ ! -f "${NATIVE_POLICY_LIB}" ] && [ -x "${NATIVE_POLICY_BUILD_SCRIPT}" ]; then
+  if ! OUT_DIR="${NATIVE_POLICY_DIR}" "${NATIVE_POLICY_BUILD_SCRIPT}"; then
+    if [ "${NATIVE_POLICY_REQUIRED}" = "1" ]; then
+      echo "ERROR: failed to build required V native policy userland module" >&2
+      exit 1
+    fi
+    echo "WARNING: V native policy userland module build failed; continuing without it" >&2
+  fi
+fi
+
+if [ -f "${NATIVE_POLICY_LIB}" ]; then
+  native_policy_file_info="$(file "${NATIVE_POLICY_LIB}")"
+  native_policy_ok=0
+  case "${TARGET_ARCH}" in
+    x86_64)
+      case "${native_policy_file_info}" in
+        *"ELF 64-bit"*"shared object"*x86-64*) native_policy_ok=1 ;;
+      esac
+      ;;
+    aarch64|arm64)
+      case "${native_policy_file_info}" in
+        *"ELF 64-bit"*"shared object"*aarch64*) native_policy_ok=1 ;;
+      esac
+      ;;
+  esac
+  if [ "${native_policy_ok}" = "1" ]; then
+    mkdir -p "${ROOTFS}/usr/local/lib/soliloquy/native-policy"
+    mkdir -p "${ROOTFS}/usr/local/share/soliloquy/native-policy"
+    cp "${NATIVE_POLICY_LIB}" "${ROOTFS}/usr/local/lib/soliloquy/native-policy/libsoliloquy_native_policy_v.so"
+    chmod +x "${ROOTFS}/usr/local/lib/soliloquy/native-policy/libsoliloquy_native_policy_v.so"
+    if [ -f "${NATIVE_POLICY_DIR}/v.mod" ]; then
+      cp "${NATIVE_POLICY_DIR}/v.mod" "${ROOTFS}/usr/local/share/soliloquy/native-policy/v.mod"
+    fi
+  elif [ "${NATIVE_POLICY_REQUIRED}" = "1" ]; then
+    echo "ERROR: V native policy userland module is not a Linux ${TARGET_ARCH} shared object: ${NATIVE_POLICY_LIB}" >&2
+    echo "detected: ${native_policy_file_info}" >&2
+    exit 1
+  else
+    echo "WARNING: V native policy userland module is not a Linux ${TARGET_ARCH} shared object; continuing without it" >&2
+  fi
+elif [ "${NATIVE_POLICY_REQUIRED}" = "1" ]; then
+  echo "ERROR: required V native policy userland module not found at ${NATIVE_POLICY_LIB}" >&2
+  exit 1
+else
+  echo "WARNING: V native policy userland module not found; continuing without it" >&2
 fi
 
 if [ ! -d "${UI_BUILD_DIR}" ]; then

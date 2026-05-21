@@ -63,10 +63,17 @@ done
 
 assert_file system/alpine/kernel-policy.json
 assert_file system/native/kernel-policy-v/policy.v
+assert_file system/native/kernel-policy-v/v.mod
 assert_contains system/alpine/kernel-policy.json '"profile": "internet-appliance"'
 assert_contains system/alpine/kernel-policy.json '"net.core.somaxconn"'
 assert_contains system/alpine/scripts/build-native-policy-modules.sh '../equilibrium'
+assert_contains system/alpine/scripts/build-native-policy-modules.sh 'libsoliloquy_native_policy_v.so'
+assert_contains system/alpine/scripts/build-native-policy-modules.sh 'native policy userland module'
+assert_not_contains system/alpine/scripts/build-native-policy-modules.sh 'Built V kernel'
+assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'NATIVE_POLICY_REQUIRED'
+assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh '/usr/local/lib/soliloquy/native-policy'
 assert_contains system/native/kernel-policy-v/policy.v 'sol_renderer_cpu_weight'
+assert_contains system/native/kernel-policy-v/v.mod "license: 'MPL-2.0'"
 assert_contains system/alpine/openrc/sol-session '^respawn=YES$'
 assert_contains system/alpine/openrc/sol-session 'need sold seatd'
 assert_contains system/alpine/openrc/sold 'need localmount networking'
