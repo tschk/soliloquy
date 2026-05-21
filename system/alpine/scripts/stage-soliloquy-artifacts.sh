@@ -11,6 +11,7 @@ REPO_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)"
 SERVO_BIN="${SERVO_BIN:-${REPO_ROOT}/third_party/servo/target/release/servoshell}"
 SERVO_RUNTIME_DIR="${SERVO_RUNTIME_DIR:-}"
 SOLD_BIN="${SOLD_BIN:-${REPO_ROOT}/target/release/sold}"
+SOL_KERNELCTL_BIN="${SOL_KERNELCTL_BIN:-${REPO_ROOT}/target/release/sol-kernelctl}"
 UI_BUILD_DIR="${UI_BUILD_DIR:-${REPO_ROOT}/ui/desktop/build}"
 TARGET_ARCH="${QEMU_ARCH:-x86_64}"
 
@@ -77,6 +78,12 @@ fi
 require_linux_elf_binary "${SOLD_BIN}"
 cp "${SOLD_BIN}" "${ROOTFS}/usr/local/bin/sold"
 chmod +x "${ROOTFS}/usr/local/bin/sold"
+
+if [ -f "${SOL_KERNELCTL_BIN}" ]; then
+  require_linux_elf_binary "${SOL_KERNELCTL_BIN}"
+  cp "${SOL_KERNELCTL_BIN}" "${ROOTFS}/usr/local/bin/sol-kernelctl"
+  chmod +x "${ROOTFS}/usr/local/bin/sol-kernelctl"
+fi
 
 if [ ! -d "${UI_BUILD_DIR}" ]; then
   echo "desktop UI build not found at ${UI_BUILD_DIR}" >&2

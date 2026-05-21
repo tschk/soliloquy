@@ -48,6 +48,7 @@ test -L CLAUDE.md || fail "CLAUDE.md must be a symlink"
 for path in \
   system/alpine/scripts/configure-rootfs.sh \
   system/alpine/scripts/apply-kernel-policy.sh \
+  system/alpine/scripts/build-native-policy-modules.sh \
   system/alpine/scripts/sol-session-start \
   system/alpine/scripts/sol-servo-wrapper \
   system/alpine/scripts/stage-soliloquy-artifacts.sh \
@@ -61,8 +62,11 @@ do
 done
 
 assert_file system/alpine/kernel-policy.json
+assert_file system/native/kernel-policy-v/policy.v
 assert_contains system/alpine/kernel-policy.json '"profile": "internet-appliance"'
 assert_contains system/alpine/kernel-policy.json '"net.core.somaxconn"'
+assert_contains system/alpine/scripts/build-native-policy-modules.sh '../equilibrium'
+assert_contains system/native/kernel-policy-v/policy.v 'sol_renderer_cpu_weight'
 assert_contains system/alpine/openrc/sol-session '^respawn=YES$'
 assert_contains system/alpine/openrc/sol-session 'need sold seatd'
 assert_contains system/alpine/openrc/sold 'need localmount networking'
@@ -72,9 +76,12 @@ assert_contains system/alpine/rootfs-overlay/etc/inittab '^::wait:/sbin/openrc d
 assert_not_contains system/alpine/rootfs-overlay/etc/inittab 'sol-session-start'
 
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'load_kernel_module virtio_net'
+assert_contains system/alpine/scripts/apply-kernel-policy.sh 'sol-kernelctl'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'cgroup.subtree_control'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'memory.high'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'io.weight'
+assert_contains system/alpine/packages-v0.txt '^font-dejavu$'
+assert_not_contains system/alpine/packages-v0.txt '^xwayland$|^gcompat$|^font-noto$'
 assert_contains system/alpine/scripts/sol-session-start 'SOLILOQUY_RUNTIME_STATE_ENV'
 assert_contains system/alpine/scripts/sol-session-start 'attach_to_cgroup browser'
 assert_contains system/alpine/scripts/sol-servo-wrapper 'attach_to_cgroup renderer'

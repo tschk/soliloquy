@@ -36,6 +36,7 @@ grep -Eq 'third_party/servo|src/rv8|\.\./rv8' Cargo.toml && fail "root Cargo.tom
 
 cargo_ci fmt --package sold -- --check
 cargo_ci test -p sold
+cargo_ci test -p sol-kernelctl
 cargo_ci test -p soliloquy-drivers
 
 printf 'ci-rust-core: ok\n'

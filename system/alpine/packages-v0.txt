@@ -4,11 +4,9 @@ openrc
 linux-virt
 seatd
 cage
-xwayland
 wayland-libs-egl
 mesa-egl
 mesa-gbm
 mesa-dri-gallium
-gcompat
 libstdc++
-font-noto
+font-dejavu

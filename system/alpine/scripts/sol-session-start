@@ -183,7 +183,7 @@ status=$?
 set -e
 
 # If the session was started with native Wayland winit, retry once with X11 (XWayland).
-if [ "${status}" != 0 ] && [ "${SOL_SESSION_X11_FALLBACK:-1}" = "1" ] && [ "${WINIT_UNIX_BACKEND}" != "x11" ]; then
+if [ "${status}" != 0 ] && [ "${SOL_SESSION_X11_FALLBACK:-0}" = "1" ] && [ "${WINIT_UNIX_BACKEND}" != "x11" ]; then
   log "session exited ${status}; retrying with X11 client backend via XWayland (WINIT_UNIX_BACKEND=x11)"
   export WINIT_UNIX_BACKEND=x11
   export DISPLAY="${DISPLAY:-:0}"

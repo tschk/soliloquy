@@ -2,6 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)"
+CREPUSCULARITY_DIR="${ROOT_DIR}/../crepuscularity"
 QEMU_ARCH="${QEMU_ARCH:-x86_64}"
 OUT_DIR="${ROOT_DIR}/build/alpine/artifacts/linux-${QEMU_ARCH}"
 SERVO_SRC_BIN="${ROOT_DIR}/third_party/servo/target/release/servoshell"
@@ -18,6 +19,12 @@ require_tool() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "missing required tool: $1" >&2
     exit 1
+  fi
+}
+
+crepuscularity_mount_args() {
+  if [ -d "${CREPUSCULARITY_DIR}" ]; then
+    printf '%s\n' "-v" "${CREPUSCULARITY_DIR}:/crepuscularity:ro"
   fi
 }
 
@@ -58,6 +65,10 @@ sold_matches_runtime() {
       ;;
   esac
   return 1
+}
+
+kernelctl_matches_runtime() {
+  sold_matches_runtime "$1"
 }
 
 servo_native_musl() {
@@ -129,6 +140,7 @@ build_sold_linux() {
   docker run --rm \
     --platform "${docker_platform}" \
     -v "${ROOT_DIR}:/work" \
+    $(crepuscularity_mount_args) \
     -w /work \
     rust:1.95-alpine sh -lc "
       set -eu
@@ -136,6 +148,37 @@ build_sold_linux() {
       apk add --no-cache musl-dev
       cargo build --release --manifest-path sold/Cargo.toml --target-dir target/alpine-sold
       cp target/alpine-sold/release/sold build/alpine/artifacts/linux-${QEMU_ARCH}/sold
+    " >&2
+}
+
+build_kernelctl_linux() {
+  require_tool docker
+
+  case "${QEMU_ARCH}" in
+    x86_64)
+      docker_platform="linux/amd64"
+      ;;
+    aarch64|arm64)
+      docker_platform="linux/arm64"
+      ;;
+    *)
+      echo "unsupported QEMU_ARCH: ${QEMU_ARCH}" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "Building Linux sol-kernelctl for ${QEMU_ARCH}..." >&2
+  docker run --rm \
+    --platform "${docker_platform}" \
+    -v "${ROOT_DIR}:/work" \
+    $(crepuscularity_mount_args) \
+    -w /work \
+    rust:1.95-alpine sh -lc "
+      set -eu
+      export PATH=/usr/local/cargo/bin:\$PATH
+      apk add --no-cache musl-dev
+      cargo build --release --manifest-path system/kernelctl/Cargo.toml --target-dir target/alpine-kernelctl
+      cp target/alpine-kernelctl/release/sol-kernelctl build/alpine/artifacts/linux-${QEMU_ARCH}/sol-kernelctl
     " >&2
 }
 
@@ -411,6 +454,12 @@ else
   build_sold_linux
 fi
 
+if [ -f "${OUT_DIR}/sol-kernelctl" ] && file_matches_arch "${OUT_DIR}/sol-kernelctl" && kernelctl_matches_runtime "${OUT_DIR}/sol-kernelctl"; then
+  echo "Reusing Linux sol-kernelctl binary: ${OUT_DIR}/sol-kernelctl" >&2
+else
+  build_kernelctl_linux
+fi
+
 if [ -n "${SERVO_BIN_LINUX:-}" ]; then
   if [ ! -f "${SERVO_BIN_LINUX}" ]; then
     echo "SERVO_BIN_LINUX does not exist: ${SERVO_BIN_LINUX}" >&2
@@ -456,5 +505,5 @@ if servo_needs_glibc_runtime "${OUT_DIR}/servo"; then
   fi
 fi
 
-chmod +x "${OUT_DIR}/servo" "${OUT_DIR}/sold"
+chmod +x "${OUT_DIR}/servo" "${OUT_DIR}/sold" "${OUT_DIR}/sol-kernelctl"
 echo "${OUT_DIR}"

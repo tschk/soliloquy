@@ -4,6 +4,12 @@ set -eu
 SOLILOQUY_KERNEL_POLICY_FILE="${SOLILOQUY_KERNEL_POLICY_FILE:-/etc/soliloquy/kernel-policy.json}"
 SOLILOQUY_RUNTIME_STATE_ENV="${SOLILOQUY_RUNTIME_STATE_ENV:-/run/soliloquy/runtime-state.env}"
 
+if [ -x /usr/local/bin/sol-kernelctl ]; then
+  exec /usr/local/bin/sol-kernelctl \
+    --policy "${SOLILOQUY_KERNEL_POLICY_FILE}" \
+    --runtime-state "${SOLILOQUY_RUNTIME_STATE_ENV}"
+fi
+
 mkdir -p "$(dirname "${SOLILOQUY_RUNTIME_STATE_ENV}")"
 
 record_runtime_state() {
