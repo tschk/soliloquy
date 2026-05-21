@@ -51,6 +51,7 @@ for path in \
   system/alpine/scripts/apply-zram-policy.sh \
   system/alpine/scripts/audit-package-budget.sh \
   system/alpine/scripts/build-native-policy-modules.sh \
+  system/alpine/kernel/validate-kernel-config.sh \
   system/alpine/scripts/sol-session-start \
   system/alpine/scripts/sol-servo-wrapper \
   system/alpine/scripts/stage-soliloquy-artifacts.sh \
@@ -65,9 +66,26 @@ do
 done
 
 assert_file system/alpine/kernel-policy.json
+assert_file system/alpine/kernel/APKBUILD
+assert_file system/alpine/kernel/README.md
+assert_file system/alpine/kernel/soliloquy-internet-appliance.config
 assert_file system/native/kernel-policy-v/policy.v
 assert_file system/native/kernel-policy-v/v.mod
 assert_contains system/alpine/kernel-policy.json '"profile": "internet-appliance"'
+assert_contains system/alpine/kernel/APKBUILD '^pkgname=linux-soliloquy-appliance$'
+assert_contains system/alpine/kernel/APKBUILD 'validate-kernel-config.sh'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_CGROUPS=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_ZRAM=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_VIRTIO_NET=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_DRM_VIRTIO_GPU=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_SECCOMP_FILTER=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_SECURITY_LANDLOCK=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_TCP_CONG_BBR=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^# CONFIG_USB_STORAGE is not set$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^# CONFIG_BLUETOOTH is not set$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^# CONFIG_CIFS is not set$'
+assert_contains system/alpine/kernel/validate-kernel-config.sh 'CONFIG_SECURITY_LANDLOCK'
+system/alpine/kernel/validate-kernel-config.sh
 assert_contains system/alpine/kernel-policy.json '"net.core.somaxconn"'
 assert_contains system/alpine/scripts/build-native-policy-modules.sh '../equilibrium'
 assert_contains system/alpine/scripts/build-native-policy-modules.sh 'libsoliloquy_native_policy_v.so'

@@ -53,3 +53,12 @@ The appliance session defaults to `SOL_SERVO_NO_BROWSER_CHROME=1`. Keep Soliloqu
 ./system/alpine/scripts/setup-host.sh
 ./system/alpine/scripts/qemu-v0.sh
 ```
+
+Validate the custom appliance kernel profile without a full kernel build:
+
+```bash
+./system/alpine/kernel/validate-kernel-config.sh
+./system/alpine/kernel/validate-kernel-config.sh /path/to/linux/.config
+```
+
+The custom kernel packaging scaffold lives under `system/alpine/kernel`. Its fragment keeps cgroup v2, zram, virtio, DRM/KMS, seccomp, Landlock, fq, and BBR enabled while rejecting unused desktop/server drivers, filesystems, and network protocols.
