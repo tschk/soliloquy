@@ -23,8 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Check Rust core
         run: scripts/ci-rust-core.sh

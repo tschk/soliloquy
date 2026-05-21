@@ -11,6 +11,7 @@ fail() {
 
 metadata="$(cargo metadata --no-deps --format-version 1)"
 printf '%s\n' "${metadata}" | grep -q '"name":"rv8"' && fail "rv8 must not be a root workspace package"
+grep -Eq 'third_party/servo|src/rv8|\.\./rv8' Cargo.toml && fail "root Cargo.toml must not depend on browser engine paths"
 
 cargo fmt --package sold -- --check
 cargo test -p sold
