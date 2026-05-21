@@ -14,6 +14,7 @@ OPENRC_DIR="${ALPINE_DIR}/openrc"
 BIN_SRC="${ALPINE_DIR}/scripts"
 SERVICE_REGISTRY_SRC="${ALPINE_DIR}/services.json"
 KERNEL_POLICY_SRC="${ALPINE_DIR}/kernel-policy.json"
+FILESYSTEM_MANIFEST_DIR="${ALPINE_DIR}/filesystems"
 SOLILOQUY_UID="770"
 SOLILOQUY_GID="770"
 SOLD_UID="771"
@@ -59,8 +60,10 @@ ensure_shadow "sold"
 mkdir -p "${ROOTFS}/etc/init.d" "${ROOTFS}/usr/local/bin"
 mkdir -p "${ROOTFS}/etc/local.d"
 mkdir -p "${ROOTFS}/etc/network"
+mkdir -p "${ROOTFS}/etc/soliloquy/filesystems"
 mkdir -p "${ROOTFS}/etc/soliloquy/plugins"
 mkdir -p "${ROOTFS}/etc/soliloquy/services"
+mkdir -p "${ROOTFS}/home" "${ROOTFS}/state" "${ROOTFS}/sysroot/soliloquy"
 mkdir -p \
   "${ROOTFS}/var/lib/soliloquy/browser/profiles" \
   "${ROOTFS}/var/lib/soliloquy/browser/cache" \
@@ -72,7 +75,9 @@ mkdir -p \
   "${ROOTFS}/var/lib/soliloquy/system" \
   "${ROOTFS}/var/lib/soliloquy/system/plugins" \
   "${ROOTFS}/var/lib/soliloquy/wax"
+mkdir -p "${ROOTFS}/var/cache/soliloquy" "${ROOTFS}/var/log/soliloquy"
 
+chmod 700 "${ROOTFS}/state"
 chmod 700 \
   "${ROOTFS}/var/lib/soliloquy/browser/profiles" \
   "${ROOTFS}/var/lib/soliloquy/browser/cache" \
@@ -82,9 +87,12 @@ chmod 700 \
   "${ROOTFS}/var/lib/soliloquy/browser/terminal" \
   "${ROOTFS}/var/lib/soliloquy/files" \
   "${ROOTFS}/var/lib/soliloquy/system" \
-  "${ROOTFS}/var/lib/soliloquy/system/plugins"
+  "${ROOTFS}/var/lib/soliloquy/system/plugins" \
+  "${ROOTFS}/var/cache/soliloquy" \
+  "${ROOTFS}/var/log/soliloquy"
 
 chown -R "${SOLILOQUY_UID}:${SOLILOQUY_GID}" "${ROOTFS}/var/lib/soliloquy/browser" >/dev/null 2>&1 || true
+chown -R "${SOLILOQUY_UID}:${SOLILOQUY_GID}" "${ROOTFS}/var/cache/soliloquy" >/dev/null 2>&1 || true
 chown -R "${SOLD_UID}:${SOLD_GID}" "${ROOTFS}/var/lib/soliloquy/files" "${ROOTFS}/var/lib/soliloquy/system" >/dev/null 2>&1 || true
 
 mkdir -p "${ROOTFS}/tmp"
@@ -93,6 +101,7 @@ chmod 755 "${ROOTFS}/tmp"
 cp -R "${OVERLAY_DIR}/." "${ROOTFS}/"
 cp "${OPENRC_DIR}/seatd" "${ROOTFS}/etc/init.d/seatd"
 cp "${OPENRC_DIR}/sol-kernel-policy" "${ROOTFS}/etc/init.d/sol-kernel-policy"
+cp "${OPENRC_DIR}/sol-netd" "${ROOTFS}/etc/init.d/sol-netd"
 cp "${OPENRC_DIR}/sol-zram" "${ROOTFS}/etc/init.d/sol-zram"
 cp "${OPENRC_DIR}/sol-session" "${ROOTFS}/etc/init.d/sol-session"
 if [ -f "${OPENRC_DIR}/sold" ]; then
@@ -102,10 +111,13 @@ cp "${BIN_SRC}/apply-kernel-policy.sh" "${ROOTFS}/usr/local/bin/apply-kernel-pol
 cp "${BIN_SRC}/apply-zram-policy.sh" "${ROOTFS}/usr/local/bin/apply-zram-policy.sh"
 cp "${BIN_SRC}/sol-session-start" "${ROOTFS}/usr/local/bin/sol-session-start"
 cp "${BIN_SRC}/sol-servo-wrapper" "${ROOTFS}/usr/local/bin/sol-servo-wrapper"
+cp "${FILESYSTEM_MANIFEST_DIR}/rootfs-layout.json" "${ROOTFS}/etc/soliloquy/filesystems/rootfs-layout.json"
+cp "${FILESYSTEM_MANIFEST_DIR}/state-mounts.json" "${ROOTFS}/etc/soliloquy/filesystems/state-mounts.json"
 
 chmod +x \
   "${ROOTFS}/etc/init.d/seatd" \
   "${ROOTFS}/etc/init.d/sol-kernel-policy" \
+  "${ROOTFS}/etc/init.d/sol-netd" \
   "${ROOTFS}/etc/init.d/sol-zram" \
   "${ROOTFS}/etc/init.d/sol-session" \
   "${ROOTFS}/etc/init.d/sold" \
@@ -140,10 +152,25 @@ cat > "${ROOTFS}/etc/resolv.conf" <<'EOF'
 nameserver 10.0.2.3
 EOF
 
+cat > "${ROOTFS}/etc/soliloquy/filesystems/fstab.plan" <<'EOF'
+soliloquy-root / erofs ro,nodev 0 0
+soliloquy-state /state ext4 rw,nosuid,nodev 0 2
+tmpfs /run tmpfs nosuid,nodev,mode=0755 0 0
+tmpfs /tmp tmpfs nosuid,nodev,mode=0755 0 0
+tmpfs /dev/shm tmpfs nosuid,nodev,mode=1777,size=256m 0 0
+/state/home /home none bind 0 0
+/state/var/lib/soliloquy /var/lib/soliloquy none bind 0 0
+/state/var/cache/soliloquy /var/cache/soliloquy none bind 0 0
+/state/var/log/soliloquy /var/log/soliloquy none bind 0 0
+EOF
+
 cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
 {
   "filesystem": {
     "immutable_root": true,
+    "rootfs_layout": "/etc/soliloquy/filesystems/rootfs-layout.json",
+    "state_mounts": "/etc/soliloquy/filesystems/state-mounts.json",
+    "state_root": "/state",
     "user_home_root": "/home",
     "user_writable_scope": "home-only",
     "tmp_policy": {
@@ -313,7 +340,7 @@ chmod +x "${ROOTFS}/etc/local.d/soliloquy-firstboot.start"
 # Make default runlevel explicit and minimal.
 mkdir -p "${ROOTFS}/etc/runlevels/default"
 find "${ROOTFS}/etc/runlevels/default" -mindepth 1 -maxdepth 1 -exec rm -f {} +
-for svc in networking seatd sol-kernel-policy sol-zram sold sol-session; do
+for svc in networking seatd sol-kernel-policy sol-zram sol-netd sold sol-session; do
   if [ -f "${ROOTFS}/etc/init.d/${svc}" ]; then
     ln -sf "/etc/init.d/${svc}" "${ROOTFS}/etc/runlevels/default/${svc}"
   fi

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "target": "soliloquy-a527-browser-appliance",
+  "root": {
+    "mountpoint": "/",
+    "role": "immutable-system",
+    "format_preference": [
+      "erofs",
+      "squashfs"
+    ],
+    "mount_options": [
+      "ro",
+      "nodev"
+    ],
+    "generation_root": "/sysroot/soliloquy",
+    "active_generation_link": "/sysroot/soliloquy/current",
+    "rollback_generations": 2
+  },
+  "immutable_paths": [
+    "/bin",
+    "/boot",
+    "/etc",
+    "/lib",
+    "/sbin",
+    "/usr"
+  ],
+  "runtime_tmpfs": [
+    {
+      "path": "/run",
+      "mode": "0755",
+      "options": [
+        "nosuid",
+        "nodev",
+        "mode=0755"
+      ]
+    },
+    {
+      "path": "/tmp",
+      "mode": "0755",
+      "options": [
+        "nosuid",
+        "nodev",
+        "mode=0755"
+      ]
+    },
+    {
+      "path": "/dev/shm",
+      "mode": "1777",
+      "options": [
+        "nosuid",
+        "nodev",
+        "mode=1777",
+        "size=256m"
+      ]
+    }
+  ],
+  "state_manifest": "/etc/soliloquy/filesystems/state-mounts.json",
+  "sealed_inputs": [
+    "/etc/apk/world.soliloquy",
+    "/etc/soliloquy/kernel-policy.json",
+    "/etc/soliloquy/services.json",
+    "/etc/soliloquy/system.json",
+    "/etc/soliloquy/update-policy.json"
+  ]
+}

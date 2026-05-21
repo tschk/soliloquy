@@ -5,6 +5,7 @@ This directory carries the Alpine-specific boot/runtime layout for the Soliloquy
 - `packages-v0.txt` - minimal runtime package manifest
 - `packages-v0-dev.txt` - optional dev extras (terminal-oriented)
 - `rootfs-overlay/` - files copied directly into Alpine rootfs
+- `filesystems/` - immutable root and writable state mount manifests
 - `openrc/` - OpenRC service units for the browser session
 - `scripts/` - helper scripts for rootfs assembly and image prep
 - `docker/` - rootfs builder implementation for reproducible output
@@ -18,6 +19,7 @@ This directory carries the Alpine-specific boot/runtime layout for the Soliloquy
 5. Servo opens the local Soliloquy browser surface.
 
 The root filesystem is treated as immutable at runtime; browser profile, cache, downloads, logs, and terminal state are the writable areas.
+The concrete root and state contract lives in `filesystems/rootfs-layout.json` and `filesystems/state-mounts.json`, with the design captured in `docs/architecture/immutable-rootfs.md`.
 
 The first-boot hook prunes nonessential default services (logging daemons, avahi, cron, bluetooth, etc.) to keep startup and memory overhead low.
 
@@ -34,6 +36,13 @@ Output:
 
 - `build/alpine/rootfs.tar.gz`
 - `build/alpine/rootfs/` (extracted rootfs)
+
+Build a sealed rootfs image from the configured rootfs:
+
+```sh
+SOLILOQUY_ROOTFS_FORMAT=erofs ./system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images
+SOLILOQUY_ROOTFS_FORMAT=squashfs ./system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images
+```
 
 ## Full QEMU flow
 

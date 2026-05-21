@@ -59,6 +59,6 @@ start_post() {
 }
 
 depend() {
-    need localmount networking sol-kernel-policy sol-zram
+    need localmount networking sol-kernel-policy sol-netd sol-zram
     after seatd
 }

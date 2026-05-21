@@ -30,12 +30,27 @@
       ]
     },
     {
+      "id": "sol-netd",
+      "display_name": "Network State Daemon",
+      "run_as": "root",
+      "restart": "always",
+      "dependencies": [
+        "networking",
+        "sol-kernel-policy"
+      ],
+      "state_paths": [
+        "/run/soliloquy/netd/interfaces.json",
+        "/run/soliloquy/netd/runtime-state.env"
+      ]
+    },
+    {
       "id": "sold",
       "display_name": "Soliloquy Local Server",
       "run_as": "sold",
       "restart": "always",
       "dependencies": [
         "networking",
+        "sol-netd",
         "sol-kernel-policy",
         "sol-zram"
       ],

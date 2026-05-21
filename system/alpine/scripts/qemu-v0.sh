@@ -17,6 +17,8 @@ LINUX_BIN_DIR="$("${ALPINE_SCRIPTS}/ensure-linux-runtime-binaries.sh")"
 # so staging does not fail and we never copy a stale Debian root onto the appliance by mistake.
 export SERVO_BIN="${LINUX_BIN_DIR}/servo"
 export SOLD_BIN="${LINUX_BIN_DIR}/sold"
+export SOL_NETD_BIN="${LINUX_BIN_DIR}/sol-netd"
+export SOL_KERNELCTL_BIN="${LINUX_BIN_DIR}/sol-kernelctl"
 if [ -d "${LINUX_BIN_DIR}/servo-runtime-root" ]; then
   export SERVO_RUNTIME_DIR="${LINUX_BIN_DIR}/servo-runtime-root"
 else

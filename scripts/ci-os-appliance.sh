@@ -51,6 +51,8 @@ for path in \
   system/alpine/scripts/apply-zram-policy.sh \
   system/alpine/scripts/audit-package-budget.sh \
   system/alpine/scripts/build-native-policy-modules.sh \
+  system/alpine/scripts/build-rootfs-image.sh \
+  system/alpine/scripts/validate-filesystem-plan.sh \
   system/alpine/kernel/validate-kernel-config.sh \
   system/alpine/scripts/sol-session-start \
   system/alpine/scripts/sol-servo-wrapper \
@@ -58,14 +60,29 @@ for path in \
   system/alpine/openrc/sold \
   system/alpine/openrc/sol-session \
   system/alpine/openrc/sol-kernel-policy \
+  system/alpine/openrc/sol-netd \
   system/alpine/openrc/sol-zram \
   system/alpine/openrc/seatd
 do
   assert_file "${path}"
   sh -n "${path}"
 done
+assert_file scripts/ci-qemu-appliance.sh
+sh -n scripts/ci-qemu-appliance.sh
+assert_contains scripts/ci-qemu-appliance.sh 'Starting sol-kernel-policy'
+assert_contains scripts/ci-qemu-appliance.sh 'Starting sol-zram'
+assert_contains scripts/ci-qemu-appliance.sh 'Cannot find Xwayland binary'
 
 assert_file system/alpine/kernel-policy.json
+assert_file system/alpine/filesystems/rootfs-layout.json
+assert_file system/alpine/filesystems/state-mounts.json
+assert_contains system/alpine/filesystems/rootfs-layout.json '"role": "immutable-system"'
+assert_contains system/alpine/filesystems/rootfs-layout.json '"erofs"'
+assert_contains system/alpine/filesystems/rootfs-layout.json '"squashfs"'
+assert_contains system/alpine/filesystems/state-mounts.json '"target": "/var/lib/soliloquy"'
+assert_contains system/alpine/filesystems/state-mounts.json '"target": "/home"'
+assert_contains system/alpine/scripts/build-rootfs-image.sh 'mkfs.erofs'
+assert_contains system/alpine/scripts/build-rootfs-image.sh 'mksquashfs'
 assert_file system/alpine/kernel/APKBUILD
 assert_file system/alpine/kernel/README.md
 assert_file system/alpine/kernel/soliloquy-internet-appliance.config
@@ -93,12 +110,17 @@ assert_contains system/alpine/scripts/build-native-policy-modules.sh 'native pol
 assert_not_contains system/alpine/scripts/build-native-policy-modules.sh 'Built V kernel'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'NATIVE_POLICY_REQUIRED'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh '/usr/local/lib/soliloquy/native-policy'
+assert_contains system/alpine/scripts/ensure-linux-runtime-binaries.sh 'build_netd_linux'
+assert_contains system/alpine/scripts/qemu-v0.sh 'SOL_NETD_BIN'
 assert_contains system/native/kernel-policy-v/policy.v 'sol_renderer_cpu_weight'
 assert_contains system/native/kernel-policy-v/v.mod "license: 'MPL-2.0'"
 assert_contains system/alpine/openrc/sol-session '^respawn=YES$'
 assert_contains system/alpine/openrc/sol-session 'need sold seatd'
 assert_contains system/alpine/openrc/sold 'need localmount networking'
+assert_contains system/alpine/openrc/sold 'sol-netd'
 assert_contains system/alpine/openrc/sol-kernel-policy 'apply-kernel-policy.sh'
+assert_contains system/alpine/openrc/sol-netd 'sol-netd'
+assert_contains system/alpine/openrc/sol-netd 'before sold sol-session'
 assert_contains system/alpine/openrc/sol-zram 'apply-zram-policy.sh'
 assert_contains system/alpine/openrc/seatd '^command_background="yes"$'
 assert_file system/alpine/rootfs-overlay/etc/modprobe.d/soliloquy-browser-appliance.conf
@@ -132,6 +154,7 @@ assert_contains system/alpine/scripts/sol-servo-wrapper 'sol-kernelctl attach --
 assert_contains system/alpine/openrc/sold 'attach_to_cgroup system'
 assert_contains system/alpine/openrc/sold 'sol-kernelctl attach --group'
 assert_contains system/alpine/services.json '"id": "networking"'
+assert_contains system/alpine/services.json '"id": "sol-netd"'
 assert_contains system/alpine/services.json '"id": "sol-zram"'
 assert_contains system/alpine/services.json '"id": "sold"'
 assert_contains system/alpine/services.json '"id": "sol-session"'
@@ -150,7 +173,7 @@ done
 
 system/alpine/scripts/configure-rootfs.sh "${tmp_root}" >/dev/null
 
-for service in networking seatd sol-kernel-policy sol-zram sold sol-session; do
+for service in networking seatd sol-kernel-policy sol-zram sol-netd sold sol-session; do
   assert_runlevel_service "${tmp_root}" "${service}"
 done
 
@@ -158,8 +181,11 @@ assert_file "${tmp_root}/etc/soliloquy/services.json"
 assert_file "${tmp_root}/etc/soliloquy/system.json"
 assert_file "${tmp_root}/etc/soliloquy/kernel-policy.json"
 assert_file "${tmp_root}/etc/soliloquy/package-manager.json"
+assert_file "${tmp_root}/etc/soliloquy/filesystems/rootfs-layout.json"
+assert_file "${tmp_root}/etc/soliloquy/filesystems/state-mounts.json"
 assert_file "${tmp_root}/var/lib/soliloquy/system/plugin-installs.json"
 assert_executable "${tmp_root}/etc/init.d/sol-kernel-policy"
+assert_executable "${tmp_root}/etc/init.d/sol-netd"
 assert_executable "${tmp_root}/etc/init.d/sol-zram"
 assert_executable "${tmp_root}/usr/local/bin/apply-kernel-policy.sh"
 assert_executable "${tmp_root}/usr/local/bin/apply-zram-policy.sh"
@@ -173,8 +199,10 @@ assert_contains "${tmp_root}/etc/modules-load.d/soliloquy-browser-appliance.conf
 assert_contains "${tmp_root}/var/lib/soliloquy/system/plugin-installs.json" '"plugins": \[\]'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "seatd"'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-kernel-policy"'
+assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-netd"'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-zram"'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-session"'
+system/alpine/scripts/validate-filesystem-plan.sh "${tmp_root}" >/dev/null
 [ ! -e "${tmp_root}/etc/runlevels/default/local" ] || fail "local must not block browser appliance boot"
 
 printf 'ci-os-appliance: ok\n'

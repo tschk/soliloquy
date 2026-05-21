@@ -12,6 +12,7 @@ SERVO_BIN="${SERVO_BIN:-${REPO_ROOT}/third_party/servo/target/release/servoshell
 SERVO_RUNTIME_DIR="${SERVO_RUNTIME_DIR:-}"
 SOLD_BIN="${SOLD_BIN:-${REPO_ROOT}/target/release/sold}"
 SOL_KERNELCTL_BIN="${SOL_KERNELCTL_BIN:-${REPO_ROOT}/target/release/sol-kernelctl}"
+SOL_NETD_BIN="${SOL_NETD_BIN:-${REPO_ROOT}/target/release/sol-netd}"
 NATIVE_POLICY_BUILD_SCRIPT="${NATIVE_POLICY_BUILD_SCRIPT:-${REPO_ROOT}/system/alpine/scripts/build-native-policy-modules.sh}"
 NATIVE_POLICY_DIR="${NATIVE_POLICY_DIR:-${REPO_ROOT}/build/alpine/native-policy-v}"
 NATIVE_POLICY_LIB="${NATIVE_POLICY_LIB:-${NATIVE_POLICY_DIR}/libsoliloquy_native_policy_v.so}"
@@ -88,6 +89,15 @@ if [ -f "${SOL_KERNELCTL_BIN}" ]; then
   cp "${SOL_KERNELCTL_BIN}" "${ROOTFS}/usr/local/bin/sol-kernelctl"
   chmod +x "${ROOTFS}/usr/local/bin/sol-kernelctl"
 fi
+
+if [ ! -f "${SOL_NETD_BIN}" ]; then
+  echo "sol-netd binary not found at ${SOL_NETD_BIN}" >&2
+  echo "run cargo build --release -p sol-netd before staging artifacts" >&2
+  exit 1
+fi
+require_linux_elf_binary "${SOL_NETD_BIN}"
+cp "${SOL_NETD_BIN}" "${ROOTFS}/usr/local/bin/sol-netd"
+chmod +x "${ROOTFS}/usr/local/bin/sol-netd"
 
 if [ ! -f "${NATIVE_POLICY_LIB}" ] && [ -x "${NATIVE_POLICY_BUILD_SCRIPT}" ]; then
   if ! OUT_DIR="${NATIVE_POLICY_DIR}" "${NATIVE_POLICY_BUILD_SCRIPT}"; then

@@ -9,6 +9,7 @@ members = [
     "sold",
     "drivers/generic",
     "system/kernelctl",
+    "system/netd",
 ]
 
 [workspace.package]

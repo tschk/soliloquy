@@ -71,6 +71,10 @@ kernelctl_matches_runtime() {
   sold_matches_runtime "$1"
 }
 
+netd_matches_runtime() {
+  sold_matches_runtime "$1"
+}
+
 servo_native_musl() {
   bin_path="$1"
   file_info="$(file "${bin_path}")"
@@ -179,6 +183,37 @@ build_kernelctl_linux() {
       apk add --no-cache musl-dev
       cargo build --release --manifest-path system/kernelctl/Cargo.toml --target-dir target/alpine-kernelctl
       cp target/alpine-kernelctl/release/sol-kernelctl build/alpine/artifacts/linux-${QEMU_ARCH}/sol-kernelctl
+    " >&2
+}
+
+build_netd_linux() {
+  require_tool docker
+
+  case "${QEMU_ARCH}" in
+    x86_64)
+      docker_platform="linux/amd64"
+      ;;
+    aarch64|arm64)
+      docker_platform="linux/arm64"
+      ;;
+    *)
+      echo "unsupported QEMU_ARCH: ${QEMU_ARCH}" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "Building Linux sol-netd for ${QEMU_ARCH}..." >&2
+  docker run --rm \
+    --platform "${docker_platform}" \
+    -v "${ROOT_DIR}:/work" \
+    $(crepuscularity_mount_args) \
+    -w /work \
+    rust:1.95-alpine sh -lc "
+      set -eu
+      export PATH=/usr/local/cargo/bin:\$PATH
+      apk add --no-cache musl-dev
+      cargo build --release --manifest-path system/netd/Cargo.toml --target-dir target/alpine-netd
+      cp target/alpine-netd/release/sol-netd build/alpine/artifacts/linux-${QEMU_ARCH}/sol-netd
     " >&2
 }
 
@@ -460,6 +495,12 @@ else
   build_kernelctl_linux
 fi
 
+if [ -f "${OUT_DIR}/sol-netd" ] && file_matches_arch "${OUT_DIR}/sol-netd" && netd_matches_runtime "${OUT_DIR}/sol-netd"; then
+  echo "Reusing Linux sol-netd binary: ${OUT_DIR}/sol-netd" >&2
+else
+  build_netd_linux
+fi
+
 if [ -n "${SERVO_BIN_LINUX:-}" ]; then
   if [ ! -f "${SERVO_BIN_LINUX}" ]; then
     echo "SERVO_BIN_LINUX does not exist: ${SERVO_BIN_LINUX}" >&2
@@ -505,5 +546,5 @@ if servo_needs_glibc_runtime "${OUT_DIR}/servo"; then
   fi
 fi
 
-chmod +x "${OUT_DIR}/servo" "${OUT_DIR}/sold" "${OUT_DIR}/sol-kernelctl"
+chmod +x "${OUT_DIR}/servo" "${OUT_DIR}/sold" "${OUT_DIR}/sol-kernelctl" "${OUT_DIR}/sol-netd"
 echo "${OUT_DIR}"

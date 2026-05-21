@@ -13,6 +13,8 @@ rootfs_manifest_changed() {
   for manifest in \
     "${ALPINE_DIR}/packages-v0.txt" \
     "${ALPINE_DIR}/docker/rootfs.Dockerfile" \
+    "${ALPINE_DIR}/filesystems/rootfs-layout.json" \
+    "${ALPINE_DIR}/filesystems/state-mounts.json" \
     "${ALPINE_DIR}/rootfs-overlay/init" \
     "${ALPINE_DIR}/scripts/configure-rootfs.sh" \
     "${ALPINE_DIR}/scripts/sol-session-start" \
