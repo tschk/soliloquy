@@ -15,6 +15,17 @@ if [ ! -d "${ROOTFS_DIR}" ]; then
 fi
 
 mkdir -p "$(dirname "${OUT_INITRD}")"
+mkdir -p "${ROOTFS_DIR}/etc/soliloquy"
+ROOTFS_BYTES="$(du -sk "${ROOTFS_DIR}" | awk '{ print $1 * 1024 }')"
+cat > "${ROOTFS_DIR}/etc/soliloquy/initramfs.json" <<EOF
+{
+  "mode": "ram-root",
+  "fallback_mode": "disk-root",
+  "fallback_device": "/dev/vda",
+  "fallback_fstype": "ext4",
+  "uncompressed_bytes": ${ROOTFS_BYTES}
+}
+EOF
 
 (
   cd "${ROOTFS_DIR}"

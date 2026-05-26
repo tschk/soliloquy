@@ -63,6 +63,7 @@ mkdir -p "${ROOTFS}/etc/network"
 mkdir -p "${ROOTFS}/etc/soliloquy/filesystems"
 mkdir -p "${ROOTFS}/etc/soliloquy/plugins"
 mkdir -p "${ROOTFS}/etc/soliloquy/services"
+mkdir -p "${ROOTFS}/etc/soliloquy/generations"
 mkdir -p "${ROOTFS}/home" "${ROOTFS}/state" "${ROOTFS}/sysroot/soliloquy"
 mkdir -p \
   "${ROOTFS}/var/lib/soliloquy/browser/profiles" \
@@ -123,6 +124,7 @@ chmod +x \
   "${ROOTFS}/etc/init.d/sold" \
   "${ROOTFS}/usr/local/bin/apply-kernel-policy.sh" \
   "${ROOTFS}/usr/local/bin/apply-zram-policy.sh" \
+  "${ROOTFS}/usr/local/bin/soliloquy-generation-mark-good" \
   "${ROOTFS}/usr/local/bin/sol-session-start" \
   "${ROOTFS}/usr/local/bin/sol-servo-wrapper" \
   "${ROOTFS}/init"
@@ -154,6 +156,7 @@ EOF
 
 cat > "${ROOTFS}/etc/soliloquy/filesystems/fstab.plan" <<'EOF'
 soliloquy-root / solfs ro,nodev 0 0
+soliloquy-ram-root / ramfs auto,min_ram_mb=3072,fallback=/dev/vda 0 0
 soliloquy-state /state ext4 rw,nosuid,nodev 0 2
 tmpfs /run tmpfs nosuid,nodev,mode=0755 0 0
 tmpfs /tmp tmpfs nosuid,nodev,mode=0755 0 0
@@ -176,6 +179,15 @@ cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
     "tmp_policy": {
       "path": "/tmp",
       "mode": "system-only"
+    },
+    "boot_policy": {
+      "default_mode": "ram-root",
+      "selection": "auto",
+      "minimum_ram_mb": 3072,
+      "fallback_mode": "disk-root",
+      "fallback_device": "/dev/vda",
+      "fallback_fstype": "ext4",
+      "runtime_status": "/run/soliloquy/rootfs.env"
     }
   },
   "browser": {
@@ -184,6 +196,11 @@ cat > "${ROOTFS}/etc/soliloquy/system.json" <<'EOF'
     "cache_root": "/var/lib/soliloquy/browser/cache",
     "state_root": "/var/lib/soliloquy/browser/state",
     "logs_root": "/var/lib/soliloquy/browser/logs"
+  },
+  "generation": {
+    "metadata": "/etc/soliloquy/generation.json",
+    "mark_good_hook": "/usr/local/bin/soliloquy-generation-mark-good",
+    "state": "/var/lib/soliloquy/system/update-state.json"
   },
   "package_manager": {
     "id": "wax",
@@ -284,9 +301,28 @@ cat > "${ROOTFS}/etc/soliloquy/update-policy.json" <<'EOF'
   "rollback_enabled": true,
   "channels": ["stable"],
   "generation_root": "/sysroot/soliloquy",
-  "retained_generations": 2
+  "retained_generations": 2,
+  "default_boot_mode": "ram-root",
+  "fallback_boot_mode": "disk-root",
+  "mark_good_hook": "/usr/local/bin/soliloquy-generation-mark-good",
+  "interactive_mark_good": true
 }
 EOF
+
+cat > "${ROOTFS}/etc/soliloquy/generation.json" <<'EOF'
+{
+  "id": "soliloquy-0001",
+  "slot": "current",
+  "status": "pending-good",
+  "root_mode": "ram-root",
+  "fallback_mode": "disk-root",
+  "metadata_schema": 1,
+  "mark_good_hook": "/usr/local/bin/soliloquy-generation-mark-good",
+  "state_path": "/var/lib/soliloquy/system/update-state.json"
+}
+EOF
+
+cp "${ROOTFS}/etc/soliloquy/generation.json" "${ROOTFS}/etc/soliloquy/generations/soliloquy-0001.json"
 
 cat > "${ROOTFS}/var/lib/soliloquy/system/plugin-state.json" <<'EOF'
 {
@@ -311,6 +347,8 @@ cat > "${ROOTFS}/var/lib/soliloquy/system/update-state.json" <<'EOF'
   "active_generation": "soliloquy-0001",
   "staged_generation": null,
   "rollback_generation": null,
+  "boot_status": "pending-good",
+  "mark_good_source": null,
   "last_result": "bootstrapped"
 }
 EOF

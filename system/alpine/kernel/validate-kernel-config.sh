@@ -2,6 +2,8 @@
 set -eu
 
 CONFIG_FILE="${1:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)/soliloquy-internet-appliance.config}"
+KERNEL_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+METADATA_FILE="${SOLILOQUY_KERNEL_METADATA:-${KERNEL_DIR}/hybrid-kernel.json}"
 
 if [ ! -f "${CONFIG_FILE}" ]; then
   printf 'validate-kernel-config: missing config: %s\n' "${CONFIG_FILE}" >&2
@@ -71,6 +73,25 @@ require_value() {
   failures=$((failures + 1))
 }
 
+require_file() {
+  file="$1"
+  if [ -f "${file}" ]; then
+    return 0
+  fi
+  printf 'validate-kernel-config: missing metadata: %s\n' "${file}" >&2
+  failures=$((failures + 1))
+}
+
+require_contains() {
+  file="$1"
+  pattern="$2"
+  if [ -f "${file}" ] && grep -Fq "${pattern}" "${file}"; then
+    return 0
+  fi
+  printf 'validate-kernel-config: %s must contain %s\n' "${file}" "${pattern}" >&2
+  failures=$((failures + 1))
+}
+
 for option in \
   CONFIG_CGROUPS \
   CONFIG_RUST \
@@ -78,6 +99,8 @@ for option in \
   CONFIG_CGROUP_PIDS \
   CONFIG_CPUSETS \
   CONFIG_MEMCG \
+  CONFIG_LRU_GEN \
+  CONFIG_LRU_GEN_ENABLED \
   CONFIG_BLK_CGROUP \
   CONFIG_NAMESPACES \
   CONFIG_SECCOMP \
@@ -88,6 +111,8 @@ for option in \
   CONFIG_ZRAM \
   CONFIG_ZSMALLOC \
   CONFIG_SWAP \
+  CONFIG_EROFS_FS \
+  CONFIG_EROFS_FS_ZIP \
   CONFIG_VIRTIO \
   CONFIG_VIRTIO_PCI \
   CONFIG_VIRTIO_BLK \
@@ -101,6 +126,7 @@ for option in \
   CONFIG_DRM_SIMPLEDRM \
   CONFIG_EXT4_FS \
   CONFIG_SQUASHFS \
+  CONFIG_SQUASHFS_ZSTD \
   CONFIG_OVERLAY_FS \
   CONFIG_TMPFS \
   CONFIG_DEVTMPFS \
@@ -121,7 +147,9 @@ for option in \
   CONFIG_DRM \
   CONFIG_DRM_VIRTIO_GPU \
   CONFIG_ZRAM \
+  CONFIG_LRU_GEN \
   CONFIG_EXT4_FS \
+  CONFIG_EROFS_FS \
   CONFIG_TMPFS \
   CONFIG_DEVTMPFS
 do
@@ -129,6 +157,45 @@ do
 done
 
 require_value CONFIG_DEFAULT_TCP_CONG '"bbr"'
+
+require_file "${METADATA_FILE}"
+require_file "${KERNEL_DIR}/patch-series/bore-style.json"
+require_file "${KERNEL_DIR}/patches/series"
+
+for token in \
+  '"id": "soliloquy-hybrid-default"' \
+  '"default": true' \
+  '"mode": "single_default"' \
+  '"hardware_adjustment": "runtime_capability_probe"' \
+  '"in_tree_path": "system/alpine/kernel/linux"' \
+  '"path": "patches/series"' \
+  '"fallback_boot"' \
+  '"metrics_gates"' \
+  '"mglru"' \
+  '"zram"' \
+  '"seccomp"' \
+  '"landlock"' \
+  '"bbr_fq"' \
+  '"solfs"' \
+  '"erofs"' \
+  '"squashfs"' \
+  '"damon"' \
+  '"sched_ext"' \
+  '"preempt_rt"' \
+  '"patch-series/bore-style.json"'
+do
+  require_contains "${METADATA_FILE}" "${token}"
+done
+
+for token in \
+  '"id": "bore-style-scheduler-lane"' \
+  '"lane": "direct-source-edit-or-patch-queue"' \
+  '"source_policy": "in-tree-source-expected"' \
+  '"source_path": "system/alpine/kernel/linux"' \
+  '"queue_path": "system/alpine/kernel/patches/series"'
+do
+  require_contains "${KERNEL_DIR}/patch-series/bore-style.json" "${token}"
+done
 
 for option in \
   CONFIG_ACPI \

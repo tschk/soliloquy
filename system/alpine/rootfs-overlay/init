@@ -5,6 +5,46 @@ log() {
   printf '[init] %s\n' "$1" >/dev/console
 }
 
+cmdline_value() {
+  key="$1"
+  for arg in $(cat /proc/cmdline 2>/dev/null || true); do
+    case "${arg}" in
+      "${key}="*) printf '%s\n' "${arg#*=}"; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+record_rootfs_state() {
+  mkdir -p /run/soliloquy
+  {
+    printf 'SOLILOQUY_ROOT_MODE=%s\n' "$1"
+    printf 'SOLILOQUY_ROOT_SOURCE=%s\n' "$2"
+    printf 'SOLILOQUY_ROOT_MEM_MB=%s\n' "$3"
+  } >/run/soliloquy/rootfs.env
+}
+
+try_disk_root() {
+  device="$1"
+  fstype="$2"
+  mem_mb="$3"
+  mkdir -p /sysroot
+  if mount -t "${fstype}" -o ro "${device}" /sysroot 2>/dev/null; then
+    mkdir -p /sysroot/run/soliloquy
+    {
+      printf 'SOLILOQUY_ROOT_MODE=%s\n' "disk-root"
+      printf 'SOLILOQUY_ROOT_SOURCE=%s\n' "${device}"
+      printf 'SOLILOQUY_ROOT_MEM_MB=%s\n' "${mem_mb}"
+    } >/sysroot/run/soliloquy/rootfs.env
+    if command -v switch_root >/dev/null 2>&1; then
+      log "switching to disk root ${device}"
+      exec switch_root /sysroot /sbin/init
+    fi
+    umount /sysroot 2>/dev/null || true
+  fi
+  return 1
+}
+
 log "starting early userspace"
 mount -t proc proc /proc || true
 # Larger core socket limits can avoid EMSGSIZE on some Wayland client↔compositor paths
@@ -46,6 +86,29 @@ fi
 mkdir -p /dev/shm
 chmod 1777 /dev/shm 2>/dev/null || true
 mount -t tmpfs -o mode=1777,nosuid,nodev,size=256m tmpfs /dev/shm 2>/dev/null || true
+
+ram_root_mode="$(cmdline_value soliloquy.ram_root || printf '%s\n' auto)"
+ram_root_min_mb="$(cmdline_value soliloquy.ram_root_min_mb || printf '%s\n' 3072)"
+root_fallback="$(cmdline_value soliloquy.root_fallback || printf '%s\n' /dev/vda)"
+root_fallback_fstype="$(cmdline_value soliloquy.root_fallback_fstype || printf '%s\n' ext4)"
+mem_kb="$(awk '/MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null || printf '%s\n' 0)"
+mem_mb="$((mem_kb / 1024))"
+
+case "${ram_root_mode}" in
+  0|false|off|disk)
+    try_disk_root "${root_fallback}" "${root_fallback_fstype}" "${mem_mb}" || record_rootfs_state "ram-root" "initramfs-fallback" "${mem_mb}"
+    ;;
+  force|1|true|ram)
+    record_rootfs_state "ram-root" "initramfs-forced" "${mem_mb}"
+    ;;
+  *)
+    if [ "${mem_mb}" -lt "${ram_root_min_mb}" ]; then
+      try_disk_root "${root_fallback}" "${root_fallback_fstype}" "${mem_mb}" || record_rootfs_state "ram-root" "initramfs-low-memory-fallback-missing" "${mem_mb}"
+    else
+      record_rootfs_state "ram-root" "initramfs-auto" "${mem_mb}"
+    fi
+    ;;
+esac
 
 if command -v modprobe >/dev/null 2>&1; then
   # Prefer the virtio DRM path in QEMU, but keep booting if modules are absent.

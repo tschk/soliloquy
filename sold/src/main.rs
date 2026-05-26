@@ -355,6 +355,7 @@ struct RuntimeStatus {
     javascript: JavascriptRuntimeStatus,
     display: DisplayRuntimeStatus,
     kernel_policy: KernelPolicyStatus,
+    pressure: PressureRuntimeStatus,
     optimizations: Vec<RuntimeOptimizationStatus>,
 }
 
@@ -387,9 +388,12 @@ struct BrowserBootMetrics {
     session_start_unix_ms: Option<u128>,
     sold_start_unix_ms: Option<u128>,
     sold_ready_unix_ms: Option<u128>,
+    sold_probe_unix_ms: Option<u128>,
+    browser_launch_unix_ms: Option<u128>,
     servo_spawn_unix_ms: Option<u128>,
     first_frame_unix_ms: Option<u128>,
     interactive_unix_ms: Option<u128>,
+    browser_exit_unix_ms: Option<u128>,
     renderer_pid: Option<u64>,
     renderer_restarts: Option<u64>,
     last_renderer_exit: Option<i64>,
@@ -428,8 +432,57 @@ struct KernelPolicyStatus {
     profile: String,
     cgroup_v2_available: bool,
     cgroups_state: Option<String>,
+    features: KernelFeatureStatus,
+    source: KernelSourceStatus,
     groups: Vec<KernelPolicyGroupStatus>,
     renderer_pid: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct KernelFeatureStatus {
+    cgroup_v2_available: bool,
+    cpu_controller_available: bool,
+    io_controller_available: bool,
+    memory_controller_available: bool,
+    pids_controller_available: bool,
+    bbr_available: bool,
+    tcp_fastopen_available: bool,
+    virtio_gpu_available: bool,
+    mglru_available: bool,
+    zram_available: bool,
+    damon_available: bool,
+    seccomp_available: bool,
+    landlock_available: bool,
+    sched_ext_available: bool,
+    preempt_rt_available: bool,
+    solfs_available: bool,
+    erofs_available: bool,
+    squashfs_available: bool,
+}
+
+#[derive(Serialize)]
+struct KernelSourceStatus {
+    mode: String,
+    in_tree_path: String,
+    source_env: String,
+    active_source: Option<String>,
+    in_tree_present: bool,
+    patch_queue_present: bool,
+    bore_lane_present: bool,
+}
+
+#[derive(Serialize)]
+struct PressureRuntimeStatus {
+    level: &'static str,
+    psi_available: bool,
+    cpu_psi_available: bool,
+    memory_psi_available: bool,
+    io_psi_available: bool,
+    mglru_active: bool,
+    zram_state: Option<String>,
+    zram_size: Option<String>,
+    damon_active: bool,
+    ram_root_state: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -477,22 +530,67 @@ impl Default for KernelPolicyConfig {
                     pids_max: Some(128),
                 },
                 KernelPolicyGroupConfig {
+                    id: "network".to_string(),
+                    path: "soliloquy/network".to_string(),
+                    cpu_weight: Some(250),
+                    io_weight: Some(500),
+                    memory_high: Some("384M".to_string()),
+                    memory_max: Some("640M".to_string()),
+                    pids_max: Some(192),
+                },
+                KernelPolicyGroupConfig {
                     id: "browser".to_string(),
                     path: "soliloquy/browser".to_string(),
-                    cpu_weight: Some(300),
+                    cpu_weight: Some(350),
                     io_weight: Some(300),
                     memory_high: Some("768M".to_string()),
-                    memory_max: None,
+                    memory_max: Some("1024M".to_string()),
                     pids_max: Some(256),
                 },
                 KernelPolicyGroupConfig {
-                    id: "renderer".to_string(),
-                    path: "soliloquy/renderer".to_string(),
+                    id: "foreground-renderer".to_string(),
+                    path: "soliloquy/foreground-renderer".to_string(),
                     cpu_weight: Some(800),
                     io_weight: Some(800),
                     memory_high: Some("1536M".to_string()),
                     memory_max: Some("2304M".to_string()),
                     pids_max: Some(512),
+                },
+                KernelPolicyGroupConfig {
+                    id: "background-renderer".to_string(),
+                    path: "soliloquy/background-renderer".to_string(),
+                    cpu_weight: Some(250),
+                    io_weight: Some(200),
+                    memory_high: Some("768M".to_string()),
+                    memory_max: Some("1280M".to_string()),
+                    pids_max: Some(384),
+                },
+                KernelPolicyGroupConfig {
+                    id: "frozen-renderer".to_string(),
+                    path: "soliloquy/frozen-renderer".to_string(),
+                    cpu_weight: Some(50),
+                    io_weight: Some(50),
+                    memory_high: Some("384M".to_string()),
+                    memory_max: Some("768M".to_string()),
+                    pids_max: Some(256),
+                },
+                KernelPolicyGroupConfig {
+                    id: "discardable-renderer".to_string(),
+                    path: "soliloquy/discardable-renderer".to_string(),
+                    cpu_weight: Some(10),
+                    io_weight: Some(10),
+                    memory_high: Some("128M".to_string()),
+                    memory_max: Some("256M".to_string()),
+                    pids_max: Some(128),
+                },
+                KernelPolicyGroupConfig {
+                    id: "gpu-compositor".to_string(),
+                    path: "soliloquy/gpu-compositor".to_string(),
+                    cpu_weight: Some(900),
+                    io_weight: Some(300),
+                    memory_high: Some("512M".to_string()),
+                    memory_max: Some("768M".to_string()),
+                    pids_max: Some(192),
                 },
             ],
         }
@@ -1231,6 +1329,8 @@ fn build_runtime_status(
                     .u128("SOLILOQUY_SOLD_START_UNIX_MS")
                     .or_else(|| env_u128("SOLILOQUY_SOLD_START_UNIX_MS")),
                 sold_ready_unix_ms: runtime_state.u128("SOLILOQUY_SOLD_READY_UNIX_MS"),
+                sold_probe_unix_ms: runtime_state.u128("SOLILOQUY_SOLD_PROBE_UNIX_MS"),
+                browser_launch_unix_ms: runtime_state.u128("SOLILOQUY_BROWSER_LAUNCH_UNIX_MS"),
                 servo_spawn_unix_ms: runtime_state.u128("SOLILOQUY_SERVO_SPAWN_UNIX_MS"),
                 first_frame_unix_ms: runtime_state
                     .u128("SOLILOQUY_FIRST_FRAME_UNIX_MS")
@@ -1238,6 +1338,7 @@ fn build_runtime_status(
                 interactive_unix_ms: runtime_state
                     .u128("SOLILOQUY_BROWSER_INTERACTIVE_UNIX_MS")
                     .or_else(|| env_u128("SOLILOQUY_BROWSER_INTERACTIVE_UNIX_MS")),
+                browser_exit_unix_ms: runtime_state.u128("SOLILOQUY_BROWSER_EXIT_UNIX_MS"),
                 renderer_pid,
                 renderer_restarts: runtime_state
                     .u64("SOLILOQUY_RENDERER_RESTARTS")
@@ -1261,6 +1362,7 @@ fn build_runtime_status(
             headless: env_flag("SOL_SERVO_HEADLESS"),
         },
         kernel_policy: build_kernel_policy_status(renderer_pid, runtime_state),
+        pressure: build_pressure_runtime_status(runtime_state),
         optimizations: vec![
             RuntimeOptimizationStatus {
                 id: "v8-flags",
@@ -1346,7 +1448,12 @@ fn build_kernel_policy_status(
     runtime_state: &RuntimeState,
 ) -> KernelPolicyStatus {
     let config = read_kernel_policy_config();
-    let cgroup_v2_available = FsPath::new("/sys/fs/cgroup/cgroup.controllers").exists();
+    let cgroup_v2_available = kernel_feature_flag(
+        runtime_state,
+        "SOLILOQUY_KERNEL_FEATURE_CGROUP_V2",
+        FsPath::new("/sys/fs/cgroup/cgroup.controllers").exists(),
+    );
+    let features = kernel_feature_status(runtime_state, cgroup_v2_available);
     let groups = config
         .groups
         .iter()
@@ -1358,9 +1465,244 @@ fn build_kernel_policy_status(
             .unwrap_or(config.profile),
         cgroup_v2_available,
         cgroups_state: runtime_state.string("SOLILOQUY_KERNEL_POLICY_CGROUPS"),
+        features,
+        source: build_kernel_source_status(runtime_state),
         groups,
         renderer_pid,
     }
+}
+
+fn kernel_feature_status(
+    runtime_state: &RuntimeState,
+    cgroup_v2_available: bool,
+) -> KernelFeatureStatus {
+    let controllers =
+        std::fs::read_to_string("/sys/fs/cgroup/cgroup.controllers").unwrap_or_default();
+    KernelFeatureStatus {
+        cgroup_v2_available,
+        cpu_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_CPU_CONTROLLER",
+            controller_available(&controllers, "cpu"),
+        ),
+        io_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_IO_CONTROLLER",
+            controller_available(&controllers, "io"),
+        ),
+        memory_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_MEMORY_CONTROLLER",
+            controller_available(&controllers, "memory"),
+        ),
+        pids_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_PIDS_CONTROLLER",
+            controller_available(&controllers, "pids"),
+        ),
+        bbr_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_BBR",
+            proc_file_contains(
+                FsPath::new("/proc/sys/net/ipv4/tcp_available_congestion_control"),
+                "bbr",
+            ),
+        ),
+        tcp_fastopen_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_TCP_FASTOPEN",
+            FsPath::new("/proc/sys/net/ipv4/tcp_fastopen").exists(),
+        ),
+        virtio_gpu_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_VIRTIO_GPU",
+            module_available("virtio_gpu"),
+        ),
+        mglru_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_MGLRU",
+            FsPath::new("/sys/kernel/mm/lru_gen/enabled").exists(),
+        ),
+        zram_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_ZRAM",
+            FsPath::new("/sys/block/zram0").exists(),
+        ),
+        damon_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_DAMON",
+            FsPath::new("/sys/kernel/mm/damon/admin").exists(),
+        ),
+        seccomp_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_SECCOMP",
+            FsPath::new("/proc/sys/kernel/seccomp/actions_avail").exists(),
+        ),
+        landlock_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_LANDLOCK",
+            FsPath::new("/proc/sys/kernel/landlock").exists()
+                || FsPath::new("/proc/sys/kernel/landlock/restrict_self").exists(),
+        ),
+        sched_ext_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_SCHED_EXT",
+            FsPath::new("/sys/kernel/sched_ext").exists(),
+        ),
+        preempt_rt_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_PREEMPT_RT",
+            FsPath::new("/sys/kernel/realtime").exists(),
+        ),
+        solfs_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_SOLFS",
+            filesystem_available("solfs"),
+        ),
+        erofs_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_EROFS",
+            filesystem_available("erofs"),
+        ),
+        squashfs_available: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_CAP_SQUASHFS",
+            filesystem_available("squashfs"),
+        ),
+    }
+}
+
+fn build_kernel_source_status(runtime_state: &RuntimeState) -> KernelSourceStatus {
+    let in_tree_path = runtime_state
+        .string("SOLILOQUY_KERNEL_SOURCE_IN_TREE")
+        .unwrap_or_else(|| "system/alpine/kernel/linux".to_string());
+    let source_env = runtime_state
+        .string("SOLILOQUY_KERNEL_SOURCE_ENV")
+        .unwrap_or_else(|| "SOLILOQUY_KERNEL_SOURCE".to_string());
+    let active_source = runtime_state
+        .string("SOLILOQUY_KERNEL_SOURCE")
+        .or_else(|| std::env::var("SOLILOQUY_KERNEL_SOURCE").ok());
+    let in_tree_present = runtime_state
+        .bool("SOLILOQUY_KERNEL_SOURCE_IN_TREE_PRESENT")
+        .unwrap_or_else(|| FsPath::new(&in_tree_path).exists());
+    KernelSourceStatus {
+        mode: runtime_state
+            .string("SOLILOQUY_KERNEL_SOURCE_MODE")
+            .unwrap_or_else(|| "external-or-in-tree".to_string()),
+        in_tree_path,
+        source_env,
+        active_source,
+        in_tree_present,
+        patch_queue_present: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_PATCH_QUEUE",
+            FsPath::new("system/alpine/kernel/patches/series").exists(),
+        ),
+        bore_lane_present: runtime_capability_active(
+            runtime_state,
+            "SOLILOQUY_KERNEL_BORE_LANE",
+            FsPath::new("system/alpine/kernel/patch-series/bore-style.json").exists(),
+        ),
+    }
+}
+
+fn build_pressure_runtime_status(runtime_state: &RuntimeState) -> PressureRuntimeStatus {
+    let psi_available = FsPath::new("/proc/pressure").exists();
+    let cpu_psi_available = runtime_capability_active(
+        runtime_state,
+        "SOLILOQUY_PRESSURE_PSI_CPU",
+        FsPath::new("/proc/pressure/cpu").exists(),
+    );
+    let memory_psi_available = runtime_capability_active(
+        runtime_state,
+        "SOLILOQUY_PRESSURE_PSI_MEMORY",
+        FsPath::new("/proc/pressure/memory").exists(),
+    );
+    let io_psi_available = runtime_capability_active(
+        runtime_state,
+        "SOLILOQUY_PRESSURE_PSI_IO",
+        FsPath::new("/proc/pressure/io").exists(),
+    );
+    let mglru_active = runtime_capability_active(
+        runtime_state,
+        "SOLILOQUY_KERNEL_CAP_MGLRU",
+        FsPath::new("/sys/kernel/mm/lru_gen/enabled").exists(),
+    );
+    let damon_active = runtime_capability_active(
+        runtime_state,
+        "SOLILOQUY_KERNEL_CAP_DAMON",
+        FsPath::new("/sys/kernel/mm/damon/admin").exists(),
+    );
+    PressureRuntimeStatus {
+        level: pressure_level(runtime_state, memory_psi_available),
+        psi_available,
+        cpu_psi_available,
+        memory_psi_available,
+        io_psi_available,
+        mglru_active,
+        zram_state: runtime_state.string("SOLILOQUY_ZRAM_STATE"),
+        zram_size: runtime_state.string("SOLILOQUY_ZRAM_SIZE"),
+        damon_active,
+        ram_root_state: runtime_state.string("SOLILOQUY_RAM_ROOT_STATE"),
+    }
+}
+
+fn pressure_level(runtime_state: &RuntimeState, memory_psi_available: bool) -> &'static str {
+    if let Some(level) = runtime_state.string("SOLILOQUY_PRESSURE_LEVEL") {
+        return match level.as_str() {
+            "normal" => "normal",
+            "constrained" => "constrained",
+            "pressure" => "pressure",
+            "critical" => "critical",
+            "observable" => "observable",
+            _ => "unknown",
+        };
+    }
+    if memory_psi_available {
+        "observable"
+    } else {
+        "unknown"
+    }
+}
+
+fn kernel_feature_flag(runtime_state: &RuntimeState, key: &str, fallback: bool) -> bool {
+    runtime_state.bool(key).unwrap_or(fallback)
+}
+
+fn runtime_capability_active(runtime_state: &RuntimeState, key: &str, fallback: bool) -> bool {
+    match runtime_state.string(key).as_deref() {
+        Some("active") | Some("1") | Some("true") => true,
+        Some("unavailable") | Some("0") | Some("false") => false,
+        _ => fallback,
+    }
+}
+
+fn controller_available(controllers: &str, controller: &str) -> bool {
+    controllers
+        .split_whitespace()
+        .any(|item| item == controller)
+}
+
+fn proc_file_contains(path: &FsPath, needle: &str) -> bool {
+    std::fs::read_to_string(path)
+        .map(|content| content.split_whitespace().any(|item| item == needle))
+        .unwrap_or(false)
+}
+
+fn filesystem_available(name: &str) -> bool {
+    std::fs::read_to_string("/proc/filesystems")
+        .map(|content| {
+            content
+                .lines()
+                .filter_map(|line| line.split_whitespace().last())
+                .any(|item| item == name)
+        })
+        .unwrap_or(false)
+}
+
+fn module_available(module: &str) -> bool {
+    let path = format!("/sys/module/{module}");
+    FsPath::new(&path).exists()
 }
 
 fn kernel_policy_group(
@@ -1441,6 +1783,14 @@ impl RuntimeState {
             None
         } else {
             Some(value.to_string())
+        }
+    }
+
+    fn bool(&self, key: &str) -> Option<bool> {
+        match self.values.get(key)?.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "available" | "active" => Some(true),
+            "0" | "false" | "no" | "unavailable" | "missing" => Some(false),
+            _ => None,
         }
     }
 }
@@ -2371,9 +2721,7 @@ mod tests {
     #[test]
     fn runtime_status_is_honest_about_v8_bridge() {
         let registry = default_service_registry();
-        let state = parse_runtime_state(
-            "SOLILOQUY_SESSION_START_UNIX_MS=1000\nSOLILOQUY_RENDERER_PID=42\nSOLILOQUY_RENDERER_RESTARTS=2\n",
-        );
+        let state = parse_runtime_state("SOLILOQUY_SESSION_START_UNIX_MS=1000\nSOLILOQUY_BROWSER_LAUNCH_UNIX_MS=1500\nSOLILOQUY_BROWSER_EXIT_UNIX_MS=2500\nSOLILOQUY_RENDERER_PID=42\nSOLILOQUY_RENDERER_RESTARTS=2\nSOLILOQUY_KERNEL_FEATURE_CGROUP_V2=1\nSOLILOQUY_KERNEL_FEATURE_CPU_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_IO_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_MEMORY_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_PIDS_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_BBR=1\nSOLILOQUY_KERNEL_FEATURE_TCP_FASTOPEN=1\nSOLILOQUY_KERNEL_CAP_MGLRU=active\nSOLILOQUY_KERNEL_CAP_ZRAM=active\nSOLILOQUY_KERNEL_CAP_DAMON=unavailable\nSOLILOQUY_KERNEL_CAP_SECCOMP=active\nSOLILOQUY_KERNEL_CAP_LANDLOCK=active\nSOLILOQUY_KERNEL_CAP_SCHED_EXT=unavailable\nSOLILOQUY_KERNEL_CAP_PREEMPT_RT=unavailable\nSOLILOQUY_KERNEL_CAP_SOLFS=active\nSOLILOQUY_KERNEL_CAP_EROFS=active\nSOLILOQUY_KERNEL_CAP_SQUASHFS=active\nSOLILOQUY_KERNEL_SOURCE_MODE=external-or-in-tree\nSOLILOQUY_KERNEL_SOURCE_IN_TREE=system/alpine/kernel/linux\nSOLILOQUY_KERNEL_SOURCE_IN_TREE_PRESENT=0\nSOLILOQUY_KERNEL_PATCH_QUEUE=active\nSOLILOQUY_KERNEL_BORE_LANE=active\nSOLILOQUY_PRESSURE_PSI_CPU=active\nSOLILOQUY_PRESSURE_PSI_MEMORY=active\nSOLILOQUY_PRESSURE_PSI_IO=active\nSOLILOQUY_PRESSURE_LEVEL=observable\nSOLILOQUY_ZRAM_STATE=active\nSOLILOQUY_ZRAM_SIZE=768M\nSOLILOQUY_RAM_ROOT_STATE=active\n");
         let runtime = build_runtime_status(&Settings::default(), &registry, &state);
         assert_eq!(runtime.javascript.requested_engine, "v8-experimental");
         assert_eq!(runtime.javascript.active_engine, "mozjs");
@@ -2396,15 +2744,72 @@ mod tests {
             runtime.browser.boot_metrics.session_start_unix_ms,
             Some(1000)
         );
+        assert_eq!(
+            runtime.browser.boot_metrics.browser_launch_unix_ms,
+            Some(1500)
+        );
+        assert_eq!(
+            runtime.browser.boot_metrics.browser_exit_unix_ms,
+            Some(2500)
+        );
         assert_eq!(runtime.browser.boot_metrics.renderer_pid, Some(42));
         assert_eq!(runtime.browser.boot_metrics.renderer_restarts, Some(2));
         assert_eq!(runtime.kernel_policy.profile, "internet-appliance");
         assert_eq!(runtime.kernel_policy.renderer_pid, Some(42));
+        assert!(runtime.kernel_policy.features.cgroup_v2_available);
+        assert!(runtime.kernel_policy.features.cpu_controller_available);
+        assert!(runtime.kernel_policy.features.io_controller_available);
+        assert!(runtime.kernel_policy.features.memory_controller_available);
+        assert!(runtime.kernel_policy.features.pids_controller_available);
+        assert!(runtime.kernel_policy.features.bbr_available);
+        assert!(runtime.kernel_policy.features.tcp_fastopen_available);
+        assert!(runtime.kernel_policy.features.mglru_available);
+        assert!(runtime.kernel_policy.features.zram_available);
+        assert!(!runtime.kernel_policy.features.damon_available);
+        assert!(runtime.kernel_policy.features.seccomp_available);
+        assert!(runtime.kernel_policy.features.landlock_available);
+        assert!(!runtime.kernel_policy.features.sched_ext_available);
+        assert!(!runtime.kernel_policy.features.preempt_rt_available);
+        assert!(runtime.kernel_policy.features.solfs_available);
+        assert!(runtime.kernel_policy.features.erofs_available);
+        assert!(runtime.kernel_policy.features.squashfs_available);
+        assert_eq!(
+            runtime.kernel_policy.source.in_tree_path,
+            "system/alpine/kernel/linux"
+        );
+        assert!(!runtime.kernel_policy.source.in_tree_present);
+        assert!(runtime.kernel_policy.source.patch_queue_present);
+        assert!(runtime.kernel_policy.source.bore_lane_present);
+        assert_eq!(runtime.pressure.level, "observable");
+        assert!(runtime.pressure.cpu_psi_available);
+        assert!(runtime.pressure.memory_psi_available);
+        assert!(runtime.pressure.io_psi_available);
+        assert!(runtime.pressure.mglru_active);
+        assert_eq!(runtime.pressure.zram_state.as_deref(), Some("active"));
+        assert_eq!(runtime.pressure.zram_size.as_deref(), Some("768M"));
+        assert_eq!(runtime.pressure.ram_root_state.as_deref(), Some("active"));
+        for id in [
+            "system",
+            "network",
+            "browser",
+            "foreground-renderer",
+            "background-renderer",
+            "frozen-renderer",
+            "discardable-renderer",
+            "gpu-compositor",
+        ] {
+            assert!(runtime
+                .kernel_policy
+                .groups
+                .iter()
+                .any(|group| group.id == id));
+        }
         assert!(runtime
             .kernel_policy
             .groups
             .iter()
-            .any(|group| group.id == "renderer" && group.memory_high.as_deref() == Some("1536M")));
+            .any(|group| group.id == "foreground-renderer"
+                && group.memory_high.as_deref() == Some("1536M")));
     }
 
     #[test]

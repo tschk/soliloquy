@@ -12,6 +12,7 @@ Soliloquy is currently documented around Cargo, Bun, the Alpine appliance flow, 
 ## Runtime And Appliance
 
 - [Appliance System Architecture](./architecture/appliance-system.md)
+- [Soliloquy Alpine OS Optimization Plan](./architecture/os-optimization-plan.md)
 - [API Contract](./api_contract.md)
 - [RV8 Linkage Roadmap](./rv8_linkage_roadmap.md)
 - [Browser Optimizations](./browser_optimizations.md)
