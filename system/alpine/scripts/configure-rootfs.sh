@@ -153,7 +153,7 @@ nameserver 10.0.2.3
 EOF
 
 cat > "${ROOTFS}/etc/soliloquy/filesystems/fstab.plan" <<'EOF'
-soliloquy-root / erofs ro,nodev 0 0
+soliloquy-root / solfs ro,nodev 0 0
 soliloquy-state /state ext4 rw,nosuid,nodev 0 2
 tmpfs /run tmpfs nosuid,nodev,mode=0755 0 0
 tmpfs /tmp tmpfs nosuid,nodev,mode=0755 0 0

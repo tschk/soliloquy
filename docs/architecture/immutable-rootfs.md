@@ -6,10 +6,11 @@ Soliloquy uses an image-based root filesystem plus a separate persistent state f
 
 The appliance root image is built from `build/alpine/rootfs` using `system/alpine/scripts/build-rootfs-image.sh`.
 
-The preferred format is EROFS because the Soliloquy target is a read-mostly browser appliance and EROFS keeps the root filesystem explicitly immutable. SquashFS remains the fallback for hosts or boot experiments that lack EROFS tooling.
+The preferred format is SolFS because the Soliloquy target is a read-mostly internet appliance with generation verification, browser-runtime provenance, and disposable cache semantics in the filesystem contract. EROFS remains the mature immutable fallback, and SquashFS remains the fallback for hosts or boot experiments that lack EROFS tooling.
 
 Concrete image outputs:
 
+- `SOLILOQUY_ROOTFS_FORMAT=solfs system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images` creates `build/alpine/images/soliloquy-rootfs.solfs`.
 - `SOLILOQUY_ROOTFS_FORMAT=erofs system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images` creates `build/alpine/images/soliloquy-rootfs.erofs`.
 - `SOLILOQUY_ROOTFS_FORMAT=squashfs system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images` creates `build/alpine/images/soliloquy-rootfs.squashfs`.
 
@@ -21,7 +22,7 @@ The booted filesystem plan is:
 
 | Mount | Type | Options | Purpose |
 | --- | --- | --- | --- |
-| `/` | EROFS, SquashFS fallback | `ro,nodev` | Immutable Alpine, OpenRC, Servo launcher, sold, policy, service registry |
+| `/` | SolFS, EROFS fallback, SquashFS fallback | `ro,nodev` | Immutable Alpine, OpenRC, Servo launcher, sold, policy, service registry |
 | `/state` | ext4 | `rw,nosuid,nodev` | Persistent user and system state |
 | `/run` | tmpfs | `nosuid,nodev,mode=0755` | PID files, sockets, runtime telemetry |
 | `/tmp` | tmpfs | `nosuid,nodev,mode=0755` | Short-lived system scratch |

@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+SOLFS_KERNEL_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+
+fail() {
+  printf 'validate-solfs-kernel: %s\n' "$1" >&2
+  exit 1
+}
+
+assert_file() {
+  [ -f "$1" ] || fail "missing file: $1"
+}
+
+assert_contains() {
+  file="$1"
+  pattern="$2"
+  if ! grep -Eq "${pattern}" "${file}"; then
+    fail "${file} does not match ${pattern}"
+  fi
+}
+
+assert_file "${SOLFS_KERNEL_DIR}/solfs_vfs.c"
+assert_file "${SOLFS_KERNEL_DIR}/solfs_core.rs"
+assert_file "${SOLFS_KERNEL_DIR}/solfs_format.h"
+assert_file "${SOLFS_KERNEL_DIR}/Kbuild"
+assert_file "${SOLFS_KERNEL_DIR}/Makefile"
+
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'register_filesystem'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'mount_bdev'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_rust_validate_header'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'MODULE_LICENSE\("GPL"\)'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_core.rs" '#!\[no_std\]'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_core.rs" 'extern "C" fn solfs_rust_validate_header'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_format.h" 'SOLFSV01'
+assert_contains "${SOLFS_KERNEL_DIR}/Kbuild" 'solfs_vfs.o solfs_core.o'
+
+if [ -n "${KERNEL_SRC:-}" ]; then
+  [ -d "${KERNEL_SRC}" ] || fail "KERNEL_SRC does not exist: ${KERNEL_SRC}"
+  make -C "${KERNEL_SRC}" M="${SOLFS_KERNEL_DIR}" modules
+fi
+
+printf 'validate-solfs-kernel: ok\n'

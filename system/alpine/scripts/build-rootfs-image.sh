@@ -6,7 +6,7 @@ OUT_DIR="${2:-build/alpine/images}"
 FORMAT="${SOLILOQUY_ROOTFS_FORMAT:-erofs}"
 
 case "${FORMAT}" in
-  erofs|squashfs)
+  solfs|erofs|squashfs)
     ;;
   *)
     echo "unsupported rootfs format: ${FORMAT}" >&2
@@ -21,7 +21,15 @@ fi
 
 mkdir -p "${OUT_DIR}"
 
-if [ "${FORMAT}" = "erofs" ]; then
+if [ "${FORMAT}" = "solfs" ]; then
+  OUT_IMG="${OUT_DIR}/soliloquy-rootfs.solfs"
+  rm -f "${OUT_IMG}"
+  if command -v solfsctl >/dev/null 2>&1; then
+    solfsctl mkfs "${ROOTFS_DIR}" "${OUT_IMG}"
+  else
+    (cd "$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd)" && cargo run --package solfsctl --quiet -- mkfs "${ROOTFS_DIR}" "${OUT_IMG}")
+  fi
+elif [ "${FORMAT}" = "erofs" ]; then
   command -v mkfs.erofs >/dev/null 2>&1 || {
     echo "missing required tool: mkfs.erofs" >&2
     exit 1

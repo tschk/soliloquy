@@ -73,6 +73,7 @@ require_value() {
 
 for option in \
   CONFIG_CGROUPS \
+  CONFIG_RUST \
   CONFIG_CGROUP_BPF \
   CONFIG_CGROUP_PIDS \
   CONFIG_CPUSETS \
@@ -110,6 +111,7 @@ done
 
 for option in \
   CONFIG_CGROUPS \
+  CONFIG_RUST \
   CONFIG_SECCOMP \
   CONFIG_SECURITY_LANDLOCK \
   CONFIG_VIRTIO \

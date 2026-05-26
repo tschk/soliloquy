@@ -40,6 +40,7 @@ Output:
 Build a sealed rootfs image from the configured rootfs:
 
 ```sh
+SOLILOQUY_ROOTFS_FORMAT=solfs ./system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images
 SOLILOQUY_ROOTFS_FORMAT=erofs ./system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images
 SOLILOQUY_ROOTFS_FORMAT=squashfs ./system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/images
 ```

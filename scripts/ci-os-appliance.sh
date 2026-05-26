@@ -53,6 +53,7 @@ for path in \
   system/alpine/scripts/build-native-policy-modules.sh \
   system/alpine/scripts/build-rootfs-image.sh \
   system/alpine/scripts/validate-filesystem-plan.sh \
+  system/solfs/kernel/validate-solfs-kernel.sh \
   system/alpine/kernel/validate-kernel-config.sh \
   system/alpine/scripts/sol-session-start \
   system/alpine/scripts/sol-servo-wrapper \
@@ -77,21 +78,32 @@ assert_file system/alpine/kernel-policy.json
 assert_file system/alpine/filesystems/rootfs-layout.json
 assert_file system/alpine/filesystems/state-mounts.json
 assert_contains system/alpine/filesystems/rootfs-layout.json '"role": "immutable-system"'
+assert_contains system/alpine/filesystems/rootfs-layout.json '"solfs"'
 assert_contains system/alpine/filesystems/rootfs-layout.json '"erofs"'
 assert_contains system/alpine/filesystems/rootfs-layout.json '"squashfs"'
 assert_contains system/alpine/filesystems/state-mounts.json '"target": "/var/lib/soliloquy"'
 assert_contains system/alpine/filesystems/state-mounts.json '"target": "/home"'
 assert_contains system/alpine/scripts/build-rootfs-image.sh 'mkfs.erofs'
 assert_contains system/alpine/scripts/build-rootfs-image.sh 'mksquashfs'
+assert_contains system/alpine/scripts/build-rootfs-image.sh 'solfsctl mkfs'
 assert_file system/alpine/kernel/APKBUILD
 assert_file system/alpine/kernel/README.md
 assert_file system/alpine/kernel/soliloquy-internet-appliance.config
+assert_file system/solfs/kernel/solfs_vfs.c
+assert_file system/solfs/kernel/solfs_core.rs
+assert_file system/solfs/kernel/solfs_format.h
+assert_contains system/solfs/kernel/solfs_vfs.c 'mount_bdev'
+assert_contains system/solfs/kernel/solfs_vfs.c 'register_filesystem'
+assert_contains system/solfs/kernel/solfs_core.rs '#!\[no_std\]'
+assert_contains system/solfs/kernel/solfs_core.rs 'solfs_rust_validate_header'
+system/solfs/kernel/validate-solfs-kernel.sh
 assert_file system/native/kernel-policy-v/policy.v
 assert_file system/native/kernel-policy-v/v.mod
 assert_contains system/alpine/kernel-policy.json '"profile": "internet-appliance"'
 assert_contains system/alpine/kernel/APKBUILD '^pkgname=linux-soliloquy-appliance$'
 assert_contains system/alpine/kernel/APKBUILD 'validate-kernel-config.sh'
 assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_CGROUPS=y$'
+assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_RUST=y$'
 assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_ZRAM=y$'
 assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_VIRTIO_NET=y$'
 assert_contains system/alpine/kernel/soliloquy-internet-appliance.config '^CONFIG_DRM_VIRTIO_GPU=y$'
@@ -203,6 +215,7 @@ assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-netd"'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-zram"'
 assert_contains "${tmp_root}/etc/soliloquy/services.json" '"id": "sol-session"'
 system/alpine/scripts/validate-filesystem-plan.sh "${tmp_root}" >/dev/null
+assert_contains "${tmp_root}/etc/soliloquy/filesystems/fstab.plan" '^soliloquy-root / solfs ro,nodev 0 0$'
 [ ! -e "${tmp_root}/etc/runlevels/default/local" ] || fail "local must not block browser appliance boot"
 
 printf 'ci-os-appliance: ok\n'
