@@ -5,6 +5,8 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
+pub mod v2;
+
 pub const MAGIC: &[u8; 8] = b"SOLFSV01";
 pub const HEADER_LEN: usize = 56;
 pub const ENTRY_LEN: usize = 92;

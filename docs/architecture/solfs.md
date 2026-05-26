@@ -55,3 +55,14 @@ Flags:
 Immutable images keep digest verification in tooling and mount read-only in the kernel. Mutable images allow overwrites and append-growth of existing files by relocating the file to a new aligned extent at the end of the image, updating the entry table, and advancing `image_size`. Creating files, unlinking files, renaming files, shrinking files, reusable free space, multi-extent files, and directory mutation are outside v0; those require the v2 bitmap, extent table, and journal format.
 
 The root entry is inode `1`, parent `1`, directory kind, and empty name. Symlinks are rejected in v0 so the immutable root cannot smuggle host-dependent path behavior into the boot image.
+
+## Format V2
+
+SolFS v2 keeps the v1 immutable image contract but adds mutable allocation metadata after the v1 image body:
+
+- allocation bitmap: one bit per filesystem block,
+- extent table: records inode, logical block, physical block, block count, and flags,
+- journal region: fixed-size intent and commit records for bitmap, extent, and inode-size updates,
+- data region: block-aligned file blocks.
+
+`solfsctl plan-v2 <image> <target-size>` computes the concrete v2 layout for an existing mutable image. The v2 kernel mount path is not enabled until bitmap replay, extent validation, and journal commit handling are present.

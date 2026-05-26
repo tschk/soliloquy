@@ -66,6 +66,30 @@ fn run() -> solfsctl::Result<()> {
                 .ok_or_else(|| solfsctl::SolfsError::Invalid("missing value".into()))?;
             solfsctl::overwrite_file(image, &path, value.as_bytes())?;
         }
+        Some("plan-v2") => {
+            let image = args
+                .next()
+                .ok_or_else(|| solfsctl::SolfsError::Invalid("missing image path".into()))?;
+            let target_size = args
+                .next()
+                .ok_or_else(|| solfsctl::SolfsError::Invalid("missing target size".into()))?
+                .parse::<u64>()
+                .map_err(|_| solfsctl::SolfsError::Invalid("bad target size".into()))?;
+            let image = solfsctl::inspect_image(image)?;
+            let layout = solfsctl::v2::plan_v2_layout(&image.header, &image.entries, target_size)?;
+            println!(
+                "solfs-v2 block_size={} bitmap={}+{} extents={}+{} journal={}+{} data_start={} free_blocks={}",
+                layout.block_size,
+                layout.bitmap_offset,
+                layout.bitmap_len,
+                layout.extent_table_offset,
+                layout.extent_table_len,
+                layout.journal_offset,
+                layout.journal_len,
+                layout.data_start,
+                layout.free_blocks
+            );
+        }
         Some(command) => {
             return Err(solfsctl::SolfsError::Invalid(format!(
                 "unknown command: {command}"
@@ -73,7 +97,7 @@ fn run() -> solfsctl::Result<()> {
         }
         None => {
             return Err(solfsctl::SolfsError::Invalid(
-                "usage: solfsctl mkfs [--mutable] <source-dir> <image> | solfsctl inspect <image> | solfsctl read <image> <path> | solfsctl write <image> <path> <value>".into(),
+                "usage: solfsctl mkfs [--mutable] <source-dir> <image> | solfsctl inspect <image> | solfsctl read <image> <path> | solfsctl write <image> <path> <value> | solfsctl plan-v2 <image> <target-size>".into(),
             ));
         }
     }

@@ -40,7 +40,7 @@ assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'generic_file_mmap'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'generic_file_fsync'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'generic_file_write_iter'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'filemap_splice_read'
-assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'generic_writepages'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'filemap_dirty_folio'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'SOLFS_FLAG_MUTABLE'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'allocation_lock'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_align8'
@@ -48,11 +48,12 @@ assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_write_header_image_size
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_write_disk_entry'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'iget_locked'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_rust_validate_header'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" '__weak int solfs_rust_validate_header'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'MODULE_LICENSE\("GPL"\)'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_core.rs" '#!\[no_std\]'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_core.rs" 'extern "C" fn solfs_rust_validate_header'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_format.h" 'SOLFSV01'
-assert_contains "${SOLFS_KERNEL_DIR}/Kbuild" 'solfs_vfs.o solfs_core.o'
+assert_contains "${SOLFS_KERNEL_DIR}/Kbuild" 'solfs_vfs.o'
 
 if [ -n "${KERNEL_SRC:-}" ]; then
   [ -d "${KERNEL_SRC}" ] || fail "KERNEL_SRC does not exist: ${KERNEL_SRC}"

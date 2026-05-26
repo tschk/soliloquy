@@ -9,13 +9,41 @@
 #include <linux/string.h>
 #include <linux/time.h>
 #include <linux/uio.h>
+#include <linux/writeback.h>
 
 #include "solfs_format.h"
 
 #define SOLFS_MAX_ENTRIES 65536
 #define SOLFS_MAX_NAMES_SIZE (16 * 1024 * 1024)
 
-extern int solfs_rust_validate_header(struct solfs_disk_header header);
+__weak int solfs_rust_validate_header(struct solfs_disk_header header)
+{
+	u32 version = le32_to_cpu(header.version);
+	u32 entry_count = le32_to_cpu(header.entry_count);
+	u64 entries_offset = le64_to_cpu(header.entries_offset);
+	u64 names_offset = le64_to_cpu(header.names_offset);
+	u64 data_offset = le64_to_cpu(header.data_offset);
+	u64 image_size = le64_to_cpu(header.image_size);
+	u64 entries_len;
+
+	if (memcmp(header.magic, SOLFS_MAGIC_STRING, sizeof(header.magic)))
+		return -EINVAL;
+	if (version != SOLFS_VERSION)
+		return -EINVAL;
+	if (!entry_count)
+		return -EINVAL;
+	if (check_mul_overflow((u64)entry_count, (u64)SOLFS_ENTRY_LEN, &entries_len))
+		return -EINVAL;
+	if (entries_offset != SOLFS_HEADER_LEN)
+		return -EINVAL;
+	if (names_offset < entries_offset + entries_len)
+		return -EINVAL;
+	if (data_offset < names_offset)
+		return -EINVAL;
+	if (image_size < data_offset)
+		return -EINVAL;
+	return 0;
+}
 
 struct solfs_entry {
 	u64 index;
@@ -192,7 +220,9 @@ static struct inode *solfs_make_inode(struct super_block *sb, struct solfs_entry
 	inode->i_size = entry->size;
 	inode->i_private = entry;
 	inode->i_mapping->a_ops = &solfs_aops;
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode_set_atime_to_ts(inode, current_time(inode));
+	inode_set_mtime_to_ts(inode, current_time(inode));
+	inode_set_ctime_current(inode);
 
 	if (entry->kind == SOLFS_KIND_DIR) {
 		inode->i_op = &solfs_dir_inode_ops;
@@ -356,11 +386,12 @@ static int solfs_write_folio(struct inode *inode, struct folio *folio)
 	return ret;
 }
 
-static int solfs_write_end(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, unsigned int copied, struct folio *folio, void *fsdata)
+static int solfs_write_end(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, unsigned int copied, struct page *page, void *fsdata)
 {
 	struct inode *inode = mapping->host;
 	struct solfs_entry *entry = inode->i_private;
 	struct solfs_sb_info *sbi = solfs_sbi(inode->i_sb);
+	struct folio *folio = page_folio(page);
 	u64 end;
 	u64 old_offset;
 	u64 old_size;
@@ -480,7 +511,6 @@ static const struct address_space_operations solfs_aops = {
 	.write_begin = solfs_write_begin,
 	.write_end = solfs_write_end,
 	.dirty_folio = filemap_dirty_folio,
-	.writepages = generic_writepages,
 };
 
 static int solfs_load_entries(struct super_block *sb, struct solfs_disk_header *header)

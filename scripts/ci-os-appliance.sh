@@ -70,6 +70,8 @@ do
 done
 assert_file scripts/ci-qemu-appliance.sh
 sh -n scripts/ci-qemu-appliance.sh
+assert_file scripts/ci-solfs-kernel-module.sh
+sh -n scripts/ci-solfs-kernel-module.sh
 assert_contains scripts/ci-qemu-appliance.sh 'Starting sol-kernel-policy'
 assert_contains scripts/ci-qemu-appliance.sh 'Starting sol-zram'
 assert_contains scripts/ci-qemu-appliance.sh 'Cannot find Xwayland binary'
