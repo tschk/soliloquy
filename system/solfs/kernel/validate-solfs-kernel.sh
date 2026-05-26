@@ -28,6 +28,10 @@ assert_file "${SOLFS_KERNEL_DIR}/Makefile"
 
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'register_filesystem'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'mount_bdev'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_lookup'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_iterate_shared'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_read_iter'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'iget_locked'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_rust_validate_header'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'MODULE_LICENSE\("GPL"\)'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_core.rs" '#!\[no_std\]'

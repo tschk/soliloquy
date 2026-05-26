@@ -31,19 +31,26 @@ pub extern "C" fn solfs_rust_validate_header(header: SolfsDiskHeader) -> i32 {
     let names_offset = u64::from_le(header.names_offset);
     let data_offset = u64::from_le(header.data_offset);
     let image_size = u64::from_le(header.image_size);
+    let entries_len = entry_count.saturating_mul(ENTRY_LEN);
     if entry_count == 0 {
         return -22;
     }
     if entries_offset != HEADER_LEN {
         return -22;
     }
-    if names_offset < entries_offset.saturating_add(entry_count.saturating_mul(ENTRY_LEN)) {
+    if entries_len / ENTRY_LEN != entry_count {
+        return -22;
+    }
+    if names_offset < entries_offset.saturating_add(entries_len) {
         return -22;
     }
     if data_offset < names_offset {
         return -22;
     }
     if image_size < data_offset {
+        return -22;
+    }
+    if image_size < names_offset {
         return -22;
     }
     0

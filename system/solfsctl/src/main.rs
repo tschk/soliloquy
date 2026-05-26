@@ -34,6 +34,16 @@ fn run() -> solfsctl::Result<()> {
             let image = solfsctl::inspect_image(image)?;
             println!("{}", solfsctl::render_text(&image));
         }
+        Some("read") => {
+            let image = args
+                .next()
+                .ok_or_else(|| solfsctl::SolfsError::Invalid("missing image path".into()))?;
+            let path = args
+                .next()
+                .ok_or_else(|| solfsctl::SolfsError::Invalid("missing file path".into()))?;
+            let bytes = solfsctl::read_file(image, &path)?;
+            print!("{}", String::from_utf8_lossy(&bytes));
+        }
         Some(command) => {
             return Err(solfsctl::SolfsError::Invalid(format!(
                 "unknown command: {command}"
@@ -41,7 +51,7 @@ fn run() -> solfsctl::Result<()> {
         }
         None => {
             return Err(solfsctl::SolfsError::Invalid(
-                "usage: solfsctl mkfs <source-dir> <image> | solfsctl inspect <image>".into(),
+                "usage: solfsctl mkfs <source-dir> <image> | solfsctl inspect <image> | solfsctl read <image> <path>".into(),
             ));
         }
     }

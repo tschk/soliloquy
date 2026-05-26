@@ -68,6 +68,31 @@ pub struct Image {
     pub entries: Vec<Entry>,
 }
 
+impl Image {
+    pub fn find_path(&self, path: &str) -> Option<&Entry> {
+        let path = query_path(path);
+        self.entries.iter().find(|entry| entry.path == path)
+    }
+
+    pub fn list_dir(&self, path: &str) -> Result<Vec<String>> {
+        let path = query_path(path);
+        let parent = self
+            .find_path(&path)
+            .ok_or_else(|| SolfsError::Invalid(format!("directory not found: {path}")))?;
+        if parent.kind != KIND_DIR {
+            return Err(SolfsError::Invalid(format!("not a directory: {path}")));
+        }
+        let mut names = self
+            .entries
+            .iter()
+            .filter(|entry| entry.parent == parent.inode && entry.inode != parent.inode)
+            .map(|entry| file_name(&entry.path).to_string())
+            .collect::<Vec<_>>();
+        names.sort();
+        Ok(names)
+    }
+}
+
 #[derive(Clone, Debug)]
 struct BuildEntry {
     inode: u64,
@@ -232,6 +257,31 @@ pub fn inspect_image(path: impl AsRef<Path>) -> Result<Image> {
     Ok(Image { header, entries })
 }
 
+pub fn read_file(image: impl AsRef<Path>, path: &str) -> Result<Vec<u8>> {
+    let image_path = image.as_ref();
+    let image = inspect_image(image_path)?;
+    let entry = image
+        .find_path(path)
+        .ok_or_else(|| SolfsError::Invalid(format!("file not found: {}", query_path(path))))?;
+    if entry.kind != KIND_FILE {
+        return Err(SolfsError::Invalid(format!(
+            "not a file: {}",
+            query_path(path)
+        )));
+    }
+    let mut file = File::open(image_path)?;
+    file.seek(SeekFrom::Start(entry.data_offset))?;
+    let mut bytes = vec![0_u8; entry.size as usize];
+    file.read_exact(&mut bytes)?;
+    if digest_bytes(&bytes) != entry.digest {
+        return Err(SolfsError::Invalid(format!(
+            "digest mismatch: {}",
+            query_path(path)
+        )));
+    }
+    Ok(bytes)
+}
+
 pub fn render_text(image: &Image) -> String {
     let mut lines = Vec::with_capacity(image.entries.len() + 1);
     lines.push(format!(
@@ -268,6 +318,55 @@ pub fn render_text(image: &Image) -> String {
         lines.push(format!("type={kind} mode={:o}", entry.mode));
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod behavior_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn image_lists_directory_children_in_stable_order() {
+        let root = temp_dir("list");
+        fs::create_dir_all(root.join("usr/bin")).unwrap();
+        fs::write(root.join("usr/bin/b"), b"b").unwrap();
+        fs::write(root.join("usr/bin/a"), b"a").unwrap();
+        let image_path = root.with_extension("solfs");
+        build_image(&root, &image_path).unwrap();
+        let image = inspect_image(&image_path).unwrap();
+
+        let children = image.list_dir("usr/bin").unwrap();
+
+        assert_eq!(children, vec!["a".to_string(), "b".to_string()]);
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_file(&image_path).unwrap();
+    }
+
+    #[test]
+    fn image_reads_file_bytes_by_path() {
+        let root = temp_dir("read");
+        fs::create_dir_all(root.join("etc/soliloquy")).unwrap();
+        fs::write(root.join("etc/soliloquy/system.json"), b"{\"ok\":true}\n").unwrap();
+        let image_path = root.with_extension("solfs");
+        build_image(&root, &image_path).unwrap();
+
+        let bytes = read_file(&image_path, "etc/soliloquy/system.json").unwrap();
+
+        assert_eq!(bytes, b"{\"ok\":true}\n");
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_file(&image_path).unwrap();
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "solfsctl-behavior-{name}-{}-{stamp}",
+            std::process::id()
+        ))
+    }
 }
 
 fn collect_entries(source: &Path) -> Result<Vec<BuildEntry>> {
@@ -498,6 +597,10 @@ fn parent_path(path: &str) -> &str {
 
 fn file_name(path: &str) -> &str {
     path.rsplit_once('/').map(|(_, name)| name).unwrap_or(path)
+}
+
+fn query_path(path: &str) -> String {
+    path.trim_matches('/').to_string()
 }
 
 #[cfg(test)]

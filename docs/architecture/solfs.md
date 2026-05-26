@@ -12,7 +12,7 @@ General filesystems optimize for broad POSIX workloads. Soliloquy has a smaller 
 - OS rollback should be a filesystem generation operation rather than a package-manager repair operation.
 - Image verification should be native to the root format instead of bolted on after mount.
 
-SolFS v0 therefore uses a compact read-only image with a fixed header, fixed entries, a packed name table, aligned file payloads, and SHA-256 content digests. The first kernel slice mounts only valid SolFS images and exposes an immutable root. Userspace tooling creates and inspects the image format so the on-disk contract is testable before the kernel grows full page-cache-backed file reads.
+SolFS v0 therefore uses a compact read-only image with a fixed header, fixed entries, a packed name table, aligned file payloads, and SHA-256 content digests. The kernel mounts valid SolFS images, exposes directory lookup, directory iteration, and file reads, and keeps mutation outside the root image. Userspace tooling creates, inspects, lists, and reads the image format so the on-disk contract is testable before the kernel grows page-cache readahead, mmap, xattrs, or writable state support.
 
 ## Kernel Boundary
 
