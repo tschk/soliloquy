@@ -52,6 +52,6 @@ Flags:
 - `1`: immutable verified image
 - `2`: mutable fixed-extent image
 
-Immutable images keep digest verification in tooling and mount read-only in the kernel. Mutable images allow writes only inside existing file extents; growing files, creating files, unlinking files, renaming files, and directory mutation are outside v0.
+Immutable images keep digest verification in tooling and mount read-only in the kernel. Mutable images allow overwrites and append-growth of existing files by relocating the file to a new aligned extent at the end of the image, updating the entry table, and advancing `image_size`. Creating files, unlinking files, renaming files, shrinking files, reusable free space, multi-extent files, and directory mutation are outside v0; those require the v2 bitmap, extent table, and journal format.
 
 The root entry is inode `1`, parent `1`, directory kind, and empty name. Symlinks are rejected in v0 so the immutable root cannot smuggle host-dependent path behavior into the boot image.

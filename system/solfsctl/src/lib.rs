@@ -319,26 +319,33 @@ pub fn overwrite_file(image: impl AsRef<Path>, path: &str, data: &[u8]) -> Resul
     if entry.kind != KIND_FILE {
         return Err(SolfsError::Invalid(format!("not a file: {path}")));
     }
-    if data.len() as u64 > entry.size {
-        return Err(SolfsError::Invalid(format!(
-            "cannot grow fixed SolFS extent: {path}"
-        )));
-    }
-
     let mut updated = entry.clone();
     let old_size = entry.size;
+    if data.len() as u64 > entry.size {
+        updated.data_offset = align8(image.header.image_size);
+    }
     updated.size = data.len() as u64;
     updated.digest = digest_bytes(data);
+    let new_image_size = align8(updated.data_offset + updated.size);
 
     let mut file = OpenOptions::new().read(true).write(true).open(image_path)?;
+    if new_image_size > image.header.image_size {
+        let mut header = image.header.clone();
+        header.image_size = new_image_size;
+        file.seek(SeekFrom::Start(0))?;
+        write_header(&mut file, &header)?;
+    }
     file.seek(SeekFrom::Start(
         image.header.entries_offset + index as u64 * ENTRY_LEN as u64,
     ))?;
     write_entry(&mut file, &updated)?;
-    file.seek(SeekFrom::Start(entry.data_offset))?;
+    file.seek(SeekFrom::Start(updated.data_offset))?;
     file.write_all(data)?;
-    if old_size > updated.size {
+    if old_size > updated.size && updated.data_offset == entry.data_offset {
         file.write_all(&vec![0_u8; (old_size - updated.size) as usize])?;
+    }
+    if new_image_size > updated.data_offset + updated.size {
+        write_zeroes_until(&mut file, new_image_size)?;
     }
     file.flush()?;
     Ok(())
@@ -441,17 +448,22 @@ mod behavior_tests {
     }
 
     #[test]
-    fn image_rejects_growing_fixed_extent_file() {
+    fn image_grows_mutable_file_by_allocating_new_extent() {
         let root = temp_dir("write-grow");
         fs::create_dir_all(root.join("var/lib/soliloquy")).unwrap();
         fs::write(root.join("var/lib/soliloquy/state.env"), b"small").unwrap();
         let image_path = root.with_extension("solfs");
         build_image_with_mode(&root, &image_path, ImageMode::Mutable).unwrap();
 
-        let error =
-            overwrite_file(&image_path, "var/lib/soliloquy/state.env", b"too-large").unwrap_err();
+        overwrite_file(&image_path, "var/lib/soliloquy/state.env", b"larger-value").unwrap();
+        let bytes = read_file(&image_path, "var/lib/soliloquy/state.env").unwrap();
+        let image = inspect_image(&image_path).unwrap();
 
-        assert!(error.to_string().contains("cannot grow fixed SolFS extent"));
+        assert_eq!(bytes, b"larger-value");
+        assert_eq!(
+            image.find_path("var/lib/soliloquy/state.env").unwrap().size,
+            12
+        );
         fs::remove_dir_all(&root).unwrap();
         fs::remove_file(&image_path).unwrap();
     }

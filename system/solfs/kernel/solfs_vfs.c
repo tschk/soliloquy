@@ -2,6 +2,7 @@
 #include <linux/fs.h>
 #include <linux/highmem.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/pagemap.h>
 #include <linux/slab.h>
 #include <linux/statfs.h>
@@ -17,6 +18,7 @@
 extern int solfs_rust_validate_header(struct solfs_disk_header header);
 
 struct solfs_entry {
+	u64 index;
 	u64 inode;
 	u64 parent;
 	u64 name_offset;
@@ -35,6 +37,8 @@ struct solfs_sb_info {
 	u32 entry_count;
 	u64 names_size;
 	u64 flags;
+	u64 image_size;
+	struct mutex allocation_lock;
 	struct solfs_entry *entries;
 	char *names;
 };
@@ -97,6 +101,42 @@ static int solfs_write_bytes(struct super_block *sb, u64 offset, const void *src
 		len -= chunk;
 	}
 	return 0;
+}
+
+static u64 solfs_align8(u64 value)
+{
+	return (value + 7) & ~7ULL;
+}
+
+static int solfs_write_header_image_size(struct super_block *sb, u64 image_size)
+{
+	struct solfs_disk_header header;
+	int ret;
+
+	ret = solfs_read_bytes(sb, 0, &header, sizeof(header));
+	if (ret)
+		return ret;
+	header.image_size = cpu_to_le64(image_size);
+	return solfs_write_bytes(sb, 0, &header, sizeof(header));
+}
+
+static int solfs_write_disk_entry(struct super_block *sb, struct solfs_entry *entry)
+{
+	struct solfs_disk_entry disk;
+	u64 offset = SOLFS_HEADER_LEN + entry->index * SOLFS_ENTRY_LEN;
+
+	disk.inode = cpu_to_le64(entry->inode);
+	disk.parent = cpu_to_le64(entry->parent);
+	disk.name_offset = cpu_to_le64(entry->name_offset);
+	disk.name_len = cpu_to_le32(entry->name_len);
+	disk.kind = cpu_to_le32(entry->kind);
+	disk.mode = cpu_to_le32(entry->mode);
+	disk.uid = cpu_to_le32(entry->uid);
+	disk.gid = cpu_to_le32(entry->gid);
+	disk.data_offset = cpu_to_le64(entry->data_offset);
+	disk.size = cpu_to_le64(entry->size);
+	memcpy(disk.digest, entry->digest, sizeof(disk.digest));
+	return solfs_write_bytes(sb, offset, &disk, sizeof(disk));
 }
 
 static struct solfs_entry *solfs_find_inode(struct super_block *sb, u64 inode)
@@ -267,11 +307,18 @@ static int solfs_write_begin(struct file *file, struct address_space *mapping, l
 {
 	struct inode *inode = mapping->host;
 	struct solfs_entry *entry = inode->i_private;
+	struct solfs_sb_info *sbi = solfs_sbi(inode->i_sb);
 	struct page *page;
 	pgoff_t index = pos >> PAGE_SHIFT;
 	int ret;
 
-	if (pos < 0 || len > entry->size || pos > entry->size - len)
+	if (pos < 0)
+		return -EINVAL;
+	if (!(sbi->flags & SOLFS_FLAG_MUTABLE))
+		return -EROFS;
+	if (len > U64_MAX - pos)
+		return -EFBIG;
+	if ((u64)pos + len > entry->size && pos != entry->size)
 		return -EFBIG;
 
 	page = grab_cache_page_write_begin(mapping, index);
@@ -313,13 +360,69 @@ static int solfs_write_end(struct file *file, struct address_space *mapping, lof
 {
 	struct inode *inode = mapping->host;
 	struct solfs_entry *entry = inode->i_private;
+	struct solfs_sb_info *sbi = solfs_sbi(inode->i_sb);
+	u64 end;
+	u64 old_offset;
+	u64 old_size;
 	int ret;
 
 	if (copied == 0)
 		goto out;
-	if (pos > entry->size || copied > entry->size - pos) {
+	if (pos > entry->size || copied > U64_MAX - pos) {
 		copied = 0;
 		goto out;
+	}
+	end = pos + copied;
+	if (end > entry->size) {
+		mutex_lock(&sbi->allocation_lock);
+		old_offset = entry->data_offset;
+		old_size = entry->size;
+		entry->data_offset = solfs_align8(sbi->image_size);
+		entry->size = end;
+		sbi->image_size = solfs_align8(entry->data_offset + entry->size);
+
+		if (old_size > 0) {
+			u8 *copy = kmalloc(PAGE_SIZE, GFP_KERNEL);
+			u64 done = 0;
+
+			if (!copy) {
+				entry->data_offset = old_offset;
+				entry->size = old_size;
+				mutex_unlock(&sbi->allocation_lock);
+				copied = 0;
+				goto out;
+			}
+			while (done < old_size) {
+				size_t chunk = min_t(u64, PAGE_SIZE, old_size - done);
+
+				ret = solfs_read_bytes(inode->i_sb, old_offset + done, copy, chunk);
+				if (!ret)
+					ret = solfs_write_bytes(inode->i_sb, entry->data_offset + done, copy, chunk);
+				if (ret) {
+					kfree(copy);
+					entry->data_offset = old_offset;
+					entry->size = old_size;
+					mutex_unlock(&sbi->allocation_lock);
+					copied = 0;
+					goto out;
+				}
+				done += chunk;
+			}
+			kfree(copy);
+		}
+
+		ret = solfs_write_header_image_size(inode->i_sb, sbi->image_size);
+		if (!ret)
+			ret = solfs_write_disk_entry(inode->i_sb, entry);
+		mutex_unlock(&sbi->allocation_lock);
+		if (ret) {
+			entry->data_offset = old_offset;
+			entry->size = old_size;
+			i_size_write(inode, old_size);
+			copied = 0;
+			goto out;
+		}
+		i_size_write(inode, entry->size);
 	}
 
 	ret = solfs_write_folio(inode, folio);
@@ -402,6 +505,8 @@ static int solfs_load_entries(struct super_block *sb, struct solfs_disk_header *
 	sbi->entry_count = entry_count;
 	sbi->names_size = names_size;
 	sbi->flags = flags;
+	sbi->image_size = image_size;
+	mutex_init(&sbi->allocation_lock);
 	sbi->entries = kcalloc(entry_count, sizeof(*sbi->entries), GFP_KERNEL);
 	if (!sbi->entries)
 		return -ENOMEM;
@@ -423,6 +528,7 @@ static int solfs_load_entries(struct super_block *sb, struct solfs_disk_header *
 		if (ret)
 			return ret;
 
+		entry->index = i;
 		entry->inode = le64_to_cpu(disk.inode);
 		entry->parent = le64_to_cpu(disk.parent);
 		entry->name_offset = le64_to_cpu(disk.name_offset);
