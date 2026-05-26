@@ -52,7 +52,8 @@
         "networking",
         "sol-netd",
         "sol-kernel-policy",
-        "sol-zram"
+        "sol-zram",
+        "sol-pressure"
       ],
       "state_paths": [
         "/var/lib/soliloquy/system",
@@ -67,7 +68,8 @@
       "dependencies": [
         "sold",
         "seatd",
-        "sol-zram"
+        "sol-zram",
+        "sol-pressure"
       ],
       "state_paths": [
         "/run/user/0",
@@ -85,6 +87,21 @@
       "state_paths": [
         "/dev/zram0",
         "/proc/swaps",
+        "/run/soliloquy/runtime-state.env"
+      ]
+    },
+    {
+      "id": "sol-pressure",
+      "display_name": "Pressure Policy",
+      "run_as": "root",
+      "restart": "always",
+      "dependencies": [
+        "sol-kernel-policy",
+        "sol-zram"
+      ],
+      "state_paths": [
+        "/proc/pressure",
+        "/sys/fs/cgroup/soliloquy",
         "/run/soliloquy/runtime-state.env"
       ]
     },
