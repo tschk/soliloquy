@@ -7,7 +7,12 @@ INITRAMFS="${QEMU_DIR}/rootfs.cpio.gz"
 QEMU_HEADLESS="${QEMU_HEADLESS:-0}"
 QEMU_ACCEL="${QEMU_ACCEL:-tcg}"
 QEMU_RNG="${QEMU_RNG:-1}"
-KERNEL_CMDLINE="${KERNEL_CMDLINE:-quiet loglevel=3 console=tty0 console=ttyS0 random.trust_cpu=on rng_core.default_quality=1000 rdinit=/init}"
+QEMU_MEMORY_MB="${QEMU_MEMORY_MB:-4096}"
+SOLILOQUY_RAM_ROOT="${SOLILOQUY_RAM_ROOT:-auto}"
+SOLILOQUY_RAM_ROOT_MIN_MB="${SOLILOQUY_RAM_ROOT_MIN_MB:-3072}"
+SOLILOQUY_ROOT_FALLBACK="${SOLILOQUY_ROOT_FALLBACK:-/dev/vda}"
+SOLILOQUY_ROOT_FALLBACK_FSTYPE="${SOLILOQUY_ROOT_FALLBACK_FSTYPE:-ext4}"
+KERNEL_CMDLINE="${KERNEL_CMDLINE:-quiet loglevel=3 console=tty0 console=ttyS0 random.trust_cpu=on rng_core.default_quality=1000 rdinit=/init soliloquy.ram_root=${SOLILOQUY_RAM_ROOT} soliloquy.ram_root_min_mb=${SOLILOQUY_RAM_ROOT_MIN_MB} soliloquy.root_fallback=${SOLILOQUY_ROOT_FALLBACK} soliloquy.root_fallback_fstype=${SOLILOQUY_ROOT_FALLBACK_FSTYPE}}"
 
 for bin in qemu-system-x86_64; do
   command -v "${bin}" >/dev/null 2>&1 || {
@@ -44,7 +49,7 @@ fi
 
 qemu-system-x86_64 \
   -machine q35,accel="${QEMU_ACCEL}" \
-  -m 4096 \
+  -m "${QEMU_MEMORY_MB}" \
   -smp 2 \
   -serial mon:stdio \
   ${DISPLAY_FLAGS} \

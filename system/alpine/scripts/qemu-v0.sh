@@ -29,6 +29,8 @@ fi
 "${ALPINE_SCRIPTS}/build-qemu-initramfs.sh" "${ROOTFS_DIR}" "${QEMU_DIR}/rootfs.cpio.gz"
 
 if [ "${QEMU_RUN}" = "1" ]; then
+  export SOLILOQUY_RAM_ROOT="${SOLILOQUY_RAM_ROOT:-auto}"
+  export SOLILOQUY_RAM_ROOT_MIN_MB="${SOLILOQUY_RAM_ROOT_MIN_MB:-3072}"
   "${ALPINE_SCRIPTS}/run-qemu.sh" "${QEMU_DIR}"
 else
   echo "QEMU_RUN=0 set; skipping VM launch."
