@@ -11,21 +11,67 @@
       "pids_max": 128
     },
     {
+      "id": "network",
+      "path": "soliloquy/network",
+      "cpu_weight": 250,
+      "io_weight": 500,
+      "memory_high": "384M",
+      "memory_max": "640M",
+      "pids_max": 192
+    },
+    {
       "id": "browser",
       "path": "soliloquy/browser",
-      "cpu_weight": 300,
+      "cpu_weight": 350,
       "io_weight": 300,
       "memory_high": "768M",
+      "memory_max": "1024M",
       "pids_max": 256
     },
     {
-      "id": "renderer",
-      "path": "soliloquy/renderer",
+      "id": "foreground-renderer",
+      "path": "soliloquy/foreground-renderer",
       "cpu_weight": 800,
       "io_weight": 800,
       "memory_high": "1536M",
       "memory_max": "2304M",
       "pids_max": 512
+    },
+    {
+      "id": "background-renderer",
+      "path": "soliloquy/background-renderer",
+      "cpu_weight": 250,
+      "io_weight": 200,
+      "memory_high": "768M",
+      "memory_max": "1280M",
+      "pids_max": 384
+    },
+    {
+      "id": "frozen-renderer",
+      "path": "soliloquy/frozen-renderer",
+      "cpu_weight": 50,
+      "io_weight": 50,
+      "memory_high": "384M",
+      "memory_max": "768M",
+      "pids_max": 256
+    },
+    {
+      "id": "discardable-renderer",
+      "path": "soliloquy/discardable-renderer",
+      "cpu_weight": 10,
+      "io_weight": 10,
+      "memory_high": "128M",
+      "memory_max": "256M",
+      "pids_max": 128
+    },
+    {
+      "id": "gpu-compositor",
+      "path": "soliloquy/gpu-compositor",
+      "cpu_weight": 900,
+      "io_weight": 300,
+      "memory_high": "512M",
+      "memory_max": "768M",
+      "pids_max": 192
     }
   ],
   "sysctl": {

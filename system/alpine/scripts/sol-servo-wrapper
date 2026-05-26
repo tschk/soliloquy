@@ -192,6 +192,7 @@ if command -v wget >/dev/null 2>&1; then
   done
   if [ "${probe_i}" -lt "${SOL_SOLD_PROBE_RETRIES:-600}" ]; then
     log "sold reachable (${PROBE_URL})"
+    record_runtime_state SOLILOQUY_SOLD_PROBE_UNIX_MS "$(now_unix_ms)"
   fi
 fi
 
@@ -210,6 +211,7 @@ esac
 set -- "$@" "${LAUNCH_URL}"
 
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
+record_runtime_state SOLILOQUY_BROWSER_LAUNCH_UNIX_MS "$(now_unix_ms)"
 if [ -c "${SERIAL_CONSOLE}" ]; then
   "$@" >>"${SERIAL_CONSOLE}" 2>&1 &
 else
@@ -218,7 +220,7 @@ fi
 servo_pid=$!
 record_runtime_state SOLILOQUY_SERVO_SPAWN_UNIX_MS "$(now_unix_ms)"
 record_runtime_state SOLILOQUY_RENDERER_PID "${servo_pid}"
-attach_to_cgroup renderer "${servo_pid}"
+attach_to_cgroup foreground-renderer "${servo_pid}"
 
 if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
   log "servo pid=${servo_pid} (verbose poll)"
@@ -241,6 +243,7 @@ set +e
 wait "${servo_pid}"
 status=$?
 set -e
+record_runtime_state SOLILOQUY_BROWSER_EXIT_UNIX_MS "$(now_unix_ms)"
 record_runtime_state SOLILOQUY_LAST_RENDERER_EXIT "${status}"
 renderer_restarts="$(runtime_state_value SOLILOQUY_RENDERER_RESTARTS)"
 case "${renderer_restarts}" in

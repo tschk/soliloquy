@@ -387,9 +387,12 @@ struct BrowserBootMetrics {
     session_start_unix_ms: Option<u128>,
     sold_start_unix_ms: Option<u128>,
     sold_ready_unix_ms: Option<u128>,
+    sold_probe_unix_ms: Option<u128>,
+    browser_launch_unix_ms: Option<u128>,
     servo_spawn_unix_ms: Option<u128>,
     first_frame_unix_ms: Option<u128>,
     interactive_unix_ms: Option<u128>,
+    browser_exit_unix_ms: Option<u128>,
     renderer_pid: Option<u64>,
     renderer_restarts: Option<u64>,
     last_renderer_exit: Option<i64>,
@@ -428,8 +431,21 @@ struct KernelPolicyStatus {
     profile: String,
     cgroup_v2_available: bool,
     cgroups_state: Option<String>,
+    features: KernelFeatureStatus,
     groups: Vec<KernelPolicyGroupStatus>,
     renderer_pid: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct KernelFeatureStatus {
+    cgroup_v2_available: bool,
+    cpu_controller_available: bool,
+    io_controller_available: bool,
+    memory_controller_available: bool,
+    pids_controller_available: bool,
+    bbr_available: bool,
+    tcp_fastopen_available: bool,
+    virtio_gpu_available: bool,
 }
 
 #[derive(Serialize)]
@@ -477,22 +493,67 @@ impl Default for KernelPolicyConfig {
                     pids_max: Some(128),
                 },
                 KernelPolicyGroupConfig {
+                    id: "network".to_string(),
+                    path: "soliloquy/network".to_string(),
+                    cpu_weight: Some(250),
+                    io_weight: Some(500),
+                    memory_high: Some("384M".to_string()),
+                    memory_max: Some("640M".to_string()),
+                    pids_max: Some(192),
+                },
+                KernelPolicyGroupConfig {
                     id: "browser".to_string(),
                     path: "soliloquy/browser".to_string(),
-                    cpu_weight: Some(300),
+                    cpu_weight: Some(350),
                     io_weight: Some(300),
                     memory_high: Some("768M".to_string()),
-                    memory_max: None,
+                    memory_max: Some("1024M".to_string()),
                     pids_max: Some(256),
                 },
                 KernelPolicyGroupConfig {
-                    id: "renderer".to_string(),
-                    path: "soliloquy/renderer".to_string(),
+                    id: "foreground-renderer".to_string(),
+                    path: "soliloquy/foreground-renderer".to_string(),
                     cpu_weight: Some(800),
                     io_weight: Some(800),
                     memory_high: Some("1536M".to_string()),
                     memory_max: Some("2304M".to_string()),
                     pids_max: Some(512),
+                },
+                KernelPolicyGroupConfig {
+                    id: "background-renderer".to_string(),
+                    path: "soliloquy/background-renderer".to_string(),
+                    cpu_weight: Some(250),
+                    io_weight: Some(200),
+                    memory_high: Some("768M".to_string()),
+                    memory_max: Some("1280M".to_string()),
+                    pids_max: Some(384),
+                },
+                KernelPolicyGroupConfig {
+                    id: "frozen-renderer".to_string(),
+                    path: "soliloquy/frozen-renderer".to_string(),
+                    cpu_weight: Some(50),
+                    io_weight: Some(50),
+                    memory_high: Some("384M".to_string()),
+                    memory_max: Some("768M".to_string()),
+                    pids_max: Some(256),
+                },
+                KernelPolicyGroupConfig {
+                    id: "discardable-renderer".to_string(),
+                    path: "soliloquy/discardable-renderer".to_string(),
+                    cpu_weight: Some(10),
+                    io_weight: Some(10),
+                    memory_high: Some("128M".to_string()),
+                    memory_max: Some("256M".to_string()),
+                    pids_max: Some(128),
+                },
+                KernelPolicyGroupConfig {
+                    id: "gpu-compositor".to_string(),
+                    path: "soliloquy/gpu-compositor".to_string(),
+                    cpu_weight: Some(900),
+                    io_weight: Some(300),
+                    memory_high: Some("512M".to_string()),
+                    memory_max: Some("768M".to_string()),
+                    pids_max: Some(192),
                 },
             ],
         }
@@ -1231,6 +1292,8 @@ fn build_runtime_status(
                     .u128("SOLILOQUY_SOLD_START_UNIX_MS")
                     .or_else(|| env_u128("SOLILOQUY_SOLD_START_UNIX_MS")),
                 sold_ready_unix_ms: runtime_state.u128("SOLILOQUY_SOLD_READY_UNIX_MS"),
+                sold_probe_unix_ms: runtime_state.u128("SOLILOQUY_SOLD_PROBE_UNIX_MS"),
+                browser_launch_unix_ms: runtime_state.u128("SOLILOQUY_BROWSER_LAUNCH_UNIX_MS"),
                 servo_spawn_unix_ms: runtime_state.u128("SOLILOQUY_SERVO_SPAWN_UNIX_MS"),
                 first_frame_unix_ms: runtime_state
                     .u128("SOLILOQUY_FIRST_FRAME_UNIX_MS")
@@ -1238,6 +1301,7 @@ fn build_runtime_status(
                 interactive_unix_ms: runtime_state
                     .u128("SOLILOQUY_BROWSER_INTERACTIVE_UNIX_MS")
                     .or_else(|| env_u128("SOLILOQUY_BROWSER_INTERACTIVE_UNIX_MS")),
+                browser_exit_unix_ms: runtime_state.u128("SOLILOQUY_BROWSER_EXIT_UNIX_MS"),
                 renderer_pid,
                 renderer_restarts: runtime_state
                     .u64("SOLILOQUY_RENDERER_RESTARTS")
@@ -1346,7 +1410,12 @@ fn build_kernel_policy_status(
     runtime_state: &RuntimeState,
 ) -> KernelPolicyStatus {
     let config = read_kernel_policy_config();
-    let cgroup_v2_available = FsPath::new("/sys/fs/cgroup/cgroup.controllers").exists();
+    let cgroup_v2_available = kernel_feature_flag(
+        runtime_state,
+        "SOLILOQUY_KERNEL_FEATURE_CGROUP_V2",
+        FsPath::new("/sys/fs/cgroup/cgroup.controllers").exists(),
+    );
+    let features = kernel_feature_status(runtime_state, cgroup_v2_available);
     let groups = config
         .groups
         .iter()
@@ -1358,9 +1427,80 @@ fn build_kernel_policy_status(
             .unwrap_or(config.profile),
         cgroup_v2_available,
         cgroups_state: runtime_state.string("SOLILOQUY_KERNEL_POLICY_CGROUPS"),
+        features,
         groups,
         renderer_pid,
     }
+}
+
+fn kernel_feature_status(
+    runtime_state: &RuntimeState,
+    cgroup_v2_available: bool,
+) -> KernelFeatureStatus {
+    let controllers =
+        std::fs::read_to_string("/sys/fs/cgroup/cgroup.controllers").unwrap_or_default();
+    KernelFeatureStatus {
+        cgroup_v2_available,
+        cpu_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_CPU_CONTROLLER",
+            controller_available(&controllers, "cpu"),
+        ),
+        io_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_IO_CONTROLLER",
+            controller_available(&controllers, "io"),
+        ),
+        memory_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_MEMORY_CONTROLLER",
+            controller_available(&controllers, "memory"),
+        ),
+        pids_controller_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_PIDS_CONTROLLER",
+            controller_available(&controllers, "pids"),
+        ),
+        bbr_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_BBR",
+            proc_file_contains(
+                FsPath::new("/proc/sys/net/ipv4/tcp_available_congestion_control"),
+                "bbr",
+            ),
+        ),
+        tcp_fastopen_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_TCP_FASTOPEN",
+            FsPath::new("/proc/sys/net/ipv4/tcp_fastopen").exists(),
+        ),
+        virtio_gpu_available: kernel_feature_flag(
+            runtime_state,
+            "SOLILOQUY_KERNEL_FEATURE_VIRTIO_GPU",
+            module_available("virtio_gpu"),
+        ),
+    }
+}
+
+fn kernel_feature_flag(runtime_state: &RuntimeState, key: &str, fallback: bool) -> bool {
+    runtime_state.bool(key).unwrap_or(fallback)
+}
+
+fn controller_available(controllers: &str, controller: &str) -> bool {
+    controllers
+        .split_whitespace()
+        .any(|item| item == controller)
+}
+
+fn proc_file_contains(path: &FsPath, needle: &str) -> bool {
+    std::fs::read_to_string(path)
+        .map(|content| content.split_whitespace().any(|item| item == needle))
+        .unwrap_or(false)
+}
+
+fn module_available(module: &str) -> bool {
+    let path = format!("/sys/module/{module}");
+    FsPath::new(&path).exists()
 }
 
 fn kernel_policy_group(
@@ -1441,6 +1581,14 @@ impl RuntimeState {
             None
         } else {
             Some(value.to_string())
+        }
+    }
+
+    fn bool(&self, key: &str) -> Option<bool> {
+        match self.values.get(key)?.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "available" | "active" => Some(true),
+            "0" | "false" | "no" | "unavailable" | "missing" => Some(false),
+            _ => None,
         }
     }
 }
@@ -2372,7 +2520,7 @@ mod tests {
     fn runtime_status_is_honest_about_v8_bridge() {
         let registry = default_service_registry();
         let state = parse_runtime_state(
-            "SOLILOQUY_SESSION_START_UNIX_MS=1000\nSOLILOQUY_RENDERER_PID=42\nSOLILOQUY_RENDERER_RESTARTS=2\n",
+            "SOLILOQUY_SESSION_START_UNIX_MS=1000\nSOLILOQUY_BROWSER_LAUNCH_UNIX_MS=1500\nSOLILOQUY_BROWSER_EXIT_UNIX_MS=2500\nSOLILOQUY_RENDERER_PID=42\nSOLILOQUY_RENDERER_RESTARTS=2\nSOLILOQUY_KERNEL_FEATURE_CGROUP_V2=1\nSOLILOQUY_KERNEL_FEATURE_CPU_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_IO_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_MEMORY_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_PIDS_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_BBR=1\nSOLILOQUY_KERNEL_FEATURE_TCP_FASTOPEN=1\n",
         );
         let runtime = build_runtime_status(&Settings::default(), &registry, &state);
         assert_eq!(runtime.javascript.requested_engine, "v8-experimental");
@@ -2396,15 +2544,47 @@ mod tests {
             runtime.browser.boot_metrics.session_start_unix_ms,
             Some(1000)
         );
+        assert_eq!(
+            runtime.browser.boot_metrics.browser_launch_unix_ms,
+            Some(1500)
+        );
+        assert_eq!(
+            runtime.browser.boot_metrics.browser_exit_unix_ms,
+            Some(2500)
+        );
         assert_eq!(runtime.browser.boot_metrics.renderer_pid, Some(42));
         assert_eq!(runtime.browser.boot_metrics.renderer_restarts, Some(2));
         assert_eq!(runtime.kernel_policy.profile, "internet-appliance");
         assert_eq!(runtime.kernel_policy.renderer_pid, Some(42));
+        assert!(runtime.kernel_policy.features.cgroup_v2_available);
+        assert!(runtime.kernel_policy.features.cpu_controller_available);
+        assert!(runtime.kernel_policy.features.io_controller_available);
+        assert!(runtime.kernel_policy.features.memory_controller_available);
+        assert!(runtime.kernel_policy.features.pids_controller_available);
+        assert!(runtime.kernel_policy.features.bbr_available);
+        assert!(runtime.kernel_policy.features.tcp_fastopen_available);
+        for id in [
+            "system",
+            "network",
+            "browser",
+            "foreground-renderer",
+            "background-renderer",
+            "frozen-renderer",
+            "discardable-renderer",
+            "gpu-compositor",
+        ] {
+            assert!(runtime
+                .kernel_policy
+                .groups
+                .iter()
+                .any(|group| group.id == id));
+        }
         assert!(runtime
             .kernel_policy
             .groups
             .iter()
-            .any(|group| group.id == "renderer" && group.memory_high.as_deref() == Some("1536M")));
+            .any(|group| group.id == "foreground-renderer"
+                && group.memory_high.as_deref() == Some("1536M")));
     }
 
     #[test]
