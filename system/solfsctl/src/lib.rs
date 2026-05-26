@@ -14,6 +14,7 @@ pub const KIND_DIR: u32 = 1;
 pub const KIND_FILE: u32 = 2;
 pub const FLAG_READONLY: u64 = 1;
 pub const FLAG_MUTABLE: u64 = 2;
+pub const FLAG_V2: u64 = 4;
 
 #[derive(Debug)]
 pub enum SolfsError {

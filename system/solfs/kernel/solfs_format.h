@@ -12,6 +12,11 @@
 #define SOLFS_KIND_FILE 2
 #define SOLFS_FLAG_READONLY 1
 #define SOLFS_FLAG_MUTABLE 2
+#define SOLFS_FLAG_V2 4
+#define SOLFS_V2_MAGIC_STRING "SOLFSV02"
+#define SOLFS_V2_VERSION 2
+#define SOLFS_V2_BLOCK_SIZE 4096
+#define SOLFS_V2_SUPERBLOCK_LEN 96
 
 struct solfs_disk_header {
 	u8 magic[8];
@@ -36,6 +41,22 @@ struct solfs_disk_entry {
 	__le64 data_offset;
 	__le64 size;
 	u8 digest[32];
+} __packed;
+
+struct solfs_v2_superblock {
+	u8 magic[8];
+	__le32 version;
+	__le32 reserved;
+	__le64 block_size;
+	__le64 bitmap_offset;
+	__le64 bitmap_len;
+	__le64 extent_table_offset;
+	__le64 extent_table_len;
+	__le64 journal_offset;
+	__le64 journal_len;
+	__le64 data_start;
+	__le64 total_blocks;
+	__le64 free_blocks;
 } __packed;
 
 #endif

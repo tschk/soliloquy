@@ -124,6 +124,8 @@ assert_contains system/alpine/scripts/build-native-policy-modules.sh 'native pol
 assert_not_contains system/alpine/scripts/build-native-policy-modules.sh 'Built V kernel'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'NATIVE_POLICY_REQUIRED'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh '/usr/local/lib/soliloquy/native-policy'
+assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'SOLFS_MODULE'
+assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh '/usr/local/lib/soliloquy/kernel/solfs.ko'
 assert_contains system/alpine/scripts/ensure-linux-runtime-binaries.sh 'build_netd_linux'
 assert_contains system/alpine/scripts/qemu-v0.sh 'SOL_NETD_BIN'
 assert_contains system/native/kernel-policy-v/policy.v 'sol_renderer_cpu_weight'
@@ -147,6 +149,9 @@ assert_contains system/alpine/rootfs-overlay/etc/inittab '^::wait:/sbin/openrc d
 assert_not_contains system/alpine/rootfs-overlay/etc/inittab 'sol-session-start'
 
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'load_kernel_module virtio_net'
+assert_contains system/alpine/scripts/apply-kernel-policy.sh 'load_kernel_module solfs'
+assert_contains system/alpine/scripts/apply-kernel-policy.sh 'SOLILOQUY_SOLFS_MODULE'
+assert_contains system/alpine/scripts/apply-kernel-policy.sh 'load_kernel_module_file'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'sol-kernelctl'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'cgroup.subtree_control'
 assert_contains system/alpine/scripts/apply-kernel-policy.sh 'memory.high'

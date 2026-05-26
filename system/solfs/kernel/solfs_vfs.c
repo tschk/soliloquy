@@ -16,6 +16,8 @@
 #define SOLFS_MAX_ENTRIES 65536
 #define SOLFS_MAX_NAMES_SIZE (16 * 1024 * 1024)
 
+int solfs_rust_validate_header(struct solfs_disk_header header);
+
 __weak int solfs_rust_validate_header(struct solfs_disk_header header)
 {
 	u32 version = le32_to_cpu(header.version);
@@ -66,6 +68,8 @@ struct solfs_sb_info {
 	u64 names_size;
 	u64 flags;
 	u64 image_size;
+	u64 v2_total_blocks;
+	u64 v2_free_blocks;
 	struct mutex allocation_lock;
 	struct solfs_entry *entries;
 	char *names;
@@ -608,6 +612,60 @@ static int solfs_load_entries(struct super_block *sb, struct solfs_disk_header *
 	return 0;
 }
 
+static int solfs_load_v2_superblock(struct super_block *sb)
+{
+	struct solfs_sb_info *sbi = solfs_sbi(sb);
+	struct solfs_v2_superblock v2;
+	u64 offset = solfs_align8(sbi->image_size);
+	u64 block_size;
+	u64 bitmap_offset;
+	u64 bitmap_len;
+	u64 extent_table_offset;
+	u64 extent_table_len;
+	u64 journal_offset;
+	u64 journal_len;
+	u64 data_start;
+	u64 total_blocks;
+	u64 free_blocks;
+	int ret;
+
+	if (!(sbi->flags & SOLFS_FLAG_V2))
+		return 0;
+	ret = solfs_read_bytes(sb, offset, &v2, sizeof(v2));
+	if (ret)
+		return ret;
+	if (memcmp(v2.magic, SOLFS_V2_MAGIC_STRING, sizeof(v2.magic)))
+		return -EINVAL;
+	if (le32_to_cpu(v2.version) != SOLFS_V2_VERSION)
+		return -EINVAL;
+	block_size = le64_to_cpu(v2.block_size);
+	bitmap_offset = le64_to_cpu(v2.bitmap_offset);
+	bitmap_len = le64_to_cpu(v2.bitmap_len);
+	extent_table_offset = le64_to_cpu(v2.extent_table_offset);
+	extent_table_len = le64_to_cpu(v2.extent_table_len);
+	journal_offset = le64_to_cpu(v2.journal_offset);
+	journal_len = le64_to_cpu(v2.journal_len);
+	data_start = le64_to_cpu(v2.data_start);
+	total_blocks = le64_to_cpu(v2.total_blocks);
+	free_blocks = le64_to_cpu(v2.free_blocks);
+
+	if (block_size != SOLFS_V2_BLOCK_SIZE)
+		return -EINVAL;
+	if (bitmap_offset < offset + SOLFS_V2_SUPERBLOCK_LEN)
+		return -EINVAL;
+	if (extent_table_offset < bitmap_offset + bitmap_len)
+		return -EINVAL;
+	if (journal_offset < extent_table_offset + extent_table_len)
+		return -EINVAL;
+	if (data_start < journal_offset + journal_len)
+		return -EINVAL;
+	if (!total_blocks || free_blocks > total_blocks)
+		return -EINVAL;
+	sbi->v2_total_blocks = total_blocks;
+	sbi->v2_free_blocks = free_blocks;
+	return 0;
+}
+
 static void solfs_put_super(struct super_block *sb)
 {
 	struct solfs_sb_info *sbi = solfs_sbi(sb);
@@ -627,9 +685,9 @@ static int solfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 	buf->f_type = SOLFS_SUPER_MAGIC;
 	buf->f_bsize = sb->s_blocksize;
-	buf->f_blocks = 1;
-	buf->f_bfree = 0;
-	buf->f_bavail = 0;
+	buf->f_blocks = sbi && sbi->v2_total_blocks ? sbi->v2_total_blocks : 1;
+	buf->f_bfree = sbi && sbi->v2_total_blocks ? sbi->v2_free_blocks : 0;
+	buf->f_bavail = buf->f_bfree;
 	buf->f_files = sbi ? sbi->entry_count : 0;
 	buf->f_ffree = 0;
 	buf->f_namelen = 255;
@@ -678,6 +736,11 @@ static int solfs_fill_super(struct super_block *sb, void *data, int silent)
 	ret = solfs_load_entries(sb, &header);
 	if (ret)
 		goto err;
+	ret = solfs_load_v2_superblock(sb);
+	if (ret)
+		goto err;
+	if (sbi->flags & SOLFS_FLAG_V2)
+		sb->s_flags |= SB_RDONLY;
 
 	root_inode = solfs_make_inode(sb, solfs_find_inode(sb, 1));
 	if (!root_inode) {

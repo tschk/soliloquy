@@ -66,3 +66,5 @@ SolFS v2 keeps the v1 immutable image contract but adds mutable allocation metad
 - data region: block-aligned file blocks.
 
 `solfsctl plan-v2 <image> <target-size>` computes the concrete v2 layout for an existing mutable image. The v2 kernel mount path is not enabled until bitmap replay, extent validation, and journal commit handling are present.
+
+`solfsctl upgrade-v2 <image> <target-size>` writes the v2 superblock, allocation bitmap, extent table, empty journal region, and block-aligned extent payload copies into an existing mutable image. The kernel validates the v2 metadata and reports v2 capacity through `statfs`, but forces v2 mounts read-only until journal replay and bitmap-backed allocation are implemented.

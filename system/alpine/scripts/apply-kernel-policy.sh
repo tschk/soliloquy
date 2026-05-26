@@ -4,6 +4,7 @@ set -eu
 SOLILOQUY_KERNEL_POLICY_FILE="${SOLILOQUY_KERNEL_POLICY_FILE:-/etc/soliloquy/kernel-policy.json}"
 SOLILOQUY_HYBRID_KERNEL_METADATA="${SOLILOQUY_HYBRID_KERNEL_METADATA:-/usr/share/soliloquy/kernel/hybrid-kernel.json}"
 SOLILOQUY_RUNTIME_STATE_ENV="${SOLILOQUY_RUNTIME_STATE_ENV:-/run/soliloquy/runtime-state.env}"
+SOLILOQUY_SOLFS_MODULE="${SOLILOQUY_SOLFS_MODULE:-/usr/local/lib/soliloquy/kernel/solfs.ko}"
 
 if [ -x /usr/local/bin/sol-kernelctl ]; then
   exec /usr/local/bin/sol-kernelctl \
@@ -77,6 +78,13 @@ load_kernel_module() {
   module="$1"
   if command -v modprobe >/dev/null 2>&1; then
     modprobe "${module}" >/dev/null 2>&1 || true
+  fi
+}
+
+load_kernel_module_file() {
+  module_path="$1"
+  if [ -f "${module_path}" ] && command -v insmod >/dev/null 2>&1; then
+    insmod "${module_path}" >/dev/null 2>&1 || true
   fi
 }
 
@@ -201,6 +209,8 @@ load_kernel_module virtio_rng
 load_kernel_module virtio_gpu
 load_kernel_module erofs
 load_kernel_module squashfs
+load_kernel_module solfs
+load_kernel_module_file "${SOLILOQUY_SOLFS_MODULE}"
 
 apply_sysctl net.core.somaxconn 4096
 apply_sysctl net.core.default_qdisc fq
