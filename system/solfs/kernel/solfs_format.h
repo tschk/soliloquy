@@ -10,6 +10,8 @@
 #define SOLFS_ENTRY_LEN 92
 #define SOLFS_KIND_DIR 1
 #define SOLFS_KIND_FILE 2
+#define SOLFS_FLAG_READONLY 1
+#define SOLFS_FLAG_MUTABLE 2
 
 struct solfs_disk_header {
 	u8 magic[8];

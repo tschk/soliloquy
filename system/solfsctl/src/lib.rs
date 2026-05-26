@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
@@ -10,6 +10,8 @@ pub const HEADER_LEN: usize = 56;
 pub const ENTRY_LEN: usize = 92;
 pub const KIND_DIR: u32 = 1;
 pub const KIND_FILE: u32 = 2;
+pub const FLAG_READONLY: u64 = 1;
+pub const FLAG_MUTABLE: u64 = 2;
 
 #[derive(Debug)]
 pub enum SolfsError {
@@ -68,6 +70,12 @@ pub struct Image {
     pub entries: Vec<Entry>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ImageMode {
+    ReadOnly,
+    Mutable,
+}
+
 impl Image {
     pub fn find_path(&self, path: &str) -> Option<&Entry> {
         let path = query_path(path);
@@ -107,6 +115,14 @@ struct BuildEntry {
 }
 
 pub fn build_image(source: impl AsRef<Path>, output: impl AsRef<Path>) -> Result<Image> {
+    build_image_with_mode(source, output, ImageMode::ReadOnly)
+}
+
+pub fn build_image_with_mode(
+    source: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+    mode: ImageMode,
+) -> Result<Image> {
     let source = source.as_ref();
     if !source.is_dir() {
         return Err(SolfsError::Invalid(format!(
@@ -115,7 +131,7 @@ pub fn build_image(source: impl AsRef<Path>, output: impl AsRef<Path>) -> Result
         )));
     }
 
-    let mut entries = collect_entries(source)?;
+    let mut entries = collect_entries(source, mode)?;
     entries.sort_by(|left, right| left.path.cmp(&right.path));
 
     let mut inode_by_path = BTreeMap::new();
@@ -185,7 +201,10 @@ pub fn build_image(source: impl AsRef<Path>, output: impl AsRef<Path>) -> Result
         names_offset,
         data_offset,
         image_size: cursor,
-        flags: 1,
+        flags: match mode {
+            ImageMode::ReadOnly => FLAG_READONLY,
+            ImageMode::Mutable => FLAG_MUTABLE,
+        },
     };
 
     let mut file = File::create(output)?;
@@ -273,13 +292,56 @@ pub fn read_file(image: impl AsRef<Path>, path: &str) -> Result<Vec<u8>> {
     file.seek(SeekFrom::Start(entry.data_offset))?;
     let mut bytes = vec![0_u8; entry.size as usize];
     file.read_exact(&mut bytes)?;
-    if digest_bytes(&bytes) != entry.digest {
+    if image.header.flags & FLAG_MUTABLE == 0 && digest_bytes(&bytes) != entry.digest {
         return Err(SolfsError::Invalid(format!(
             "digest mismatch: {}",
             query_path(path)
         )));
     }
     Ok(bytes)
+}
+
+pub fn overwrite_file(image: impl AsRef<Path>, path: &str, data: &[u8]) -> Result<()> {
+    let image_path = image.as_ref();
+    let image = inspect_image(image_path)?;
+    let path = query_path(path);
+    if image.header.flags & FLAG_MUTABLE == 0 {
+        return Err(SolfsError::Invalid(format!(
+            "cannot write immutable SolFS image: {path}"
+        )));
+    }
+    let (index, entry) = image
+        .entries
+        .iter()
+        .enumerate()
+        .find(|(_, entry)| entry.path == path)
+        .ok_or_else(|| SolfsError::Invalid(format!("file not found: {path}")))?;
+    if entry.kind != KIND_FILE {
+        return Err(SolfsError::Invalid(format!("not a file: {path}")));
+    }
+    if data.len() as u64 > entry.size {
+        return Err(SolfsError::Invalid(format!(
+            "cannot grow fixed SolFS extent: {path}"
+        )));
+    }
+
+    let mut updated = entry.clone();
+    let old_size = entry.size;
+    updated.size = data.len() as u64;
+    updated.digest = digest_bytes(data);
+
+    let mut file = OpenOptions::new().read(true).write(true).open(image_path)?;
+    file.seek(SeekFrom::Start(
+        image.header.entries_offset + index as u64 * ENTRY_LEN as u64,
+    ))?;
+    write_entry(&mut file, &updated)?;
+    file.seek(SeekFrom::Start(entry.data_offset))?;
+    file.write_all(data)?;
+    if old_size > updated.size {
+        file.write_all(&vec![0_u8; (old_size - updated.size) as usize])?;
+    }
+    file.flush()?;
+    Ok(())
 }
 
 pub fn render_text(image: &Image) -> String {
@@ -348,11 +410,48 @@ mod behavior_tests {
         fs::create_dir_all(root.join("etc/soliloquy")).unwrap();
         fs::write(root.join("etc/soliloquy/system.json"), b"{\"ok\":true}\n").unwrap();
         let image_path = root.with_extension("solfs");
-        build_image(&root, &image_path).unwrap();
+        build_image_with_mode(&root, &image_path, ImageMode::Mutable).unwrap();
 
         let bytes = read_file(&image_path, "etc/soliloquy/system.json").unwrap();
 
         assert_eq!(bytes, b"{\"ok\":true}\n");
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_file(&image_path).unwrap();
+    }
+
+    #[test]
+    fn image_overwrites_existing_file_extent() {
+        let root = temp_dir("write");
+        fs::create_dir_all(root.join("var/lib/soliloquy")).unwrap();
+        fs::write(root.join("var/lib/soliloquy/state.env"), b"renderer=old\n").unwrap();
+        let image_path = root.with_extension("solfs");
+        build_image_with_mode(&root, &image_path, ImageMode::Mutable).unwrap();
+
+        overwrite_file(
+            &image_path,
+            "var/lib/soliloquy/state.env",
+            b"renderer=new\n",
+        )
+        .unwrap();
+        let bytes = read_file(&image_path, "var/lib/soliloquy/state.env").unwrap();
+
+        assert_eq!(bytes, b"renderer=new\n");
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_file(&image_path).unwrap();
+    }
+
+    #[test]
+    fn image_rejects_growing_fixed_extent_file() {
+        let root = temp_dir("write-grow");
+        fs::create_dir_all(root.join("var/lib/soliloquy")).unwrap();
+        fs::write(root.join("var/lib/soliloquy/state.env"), b"small").unwrap();
+        let image_path = root.with_extension("solfs");
+        build_image_with_mode(&root, &image_path, ImageMode::Mutable).unwrap();
+
+        let error =
+            overwrite_file(&image_path, "var/lib/soliloquy/state.env", b"too-large").unwrap_err();
+
+        assert!(error.to_string().contains("cannot grow fixed SolFS extent"));
         fs::remove_dir_all(&root).unwrap();
         fs::remove_file(&image_path).unwrap();
     }
@@ -369,23 +468,37 @@ mod behavior_tests {
     }
 }
 
-fn collect_entries(source: &Path) -> Result<Vec<BuildEntry>> {
+fn collect_entries(source: &Path, mode: ImageMode) -> Result<Vec<BuildEntry>> {
+    let dir_mode = match mode {
+        ImageMode::ReadOnly => 0o755,
+        ImageMode::Mutable => 0o755,
+    };
+    let file_mode = match mode {
+        ImageMode::ReadOnly => 0o444,
+        ImageMode::Mutable => 0o644,
+    };
     let mut entries = vec![BuildEntry {
         inode: 1,
         parent: 1,
         path: String::new(),
         kind: KIND_DIR,
-        mode: 0o755,
+        mode: dir_mode,
         uid: 0,
         gid: 0,
         data: Vec::new(),
         digest: [0; 32],
     }];
-    collect_dir(source, source, &mut entries)?;
+    collect_dir(source, source, &mut entries, dir_mode, file_mode)?;
     Ok(entries)
 }
 
-fn collect_dir(root: &Path, dir: &Path, entries: &mut Vec<BuildEntry>) -> Result<()> {
+fn collect_dir(
+    root: &Path,
+    dir: &Path,
+    entries: &mut Vec<BuildEntry>,
+    dir_mode: u32,
+    file_mode: u32,
+) -> Result<()> {
     let mut children = fs::read_dir(dir)?
         .map(|entry| entry.map(|entry| entry.path()))
         .collect::<io::Result<Vec<PathBuf>>>()?;
@@ -409,13 +522,13 @@ fn collect_dir(root: &Path, dir: &Path, entries: &mut Vec<BuildEntry>) -> Result
                 parent: 0,
                 path: relative,
                 kind: KIND_DIR,
-                mode: 0o755,
+                mode: dir_mode,
                 uid: 0,
                 gid: 0,
                 data: Vec::new(),
                 digest: [0; 32],
             });
-            collect_dir(root, &path, entries)?;
+            collect_dir(root, &path, entries, dir_mode, file_mode)?;
         } else if metadata.is_file() {
             let data = fs::read(&path)?;
             let digest = digest_bytes(&data);
@@ -424,7 +537,7 @@ fn collect_dir(root: &Path, dir: &Path, entries: &mut Vec<BuildEntry>) -> Result
                 parent: 0,
                 path: relative,
                 kind: KIND_FILE,
-                mode: 0o444,
+                mode: file_mode,
                 uid: 0,
                 gid: 0,
                 data,

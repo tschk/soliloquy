@@ -12,7 +12,7 @@ General filesystems optimize for broad POSIX workloads. Soliloquy has a smaller 
 - OS rollback should be a filesystem generation operation rather than a package-manager repair operation.
 - Image verification should be native to the root format instead of bolted on after mount.
 
-SolFS v0 therefore uses a compact read-only image with a fixed header, fixed entries, a packed name table, aligned file payloads, and SHA-256 content digests. The kernel mounts valid SolFS images, exposes directory lookup, directory iteration, and file reads, and keeps mutation outside the root image. Userspace tooling creates, inspects, lists, and reads the image format so the on-disk contract is testable before the kernel grows page-cache readahead, mmap, xattrs, or writable state support.
+SolFS v0 therefore uses a compact image with a fixed header, fixed entries, a packed name table, aligned file payloads, and SHA-256 content digests. The kernel mounts valid SolFS images, exposes directory lookup, directory iteration, page-cache-backed reads, readahead, mmap, splice reads, and fixed-extent writes for explicitly mutable images. The root image remains immutable by default; mutable SolFS is for state volumes where existing extents can be overwritten without allocation or directory mutation.
 
 ## Kernel Boundary
 
@@ -46,5 +46,12 @@ Entry:
 - mode, uid, gid
 - file data offset and size
 - SHA-256 digest
+
+Flags:
+
+- `1`: immutable verified image
+- `2`: mutable fixed-extent image
+
+Immutable images keep digest verification in tooling and mount read-only in the kernel. Mutable images allow writes only inside existing file extents; growing files, creating files, unlinking files, renaming files, and directory mutation are outside v0.
 
 The root entry is inode `1`, parent `1`, directory kind, and empty name. Symlinks are rejected in v0 so the immutable root cannot smuggle host-dependent path behavior into the boot image.
