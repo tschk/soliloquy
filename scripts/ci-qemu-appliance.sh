@@ -65,16 +65,20 @@ case "${status}" in
 esac
 
 require_log '\[init\] launching /sbin/init'
-require_log 'OpenRC .*Linux 6\.12\.90-0-virt'
+require_log 'OpenRC .*Linux 6\.12\.[0-9]+-0-virt'
 require_log 'Starting sol-kernel-policy .*ok'
 require_log 'Starting sol-zram .*ok'
+require_log 'Starting sol-pressure .*ok'
 require_log 'lease of 10\.0\.2\.15 obtained'
 require_log 'Starting sold .*ok'
 require_log 'Starting sol-session'
 require_log 'DRM device found; using cage \(Wayland\)'
+require_log 'redraw requested: .*active_webview=true.*title=Soliloquy Shell'
+require_log 'gui\.paint end'
 reject_log 'kernel policy required but cgroups state is unavailable'
 reject_log 'Cannot find Xwayland binary'
 reject_log 'cannot start .* as sol-kernel-policy would not start'
+reject_log 'cannot start .* as sol-pressure would not start'
 reject_log 'ERROR: sol-session failed to start'
 
 printf 'ci-qemu-appliance: ok\n'
