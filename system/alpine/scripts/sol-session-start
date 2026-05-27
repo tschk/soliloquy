@@ -34,10 +34,12 @@ export SOLILOQUY_STATE_DIR="${SOLILOQUY_STATE_DIR:-${SOLILOQUY_HOME}/browser/sta
 export SOLILOQUY_LOG_DIR="${SOLILOQUY_LOG_DIR:-${SOLILOQUY_HOME}/browser/logs}"
 export SOLILOQUY_TERMINAL_STATE_DIR="${SOLILOQUY_TERMINAL_STATE_DIR:-${SOLILOQUY_HOME}/browser/terminal}"
 export SOLILOQUY_RUNTIME_STATE_ENV="${SOLILOQUY_RUNTIME_STATE_ENV:-/run/soliloquy/runtime-state.env}"
+export SOLILOQUY_RUNTIME_EVENTS_FILE="${SOLILOQUY_RUNTIME_EVENTS_FILE:-/run/soliloquy/runtime-events.log}"
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 
 mkdir -p "${XDG_RUNTIME_DIR}"
 mkdir -p "$(dirname "${SOLILOQUY_RUNTIME_STATE_ENV}")"
+mkdir -p "$(dirname "${SOLILOQUY_RUNTIME_EVENTS_FILE}")"
 mkdir -p \
   "${XDG_DATA_HOME}" \
   "${XDG_CACHE_HOME}" \
@@ -81,6 +83,13 @@ record_runtime_state() {
   fi
   printf '%s=%s\n' "${key}" "${value}" >>"${tmp}"
   mv "${tmp}" "${SOLILOQUY_RUNTIME_STATE_ENV}"
+}
+
+record_runtime_event() {
+  kind="$1"
+  source="$2"
+  detail="${3:-}"
+  printf '%s\t%s\t%s\t%s\n' "$(now_unix_ms)" "${kind}" "${source}" "${detail}" >>"${SOLILOQUY_RUNTIME_EVENTS_FILE}" 2>/dev/null || true
 }
 
 runtime_state_value() {
@@ -133,6 +142,11 @@ wait_for_sold() {
   done
   log "sold ready (${origin}/health)"
   record_runtime_state SOLILOQUY_SOLD_READY_UNIX_MS "$(now_unix_ms)"
+  record_runtime_event sold_ready sol-session "${origin}/health"
+  if wget -q -O /dev/null -T 1 -t 1 "${origin}/api/runtime" 2>/dev/null; then
+    log "runtime api ready (${origin}/api/runtime)"
+    record_runtime_event runtime_api_ready sol-session "${origin}/api/runtime"
+  fi
 }
 
 has_drm_device() {
@@ -172,6 +186,7 @@ launch_session() {
 log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}"
 log "SOLILOQUY_SYSTEM_CONFIG=${SOLILOQUY_SYSTEM_CONFIG}"
 record_runtime_state SOLILOQUY_SESSION_START_UNIX_MS "$(now_unix_ms)"
+record_runtime_event session_start sol-session "${XDG_RUNTIME_DIR}"
 attach_to_cgroup browser "$$"
 require_kernel_policy
 
@@ -198,8 +213,10 @@ fi
 
 if [ "${WLR_BACKENDS}" = "headless" ]; then
   log "using cage with wlroots headless backend"
+  record_runtime_event display_ready sol-session headless
 else
   log "DRM device found; using cage (Wayland)"
+  record_runtime_event display_ready sol-session wayland
 fi
 wait_for_sold
 set +e
@@ -220,6 +237,7 @@ if [ "${status}" != 0 ] && [ "${SOL_SESSION_X11_FALLBACK:-0}" = "1" ] && [ "${WI
 fi
 
 log "Wayland session exited with status ${status}"
+record_runtime_event session_exit sol-session "${status}"
 if [ "${status}" != 0 ]; then
   delay="${SOL_SESSION_FAILURE_DELAY:-8}"
   log "non-zero exit; sleeping ${delay}s before returning (reduces inittab respawn tight-loop)"

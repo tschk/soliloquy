@@ -6,7 +6,9 @@ if [ -f "${SOLILOQUY_RUNTIME_ENV}" ]; then
   . "${SOLILOQUY_RUNTIME_ENV}"
 fi
 SOLILOQUY_RUNTIME_STATE_ENV="${SOLILOQUY_RUNTIME_STATE_ENV:-/run/soliloquy/runtime-state.env}"
+SOLILOQUY_RUNTIME_EVENTS_FILE="${SOLILOQUY_RUNTIME_EVENTS_FILE:-/run/soliloquy/runtime-events.log}"
 mkdir -p "$(dirname "${SOLILOQUY_RUNTIME_STATE_ENV}")"
+mkdir -p "$(dirname "${SOLILOQUY_RUNTIME_EVENTS_FILE}")"
 
 START_URL="${SOL_START_URL:-os://terminal}"
 # Terminal UI from sold (same HTML as bundle/terminal — black chrome + canvas). Override with SOL_LAUNCH_URL.
@@ -102,6 +104,13 @@ record_runtime_state() {
   mv "${tmp}" "${SOLILOQUY_RUNTIME_STATE_ENV}"
 }
 
+record_runtime_event() {
+  kind="$1"
+  source="$2"
+  detail="${3:-}"
+  printf '%s\t%s\t%s\t%s\n' "$(now_unix_ms)" "${kind}" "${source}" "${detail}" >>"${SOLILOQUY_RUNTIME_EVENTS_FILE}" 2>/dev/null || true
+}
+
 runtime_state_value() {
   key="$1"
   if [ -f "${SOLILOQUY_RUNTIME_STATE_ENV}" ]; then
@@ -193,6 +202,7 @@ if command -v wget >/dev/null 2>&1; then
   if [ "${probe_i}" -lt "${SOL_SOLD_PROBE_RETRIES:-600}" ]; then
     log "sold reachable (${PROBE_URL})"
     record_runtime_state SOLILOQUY_SOLD_PROBE_UNIX_MS "$(now_unix_ms)"
+    record_runtime_event sold_probe sol-servo-wrapper "${PROBE_URL}"
   fi
 fi
 
@@ -212,6 +222,7 @@ set -- "$@" "${LAUNCH_URL}"
 
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 record_runtime_state SOLILOQUY_BROWSER_LAUNCH_UNIX_MS "$(now_unix_ms)"
+record_runtime_event browser_launch sol-servo-wrapper "${LAUNCH_URL}"
 if [ -c "${SERIAL_CONSOLE}" ]; then
   "$@" >>"${SERIAL_CONSOLE}" 2>&1 &
 else
@@ -220,6 +231,7 @@ fi
 servo_pid=$!
 record_runtime_state SOLILOQUY_SERVO_SPAWN_UNIX_MS "$(now_unix_ms)"
 record_runtime_state SOLILOQUY_RENDERER_PID "${servo_pid}"
+record_runtime_event servo_spawn sol-servo-wrapper "${servo_pid}"
 attach_to_cgroup foreground-renderer "${servo_pid}"
 
 if [ "${SOL_SERVO_VERBOSE}" = "1" ]; then
@@ -245,6 +257,7 @@ status=$?
 set -e
 record_runtime_state SOLILOQUY_BROWSER_EXIT_UNIX_MS "$(now_unix_ms)"
 record_runtime_state SOLILOQUY_LAST_RENDERER_EXIT "${status}"
+record_runtime_event browser_exit sol-servo-wrapper "${status}"
 renderer_restarts="$(runtime_state_value SOLILOQUY_RENDERER_RESTARTS)"
 case "${renderer_restarts}" in
   ''|*[!0-9]*) renderer_restarts=0 ;;

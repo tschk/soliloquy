@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::os::unix::io::{AsRawFd, BorrowedFd, IntoRawFd};
@@ -32,6 +34,8 @@ nix::ioctl_write_int_bad!(pty_set_ctty, nix::libc::TIOCSCTTY);
 
 const DEFAULT_FILES_DIR: &str = "/var/lib/soliloquy/files";
 const LOCAL_FILES_DIR: &str = ".soliloquy/files";
+const DEFAULT_RUNTIME_EVENTS_FILE: &str = "/run/soliloquy/runtime-events.log";
+const RUNTIME_EVENT_RING_LIMIT: usize = 128;
 /// Shell search order on Alpine.
 const SHELLS: &[&str] = &["/usr/bin/zellij", "/bin/ash", "/bin/sh"];
 
@@ -356,6 +360,7 @@ struct RuntimeStatus {
     display: DisplayRuntimeStatus,
     kernel_policy: KernelPolicyStatus,
     pressure: PressureRuntimeStatus,
+    events: Vec<RuntimeEvent>,
     optimizations: Vec<RuntimeOptimizationStatus>,
 }
 
@@ -397,6 +402,14 @@ struct BrowserBootMetrics {
     renderer_pid: Option<u64>,
     renderer_restarts: Option<u64>,
     last_renderer_exit: Option<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+struct RuntimeEvent {
+    unix_ms: u128,
+    kind: String,
+    source: String,
+    detail: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -662,6 +675,7 @@ struct AppState {
     bundle_dir: PathBuf,
     runtime_env_path: PathBuf,
     runtime_state_env_path: PathBuf,
+    runtime_events_path: PathBuf,
     token: Option<String>,
     http: reqwest::Client,
     page_cache: Arc<DashMap<String, CachedPage>>,
@@ -689,6 +703,9 @@ async fn main() {
     let runtime_state_env_path = std::env::var_os("SOLILOQUY_RUNTIME_STATE_ENV")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/run/soliloquy/runtime-state.env"));
+    let runtime_events_path = std::env::var_os("SOLILOQUY_RUNTIME_EVENTS_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_RUNTIME_EVENTS_FILE));
     let token = std::env::var("SOL_TOKEN").ok().and_then(|value| {
         let trimmed = value.trim().to_string();
         if trimmed.is_empty() || trimmed == "dev-token-change-me" {
@@ -714,6 +731,7 @@ async fn main() {
         bundle_dir: bundle_dir.clone(),
         runtime_env_path,
         runtime_state_env_path,
+        runtime_events_path: runtime_events_path.clone(),
         token,
         http: reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(3))
@@ -776,9 +794,14 @@ async fn main() {
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    println!("sold listening on {}", addr);
-
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    append_runtime_event(
+        runtime_events_path.as_ref(),
+        "sold_listening",
+        "sold",
+        Some(&addr.to_string()),
+    );
+    println!("sold listening on {}", addr);
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -913,10 +936,12 @@ async fn device_action(
 async fn runtime_status(State(state): State<AppState>) -> Json<RuntimeStatus> {
     let settings = load_settings(&state).await;
     let runtime_state = read_runtime_state(state.runtime_state_env_path.as_ref());
+    let runtime_events = read_runtime_events(state.runtime_events_path.as_ref());
     Json(build_runtime_status(
         &settings,
         state.service_registry.as_ref(),
         &runtime_state,
+        runtime_events,
     ))
 }
 
@@ -932,7 +957,13 @@ async fn os_status(State(state): State<AppState>) -> Json<OsStatus> {
     let battery = read_battery_status().await;
     let settings = load_settings(&state).await;
     let runtime_state = read_runtime_state(state.runtime_state_env_path.as_ref());
-    let runtime = build_runtime_status(&settings, state.service_registry.as_ref(), &runtime_state);
+    let runtime_events = read_runtime_events(state.runtime_events_path.as_ref());
+    let runtime = build_runtime_status(
+        &settings,
+        state.service_registry.as_ref(),
+        &runtime_state,
+        runtime_events,
+    );
     Json(OsStatus {
         config,
         package_manager,
@@ -1301,6 +1332,7 @@ fn build_runtime_status(
     settings: &Settings,
     service_registry: &ServiceRegistry,
     runtime_state: &RuntimeState,
+    runtime_events: Vec<RuntimeEvent>,
 ) -> RuntimeStatus {
     let env_engine = std::env::var("SOLILOQUY_JS_ENGINE").unwrap_or_default();
     let requested_engine = if env_engine.trim().is_empty() {
@@ -1363,6 +1395,7 @@ fn build_runtime_status(
         },
         kernel_policy: build_kernel_policy_status(renderer_pid, runtime_state),
         pressure: build_pressure_runtime_status(runtime_state),
+        events: runtime_events,
         optimizations: vec![
             RuntimeOptimizationStatus {
                 id: "v8-flags",
@@ -1735,6 +1768,76 @@ fn read_runtime_state(path: &FsPath) -> RuntimeState {
         return RuntimeState::default();
     };
     parse_runtime_state(&raw)
+}
+
+fn read_runtime_events(path: &FsPath) -> Vec<RuntimeEvent> {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    parse_runtime_events(&raw, RUNTIME_EVENT_RING_LIMIT)
+}
+
+fn parse_runtime_events(raw: &str, limit: usize) -> Vec<RuntimeEvent> {
+    let mut events = Vec::new();
+    for line in raw.lines() {
+        let mut parts = line.splitn(4, '\t');
+        let (Some(unix_ms), Some(kind), Some(source)) = (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        let Ok(unix_ms) = unix_ms.parse() else {
+            continue;
+        };
+        if kind.trim().is_empty() || source.trim().is_empty() {
+            continue;
+        }
+        let detail = parts.next().and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
+        events.push(RuntimeEvent {
+            unix_ms,
+            kind: kind.trim().to_string(),
+            source: source.trim().to_string(),
+            detail,
+        });
+        if events.len() > limit {
+            events.remove(0);
+        }
+    }
+    events
+}
+
+fn append_runtime_event(path: &FsPath, kind: &str, source: &str, detail: Option<&str>) {
+    let Some(parent) = path.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(parent).is_err() {
+        return;
+    }
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+    let detail = detail.unwrap_or_default().replace(['\t', '\n'], " ");
+    let _ = writeln!(
+        file,
+        "{}\t{}\t{}\t{}",
+        current_unix_ms(),
+        kind.replace(['\t', '\n'], " "),
+        source.replace(['\t', '\n'], " "),
+        detail
+    );
+}
+
+fn current_unix_ms() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default()
 }
 
 fn parse_runtime_state(raw: &str) -> RuntimeState {
@@ -2722,7 +2825,7 @@ mod tests {
     fn runtime_status_is_honest_about_v8_bridge() {
         let registry = default_service_registry();
         let state = parse_runtime_state("SOLILOQUY_SESSION_START_UNIX_MS=1000\nSOLILOQUY_BROWSER_LAUNCH_UNIX_MS=1500\nSOLILOQUY_BROWSER_EXIT_UNIX_MS=2500\nSOLILOQUY_RENDERER_PID=42\nSOLILOQUY_RENDERER_RESTARTS=2\nSOLILOQUY_KERNEL_FEATURE_CGROUP_V2=1\nSOLILOQUY_KERNEL_FEATURE_CPU_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_IO_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_MEMORY_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_PIDS_CONTROLLER=1\nSOLILOQUY_KERNEL_FEATURE_BBR=1\nSOLILOQUY_KERNEL_FEATURE_TCP_FASTOPEN=1\nSOLILOQUY_KERNEL_CAP_MGLRU=active\nSOLILOQUY_KERNEL_CAP_ZRAM=active\nSOLILOQUY_KERNEL_CAP_DAMON=unavailable\nSOLILOQUY_KERNEL_CAP_SECCOMP=active\nSOLILOQUY_KERNEL_CAP_LANDLOCK=active\nSOLILOQUY_KERNEL_CAP_SCHED_EXT=unavailable\nSOLILOQUY_KERNEL_CAP_PREEMPT_RT=unavailable\nSOLILOQUY_KERNEL_CAP_SOLFS=active\nSOLILOQUY_KERNEL_CAP_EROFS=active\nSOLILOQUY_KERNEL_CAP_SQUASHFS=active\nSOLILOQUY_KERNEL_SOURCE_MODE=external-or-in-tree\nSOLILOQUY_KERNEL_SOURCE_IN_TREE=system/alpine/kernel/linux\nSOLILOQUY_KERNEL_SOURCE_IN_TREE_PRESENT=0\nSOLILOQUY_KERNEL_PATCH_QUEUE=active\nSOLILOQUY_KERNEL_BORE_LANE=active\nSOLILOQUY_PRESSURE_PSI_CPU=active\nSOLILOQUY_PRESSURE_PSI_MEMORY=active\nSOLILOQUY_PRESSURE_PSI_IO=active\nSOLILOQUY_PRESSURE_LEVEL=observable\nSOLILOQUY_ZRAM_STATE=active\nSOLILOQUY_ZRAM_SIZE=768M\nSOLILOQUY_RAM_ROOT_STATE=active\n");
-        let runtime = build_runtime_status(&Settings::default(), &registry, &state);
+        let runtime = build_runtime_status(&Settings::default(), &registry, &state, Vec::new());
         assert_eq!(runtime.javascript.requested_engine, "v8-experimental");
         assert_eq!(runtime.javascript.active_engine, "mozjs");
         assert!(!runtime.javascript.bridge_ready);
@@ -2788,6 +2891,7 @@ mod tests {
         assert_eq!(runtime.pressure.zram_state.as_deref(), Some("active"));
         assert_eq!(runtime.pressure.zram_size.as_deref(), Some("768M"));
         assert_eq!(runtime.pressure.ram_root_state.as_deref(), Some("active"));
+        assert!(runtime.events.is_empty());
         for id in [
             "system",
             "network",
@@ -2819,6 +2923,18 @@ mod tests {
         );
         assert_eq!(state.u128("SOLILOQUY_SOLD_READY_UNIX_MS"), Some(2000));
         assert_eq!(state.i64("SOLILOQUY_LAST_RENDERER_EXIT"), Some(1));
+    }
+
+    #[test]
+    fn runtime_events_keep_bounded_recent_entries() {
+        let raw = "1000\tboot\tinit\tstart\nbad\n2000\tsold\tsold\tlistening\n3000\tbrowser\tservo\tinteractive\n";
+        let events = parse_runtime_events(raw, 2);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].kind, "sold");
+        assert_eq!(events[0].source, "sold");
+        assert_eq!(events[0].detail.as_deref(), Some("listening"));
+        assert_eq!(events[1].kind, "browser");
+        assert_eq!(events[1].unix_ms, 3000);
     }
 
     #[tokio::test]
