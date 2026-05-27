@@ -48,6 +48,8 @@ assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_write_header_image_size
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_write_disk_entry'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_load_v2_superblock'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'SOLFS_FLAG_V2'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'SOLFS_KIND_SYMLINK'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_get_link'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'iget_locked'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" 'solfs_rust_validate_header'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_vfs.c" '__weak int solfs_rust_validate_header'
@@ -57,6 +59,7 @@ assert_contains "${SOLFS_KERNEL_DIR}/solfs_core.rs" 'extern "C" fn solfs_rust_va
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_format.h" 'SOLFSV01'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_format.h" 'SOLFSV02'
 assert_contains "${SOLFS_KERNEL_DIR}/solfs_format.h" 'struct solfs_v2_superblock'
+assert_contains "${SOLFS_KERNEL_DIR}/solfs_format.h" 'SOLFS_KIND_SYMLINK'
 assert_contains "${SOLFS_KERNEL_DIR}/Kbuild" 'solfs_vfs.o'
 
 if [ -n "${KERNEL_SRC:-}" ]; then

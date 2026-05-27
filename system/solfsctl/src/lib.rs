@@ -12,6 +12,7 @@ pub const HEADER_LEN: usize = 56;
 pub const ENTRY_LEN: usize = 92;
 pub const KIND_DIR: u32 = 1;
 pub const KIND_FILE: u32 = 2;
+pub const KIND_SYMLINK: u32 = 3;
 pub const FLAG_READONLY: u64 = 1;
 pub const FLAG_MUTABLE: u64 = 2;
 pub const FLAG_V2: u64 = 4;
@@ -174,7 +175,7 @@ pub fn build_image_with_mode(
         let name = file_name(&entry.path).as_bytes();
         let name_offset = names.len() as u64;
         names.extend_from_slice(name);
-        let file_offset = if entry.kind == KIND_FILE {
+        let file_offset = if entry.kind != KIND_DIR {
             let offset = cursor;
             cursor += entry.data.len() as u64;
             cursor = align8(cursor);
@@ -218,7 +219,7 @@ pub fn build_image_with_mode(
     file.write_all(&names)?;
     write_zeroes_until(&mut file, data_offset)?;
     for (entry, public_entry) in entries.iter().zip(public_entries.iter()) {
-        if entry.kind == KIND_FILE {
+        if entry.kind != KIND_DIR {
             file.seek(SeekFrom::Start(public_entry.data_offset))?;
             file.write_all(&entry.data)?;
             write_zeroes_until(
@@ -364,6 +365,7 @@ pub fn render_text(image: &Image) -> String {
         let kind = match entry.kind {
             KIND_DIR => "dir",
             KIND_FILE => "file",
+            KIND_SYMLINK => "symlink",
             _ => "unknown",
         };
         let path = if entry.path.is_empty() {
@@ -376,12 +378,12 @@ pub fn render_text(image: &Image) -> String {
             path,
             entry.inode,
             entry.parent,
-            if entry.kind == KIND_FILE {
+            if entry.kind != KIND_DIR {
                 entry.size
             } else {
                 0
             },
-            if entry.kind == KIND_FILE {
+            if entry.kind != KIND_DIR {
                 hex_digest(&entry.digest)
             } else {
                 "-".to_string()
@@ -521,17 +523,35 @@ fn collect_dir(
 
     for path in children {
         let metadata = fs::symlink_metadata(&path)?;
-        if metadata.file_type().is_symlink() {
-            return Err(SolfsError::Invalid(format!(
-                "symlinks are not part of SolFS v0: {}",
-                path.display()
-            )));
-        }
         let relative = path.strip_prefix(root).map_err(|_| {
             SolfsError::Invalid(format!("path escaped source root: {}", path.display()))
         })?;
         let relative = normalize_path(relative)?;
-        if metadata.is_dir() {
+        if metadata.file_type().is_symlink() {
+            let target = fs::read_link(&path)?;
+            let target = target
+                .to_str()
+                .ok_or_else(|| {
+                    SolfsError::Invalid(format!(
+                        "symlink target is not valid utf-8: {}",
+                        path.display()
+                    ))
+                })?
+                .as_bytes()
+                .to_vec();
+            let digest = digest_bytes(&target);
+            entries.push(BuildEntry {
+                inode: 0,
+                parent: 0,
+                path: relative,
+                kind: KIND_SYMLINK,
+                mode: 0o777,
+                uid: 0,
+                gid: 0,
+                data: target,
+                digest,
+            });
+        } else if metadata.is_dir() {
             entries.push(BuildEntry {
                 inode: 0,
                 parent: 0,
@@ -602,7 +622,7 @@ fn validate_image(header: &Header, entries: &[Entry]) -> Result<()> {
                 entry.inode
             )));
         }
-        if entry.kind != KIND_DIR && entry.kind != KIND_FILE {
+        if entry.kind != KIND_DIR && entry.kind != KIND_FILE && entry.kind != KIND_SYMLINK {
             return Err(SolfsError::Invalid(format!(
                 "bad entry kind {}",
                 entry.kind
@@ -757,15 +777,22 @@ mod tests {
     }
 
     #[test]
-    fn rejects_symlink() {
+    fn builds_symlink_entries() {
         let root = temp_dir("symlink");
         fs::create_dir_all(&root).unwrap();
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink("target", root.join("link")).unwrap();
             let image = root.with_extension("solfs");
-            let error = build_image(&root, &image).unwrap_err().to_string();
-            assert!(error.contains("symlinks are not part of SolFS v0"));
+            build_image(&root, &image).unwrap();
+            let inspected = inspect_image(&image).unwrap();
+            let link = inspected.find_path("link").unwrap();
+            assert_eq!(link.kind, KIND_SYMLINK);
+            assert_eq!(
+                read_file(&image, "link").unwrap_err().to_string(),
+                "not a file: link"
+            );
+            fs::remove_file(&image).unwrap();
         }
         fs::remove_dir_all(&root).unwrap();
     }

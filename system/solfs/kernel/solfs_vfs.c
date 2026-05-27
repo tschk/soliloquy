@@ -1,6 +1,7 @@
 #include <linux/buffer_head.h>
 #include <linux/fs.h>
 #include <linux/highmem.h>
+#include <linux/limits.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/pagemap.h>
@@ -76,6 +77,7 @@ struct solfs_sb_info {
 };
 
 static const struct inode_operations solfs_dir_inode_ops;
+static const struct inode_operations solfs_symlink_inode_ops;
 static const struct file_operations solfs_dir_ops;
 static const struct file_operations solfs_file_ops;
 static const struct address_space_operations solfs_aops;
@@ -214,6 +216,8 @@ static struct inode *solfs_make_inode(struct super_block *sb, struct solfs_entry
 	mode = entry->mode & 0777;
 	if (entry->kind == SOLFS_KIND_DIR)
 		mode |= S_IFDIR;
+	else if (entry->kind == SOLFS_KIND_SYMLINK)
+		mode |= S_IFLNK;
 	else
 		mode |= S_IFREG;
 
@@ -232,6 +236,10 @@ static struct inode *solfs_make_inode(struct super_block *sb, struct solfs_entry
 		inode->i_op = &solfs_dir_inode_ops;
 		inode->i_fop = &solfs_dir_ops;
 		set_nlink(inode, 2);
+	} else if (entry->kind == SOLFS_KIND_SYMLINK) {
+		inode->i_op = &solfs_symlink_inode_ops;
+		inode_nohighmem(inode);
+		set_nlink(inode, 1);
 	} else {
 		inode->i_fop = &solfs_file_ops;
 		set_nlink(inode, 1);
@@ -282,7 +290,12 @@ static int solfs_iterate_shared(struct file *file, struct dir_context *ctx)
 			emitted++;
 			continue;
 		}
-		type = entry->kind == SOLFS_KIND_DIR ? DT_DIR : DT_REG;
+		if (entry->kind == SOLFS_KIND_DIR)
+			type = DT_DIR;
+		else if (entry->kind == SOLFS_KIND_SYMLINK)
+			type = DT_LNK;
+		else
+			type = DT_REG;
 		if (!dir_emit(ctx, entry->name, entry->name_len, entry->inode, type))
 			return 0;
 		ctx->pos = ++emitted;
@@ -335,6 +348,34 @@ static void solfs_readahead(struct readahead_control *rac)
 			folio_mark_uptodate(folio);
 		folio_unlock(folio);
 	}
+}
+
+static void solfs_free_link(void *link)
+{
+	kfree(link);
+}
+
+static const char *solfs_get_link(struct dentry *dentry, struct inode *inode, struct delayed_call *done)
+{
+	struct solfs_entry *entry = inode->i_private;
+	char *target;
+	int ret;
+
+	if (!dentry)
+		return ERR_PTR(-ECHILD);
+	if (entry->size > PATH_MAX)
+		return ERR_PTR(-ENAMETOOLONG);
+	target = kmalloc(entry->size + 1, GFP_KERNEL);
+	if (!target)
+		return ERR_PTR(-ENOMEM);
+	ret = solfs_read_bytes(inode->i_sb, entry->data_offset, target, entry->size);
+	if (ret) {
+		kfree(target);
+		return ERR_PTR(ret);
+	}
+	target[entry->size] = '\0';
+	set_delayed_call(done, solfs_free_link, target);
+	return target;
 }
 
 static int solfs_write_begin(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, struct page **pagep, void **fsdata)
@@ -492,6 +533,10 @@ static const struct inode_operations solfs_dir_inode_ops = {
 	.lookup = solfs_lookup,
 };
 
+static const struct inode_operations solfs_symlink_inode_ops = {
+	.get_link = solfs_get_link,
+};
+
 static const struct file_operations solfs_dir_ops = {
 	.owner = THIS_MODULE,
 	.iterate_shared = solfs_iterate_shared,
@@ -577,13 +622,13 @@ static int solfs_load_entries(struct super_block *sb, struct solfs_disk_header *
 
 		if (entry->name_offset > names_size || entry->name_len > names_size - entry->name_offset)
 			return -EINVAL;
-		if (entry->kind != SOLFS_KIND_DIR && entry->kind != SOLFS_KIND_FILE)
+		if (entry->kind != SOLFS_KIND_DIR && entry->kind != SOLFS_KIND_FILE && entry->kind != SOLFS_KIND_SYMLINK)
 			return -EINVAL;
 		if (!(flags & SOLFS_FLAG_MUTABLE) && entry->mode & 0222)
 			return -EINVAL;
 		if (entry->kind == SOLFS_KIND_DIR && (entry->size || entry->data_offset))
 			return -EINVAL;
-		if (entry->kind == SOLFS_KIND_FILE && (entry->data_offset > image_size || entry->size > image_size - entry->data_offset))
+		if (entry->kind != SOLFS_KIND_DIR && (entry->data_offset > image_size || entry->size > image_size - entry->data_offset))
 			return -EINVAL;
 		if (entry->name_len && memchr(sbi->names + entry->name_offset, '/', entry->name_len))
 			return -EINVAL;

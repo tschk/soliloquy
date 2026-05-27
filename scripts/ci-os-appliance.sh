@@ -88,6 +88,15 @@ assert_contains system/alpine/filesystems/state-mounts.json '"target": "/home"'
 assert_contains system/alpine/scripts/build-rootfs-image.sh 'mkfs.erofs'
 assert_contains system/alpine/scripts/build-rootfs-image.sh 'mksquashfs'
 assert_contains system/alpine/scripts/build-rootfs-image.sh 'solfsctl mkfs'
+assert_contains system/alpine/scripts/qemu-v0.sh 'build-rootfs-image.sh'
+assert_contains system/alpine/scripts/qemu-v0.sh 'SOLILOQUY_ROOTFS_FORMAT'
+assert_contains system/alpine/scripts/qemu-v0.sh 'SOLILOQUY_ROOTFS_IMAGE_REQUIRED'
+assert_contains system/alpine/scripts/run-qemu.sh 'SOLILOQUY_ROOTFS_IMAGE'
+assert_contains system/alpine/scripts/run-qemu.sh 'missing required rootfs image'
+assert_contains system/alpine/scripts/run-qemu.sh 'virtio-blk-pci'
+assert_contains system/alpine/scripts/build-qemu-initramfs.sh 'fallback_fstype'
+assert_contains system/alpine/rootfs-overlay/init 'load_kernel_module_file'
+assert_contains system/alpine/rootfs-overlay/init 'solfs.ko'
 assert_file system/alpine/kernel/APKBUILD
 assert_file system/alpine/kernel/README.md
 assert_file system/alpine/kernel/soliloquy-internet-appliance.config

@@ -26,11 +26,16 @@ else
 fi
 "${ALPINE_SCRIPTS}/stage-soliloquy-artifacts.sh" "${ROOTFS_DIR}"
 "${ALPINE_SCRIPTS}/fetch-qemu-kernel.sh" "${QEMU_DIR}"
+ROOTFS_FORMAT="${SOLILOQUY_ROOTFS_FORMAT:-solfs}"
+SOLILOQUY_ROOTFS_FORMAT="${ROOTFS_FORMAT}" "${ALPINE_SCRIPTS}/build-rootfs-image.sh" "${ROOTFS_DIR}" "${QEMU_DIR}"
 "${ALPINE_SCRIPTS}/build-qemu-initramfs.sh" "${ROOTFS_DIR}" "${QEMU_DIR}/rootfs.cpio.gz"
 
 if [ "${QEMU_RUN}" = "1" ]; then
   export SOLILOQUY_RAM_ROOT="${SOLILOQUY_RAM_ROOT:-auto}"
   export SOLILOQUY_RAM_ROOT_MIN_MB="${SOLILOQUY_RAM_ROOT_MIN_MB:-3072}"
+  export SOLILOQUY_ROOTFS_IMAGE="${SOLILOQUY_ROOTFS_IMAGE:-${QEMU_DIR}/soliloquy-rootfs.${ROOTFS_FORMAT}}"
+  export SOLILOQUY_ROOTFS_IMAGE_REQUIRED="${SOLILOQUY_ROOTFS_IMAGE_REQUIRED:-1}"
+  export SOLILOQUY_ROOT_FALLBACK_FSTYPE="${SOLILOQUY_ROOT_FALLBACK_FSTYPE:-${ROOTFS_FORMAT}}"
   "${ALPINE_SCRIPTS}/run-qemu.sh" "${QEMU_DIR}"
 else
   echo "QEMU_RUN=0 set; skipping VM launch."

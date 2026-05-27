@@ -42,9 +42,9 @@ Entry:
 - inode
 - parent inode
 - name offset and length
-- kind: directory or file
+- kind: directory, file, or symlink
 - mode, uid, gid
-- file data offset and size
+- file or symlink data offset and size
 - SHA-256 digest
 
 Flags:
@@ -54,7 +54,7 @@ Flags:
 
 Immutable images keep digest verification in tooling and mount read-only in the kernel. Mutable images allow overwrites and append-growth of existing files by relocating the file to a new aligned extent at the end of the image, updating the entry table, and advancing `image_size`. Creating files, unlinking files, renaming files, shrinking files, reusable free space, multi-extent files, and directory mutation are outside v0; those require the v2 bitmap, extent table, and journal format.
 
-The root entry is inode `1`, parent `1`, directory kind, and empty name. Symlinks are rejected in v0 so the immutable root cannot smuggle host-dependent path behavior into the boot image.
+The root entry is inode `1`, parent `1`, directory kind, and empty name. Symlinks store their target path as inline payload data so Alpine rootfs layouts can be represented without requiring host path resolution during image build.
 
 ## Format V2
 
