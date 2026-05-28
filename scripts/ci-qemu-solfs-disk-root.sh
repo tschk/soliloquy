@@ -81,6 +81,7 @@ require_log 'Starting sold .*ok'
 require_log 'Starting sol-session'
 reject_log 'mount: mounting /dev/vda on /sysroot failed'
 reject_log 'invalid module format'
+reject_log '/etc/resolv\.conf\.[A-Za-z0-9]+'
 reject_log 'ERROR: sol-session failed to start'
 
 printf 'ci-qemu-solfs-disk-root: ok\n'

@@ -5,6 +5,11 @@ description="Soliloquy kernel policy"
 command="/usr/local/bin/apply-kernel-policy.sh"
 command_background="no"
 
+start_pre() {
+    mkdir -p /run/soliloquy
+    [ -f /run/soliloquy/resolv.conf ] || printf 'nameserver 10.0.2.3\n' >/run/soliloquy/resolv.conf
+}
+
 depend() {
     need localmount
     before networking sold sol-session

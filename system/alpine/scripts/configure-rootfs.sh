@@ -154,6 +154,11 @@ auto eth0
 iface eth0 inet dhcp
 EOF
 
+mkdir -p "${ROOTFS}/etc/udhcpc"
+cat > "${ROOTFS}/etc/udhcpc/udhcpc.conf" <<'EOF'
+RESOLV_CONF="/run/soliloquy/resolv.conf"
+EOF
+
 cat > "${ROOTFS}/etc/resolv.conf" <<'EOF'
 nameserver 10.0.2.3
 EOF

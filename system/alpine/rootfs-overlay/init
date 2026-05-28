@@ -64,6 +64,9 @@ prepare_disk_root_state() {
     : >/run/soliloquy/resolv.conf
     mount --bind /run/soliloquy/resolv.conf /sysroot/etc/resolv.conf 2>/dev/null || true
   fi
+  if [ -d /sysroot/etc/udhcpc ]; then
+    mkdir -p /run/soliloquy
+  fi
 }
 
 try_disk_root() {
