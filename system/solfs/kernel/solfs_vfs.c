@@ -10,12 +10,14 @@
 #include <linux/string.h>
 #include <linux/time.h>
 #include <linux/uio.h>
+#include <linux/version.h>
 #include <linux/writeback.h>
 
 #include "solfs_format.h"
 
 #define SOLFS_MAX_ENTRIES 65536
 #define SOLFS_MAX_NAMES_SIZE (16 * 1024 * 1024)
+#define SOLFS_HAS_FOLIO_WRITE_CALLBACKS (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
 
 int solfs_rust_validate_header(struct solfs_disk_header header);
 
@@ -81,6 +83,7 @@ static const struct inode_operations solfs_symlink_inode_ops;
 static const struct file_operations solfs_dir_ops;
 static const struct file_operations solfs_file_ops;
 static const struct address_space_operations solfs_aops;
+static int solfs_write_folio(struct inode *inode, struct folio *folio);
 
 static struct solfs_sb_info *solfs_sbi(struct super_block *sb)
 {
@@ -378,7 +381,7 @@ static const char *solfs_get_link(struct dentry *dentry, struct inode *inode, st
 	return target;
 }
 
-static int solfs_write_begin(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, struct page **pagep, void **fsdata)
+static int solfs_write_begin_common(struct address_space *mapping, loff_t pos, unsigned int len, struct folio **foliop)
 {
 	struct inode *inode = mapping->host;
 	struct solfs_entry *entry = inode->i_private;
@@ -409,34 +412,15 @@ static int solfs_write_begin(struct file *file, struct address_space *mapping, l
 		}
 	}
 
-	*pagep = page;
+	*foliop = page_folio(page);
 	return 0;
 }
 
-static int solfs_write_folio(struct inode *inode, struct folio *folio)
-{
-	struct solfs_entry *entry = inode->i_private;
-	loff_t pos = folio_pos(folio);
-	size_t size = folio_size(folio);
-	size_t written;
-	void *addr;
-	int ret;
-
-	if (pos >= entry->size)
-		return 0;
-	written = min_t(u64, size, entry->size - pos);
-	addr = kmap_local_folio(folio, 0);
-	ret = solfs_write_bytes(inode->i_sb, entry->data_offset + pos, addr, written);
-	kunmap_local(addr);
-	return ret;
-}
-
-static int solfs_write_end(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, unsigned int copied, struct page *page, void *fsdata)
+static int solfs_write_end_common(struct address_space *mapping, loff_t pos, unsigned int copied, struct folio *folio)
 {
 	struct inode *inode = mapping->host;
 	struct solfs_entry *entry = inode->i_private;
 	struct solfs_sb_info *sbi = solfs_sbi(inode->i_sb);
-	struct folio *folio = page_folio(page);
 	u64 end;
 	u64 old_offset;
 	u64 old_size;
@@ -514,6 +498,53 @@ out:
 	folio_unlock(folio);
 	folio_put(folio);
 	return copied;
+}
+
+#if SOLFS_HAS_FOLIO_WRITE_CALLBACKS
+static int solfs_write_begin(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, struct folio **foliop, void **fsdata)
+{
+	return solfs_write_begin_common(mapping, pos, len, foliop);
+}
+
+static int solfs_write_end(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, unsigned int copied, struct folio *folio, void *fsdata)
+{
+	return solfs_write_end_common(mapping, pos, copied, folio);
+}
+#else
+static int solfs_write_begin(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, struct page **pagep, void **fsdata)
+{
+	struct folio *folio;
+	int ret;
+
+	ret = solfs_write_begin_common(mapping, pos, len, &folio);
+	if (ret)
+		return ret;
+	*pagep = folio_page(folio, 0);
+	return 0;
+}
+
+static int solfs_write_end(struct file *file, struct address_space *mapping, loff_t pos, unsigned int len, unsigned int copied, struct page *page, void *fsdata)
+{
+	return solfs_write_end_common(mapping, pos, copied, page_folio(page));
+}
+#endif
+
+static int solfs_write_folio(struct inode *inode, struct folio *folio)
+{
+	struct solfs_entry *entry = inode->i_private;
+	loff_t pos = folio_pos(folio);
+	size_t size = folio_size(folio);
+	size_t written;
+	void *addr;
+	int ret;
+
+	if (pos >= entry->size)
+		return 0;
+	written = min_t(u64, size, entry->size - pos);
+	addr = kmap_local_folio(folio, 0);
+	ret = solfs_write_bytes(inode->i_sb, entry->data_offset + pos, addr, written);
+	kunmap_local(addr);
+	return ret;
 }
 
 static int solfs_writepage(struct page *page, struct writeback_control *wbc)
@@ -624,7 +655,7 @@ static int solfs_load_entries(struct super_block *sb, struct solfs_disk_header *
 			return -EINVAL;
 		if (entry->kind != SOLFS_KIND_DIR && entry->kind != SOLFS_KIND_FILE && entry->kind != SOLFS_KIND_SYMLINK)
 			return -EINVAL;
-		if (!(flags & SOLFS_FLAG_MUTABLE) && entry->mode & 0222)
+		if (!(flags & SOLFS_FLAG_MUTABLE) && entry->kind == SOLFS_KIND_FILE && entry->mode & 0222)
 			return -EINVAL;
 		if (entry->kind == SOLFS_KIND_DIR && (entry->size || entry->data_offset))
 			return -EINVAL;

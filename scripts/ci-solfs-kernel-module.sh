@@ -26,4 +26,9 @@ docker run --rm \
     make KERNEL_SRC="/lib/modules/${kernel_release}/build" clean >/dev/null
   '
 
+SOLFS_ALPINE_PLATFORM="${SOLFS_ALPINE_PLATFORM:-linux/amd64}" \
+  system/alpine/scripts/build-solfs-module.sh "build/alpine/qemu/solfs.ko" >/dev/null
+test -f build/alpine/qemu/solfs.ko
+test -f build/alpine/qemu/solfs.ko.kernel-release
+
 printf 'ci-solfs-kernel-module: ok\n'

@@ -27,7 +27,42 @@ record_rootfs_state() {
 load_kernel_module_file() {
   module_path="$1"
   if [ -f "${module_path}" ] && command -v insmod >/dev/null 2>&1; then
-    insmod "${module_path}" >/dev/null 2>&1 || true
+    if insmod "${module_path}" >/dev/null 2>&1; then
+      log "loaded kernel module ${module_path}"
+    else
+      log "kernel module load failed ${module_path}"
+    fi
+  fi
+}
+
+load_kernel_module() {
+  module="$1"
+  if command -v modprobe >/dev/null 2>&1; then
+    modprobe "${module}" >/dev/null 2>&1 || true
+  fi
+}
+
+wait_for_device() {
+  device="$1"
+  count=0
+  while [ "${count}" -lt 50 ]; do
+    [ -e "${device}" ] && return 0
+    sleep 0.1
+    count=$((count + 1))
+  done
+  return 1
+}
+
+prepare_disk_root_state() {
+  for path in var/lib/soliloquy var/log var/cache home root state; do
+    if [ -d "/sysroot/${path}" ]; then
+      mount -t tmpfs -o mode=755,nosuid,nodev tmpfs "/sysroot/${path}" 2>/dev/null || true
+    fi
+  done
+  if [ -f /sysroot/etc/resolv.conf ]; then
+    mkdir -p /run/soliloquy
+    : >/run/soliloquy/resolv.conf
+    mount --bind /run/soliloquy/resolv.conf /sysroot/etc/resolv.conf 2>/dev/null || true
   fi
 }
 
@@ -36,19 +71,22 @@ try_disk_root() {
   fstype="$2"
   mem_mb="$3"
   mkdir -p /sysroot
+  wait_for_device "${device}" || log "disk root device unavailable ${device}"
   if mount -t "${fstype}" -o ro "${device}" /sysroot 2>/dev/null; then
-    mkdir -p /sysroot/run/soliloquy
-    {
-      printf 'SOLILOQUY_ROOT_MODE=%s\n' "disk-root"
-      printf 'SOLILOQUY_ROOT_SOURCE=%s\n' "${device}"
-      printf 'SOLILOQUY_ROOT_MEM_MB=%s\n' "${mem_mb}"
-    } >/sysroot/run/soliloquy/rootfs.env
+    record_rootfs_state "disk-root" "${device}" "${mem_mb}"
+    prepare_disk_root_state
     if command -v switch_root >/dev/null 2>&1; then
       log "switching to disk root ${device}"
+      for mountpoint in proc sys dev run tmp; do
+        if [ -d "/sysroot/${mountpoint}" ]; then
+          mount --move "/${mountpoint}" "/sysroot/${mountpoint}" 2>/dev/null || true
+        fi
+      done
       exec switch_root /sysroot /sbin/init
     fi
     umount /sysroot 2>/dev/null || true
   fi
+  log "disk root mount failed ${device} ${fstype}"
   return 1
 }
 
@@ -100,6 +138,8 @@ root_fallback="$(cmdline_value soliloquy.root_fallback || printf '%s\n' /dev/vda
 root_fallback_fstype="$(cmdline_value soliloquy.root_fallback_fstype || printf '%s\n' ext4)"
 mem_kb="$(awk '/MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null || printf '%s\n' 0)"
 mem_mb="$((mem_kb / 1024))"
+load_kernel_module virtio_pci
+load_kernel_module virtio_blk
 load_kernel_module_file /usr/local/lib/soliloquy/kernel/solfs.ko
 
 case "${ram_root_mode}" in
@@ -118,16 +158,13 @@ case "${ram_root_mode}" in
     ;;
 esac
 
-if command -v modprobe >/dev/null 2>&1; then
-  # Prefer the virtio DRM path in QEMU, but keep booting if modules are absent.
-  modprobe virtio_pci >/dev/null 2>&1 || true
-  modprobe rng_core >/dev/null 2>&1 || true
-  modprobe virtio_rng >/dev/null 2>&1 || true
-  modprobe jitterentropy_rng >/dev/null 2>&1 || true
-  modprobe virtio_net >/dev/null 2>&1 || true
-  modprobe virtio_input >/dev/null 2>&1 || true
-  modprobe virtio_gpu >/dev/null 2>&1 || true
-fi
+load_kernel_module virtio_pci
+load_kernel_module rng_core
+load_kernel_module virtio_rng
+load_kernel_module jitterentropy_rng
+load_kernel_module virtio_net
+load_kernel_module virtio_input
+load_kernel_module virtio_gpu
 
 log "launching /sbin/init"
 exec /sbin/init

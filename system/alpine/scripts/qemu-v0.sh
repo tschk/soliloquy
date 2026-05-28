@@ -24,9 +24,14 @@ if [ -d "${LINUX_BIN_DIR}/servo-runtime-root" ]; then
 else
   unset SERVO_RUNTIME_DIR
 fi
-"${ALPINE_SCRIPTS}/stage-soliloquy-artifacts.sh" "${ROOTFS_DIR}"
 "${ALPINE_SCRIPTS}/fetch-qemu-kernel.sh" "${QEMU_DIR}"
 ROOTFS_FORMAT="${SOLILOQUY_ROOTFS_FORMAT:-solfs}"
+if [ "${ROOTFS_FORMAT}" = "solfs" ] && [ -z "${SOLFS_MODULE:-}" ]; then
+  SOLFS_MODULE="${QEMU_DIR}/solfs.ko"
+  "${ALPINE_SCRIPTS}/build-solfs-module.sh" "${SOLFS_MODULE}"
+  export SOLFS_MODULE
+fi
+"${ALPINE_SCRIPTS}/stage-soliloquy-artifacts.sh" "${ROOTFS_DIR}"
 SOLILOQUY_ROOTFS_FORMAT="${ROOTFS_FORMAT}" "${ALPINE_SCRIPTS}/build-rootfs-image.sh" "${ROOTFS_DIR}" "${QEMU_DIR}"
 "${ALPINE_SCRIPTS}/build-qemu-initramfs.sh" "${ROOTFS_DIR}" "${QEMU_DIR}/rootfs.cpio.gz"
 

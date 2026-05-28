@@ -51,6 +51,7 @@ for path in \
   system/alpine/scripts/apply-zram-policy.sh \
   system/alpine/scripts/audit-package-budget.sh \
   system/alpine/scripts/build-native-policy-modules.sh \
+  system/alpine/scripts/build-solfs-module.sh \
   system/alpine/scripts/build-rootfs-image.sh \
   system/alpine/scripts/validate-filesystem-plan.sh \
   system/solfs/kernel/validate-solfs-kernel.sh \
@@ -70,8 +71,12 @@ do
 done
 assert_file scripts/ci-qemu-appliance.sh
 sh -n scripts/ci-qemu-appliance.sh
+assert_file scripts/ci-qemu-solfs-disk-root.sh
+sh -n scripts/ci-qemu-solfs-disk-root.sh
 assert_file scripts/ci-solfs-kernel-module.sh
 sh -n scripts/ci-solfs-kernel-module.sh
+assert_contains scripts/ci-qemu-solfs-disk-root.sh 'SOLILOQUY_RAM_ROOT=disk'
+assert_contains scripts/ci-qemu-solfs-disk-root.sh 'switching to disk root /dev/vda'
 assert_contains scripts/ci-qemu-appliance.sh 'Starting sol-kernel-policy'
 assert_contains scripts/ci-qemu-appliance.sh 'Starting sol-zram'
 assert_contains scripts/ci-qemu-appliance.sh 'Cannot find Xwayland binary'
@@ -89,6 +94,7 @@ assert_contains system/alpine/scripts/build-rootfs-image.sh 'mkfs.erofs'
 assert_contains system/alpine/scripts/build-rootfs-image.sh 'mksquashfs'
 assert_contains system/alpine/scripts/build-rootfs-image.sh 'solfsctl mkfs'
 assert_contains system/alpine/scripts/qemu-v0.sh 'build-rootfs-image.sh'
+assert_contains system/alpine/scripts/qemu-v0.sh 'build-solfs-module.sh'
 assert_contains system/alpine/scripts/qemu-v0.sh 'SOLILOQUY_ROOTFS_FORMAT'
 assert_contains system/alpine/scripts/qemu-v0.sh 'SOLILOQUY_ROOTFS_IMAGE_REQUIRED'
 assert_contains system/alpine/scripts/run-qemu.sh 'SOLILOQUY_ROOTFS_IMAGE'
@@ -97,6 +103,13 @@ assert_contains system/alpine/scripts/run-qemu.sh 'virtio-blk-pci'
 assert_contains system/alpine/scripts/build-qemu-initramfs.sh 'fallback_fstype'
 assert_contains system/alpine/rootfs-overlay/init 'load_kernel_module_file'
 assert_contains system/alpine/rootfs-overlay/init 'solfs.ko'
+assert_contains system/alpine/rootfs-overlay/init 'mount --move'
+assert_contains system/alpine/rootfs-overlay/init 'switching to disk root'
+assert_contains system/alpine/rootfs-overlay/init 'disk root mount failed'
+assert_contains system/alpine/rootfs-overlay/init 'wait_for_device'
+assert_contains system/alpine/rootfs-overlay/init 'loaded kernel module'
+assert_contains system/alpine/rootfs-overlay/init 'prepare_disk_root_state'
+assert_contains system/alpine/rootfs-overlay/init 'var/lib/soliloquy'
 assert_file system/alpine/kernel/APKBUILD
 assert_file system/alpine/kernel/README.md
 assert_file system/alpine/kernel/soliloquy-internet-appliance.config
@@ -131,6 +144,8 @@ assert_contains system/alpine/scripts/build-native-policy-modules.sh '../equilib
 assert_contains system/alpine/scripts/build-native-policy-modules.sh 'libsoliloquy_native_policy_v.so'
 assert_contains system/alpine/scripts/build-native-policy-modules.sh 'native policy userland module'
 assert_not_contains system/alpine/scripts/build-native-policy-modules.sh 'Built V kernel'
+assert_contains system/alpine/scripts/build-solfs-module.sh 'linux-virt-dev'
+assert_contains system/alpine/scripts/build-solfs-module.sh 'kernel-release'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'NATIVE_POLICY_REQUIRED'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh '/usr/local/lib/soliloquy/native-policy'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'SOLFS_MODULE'
@@ -172,6 +187,8 @@ assert_contains system/alpine/packages-v0.txt '^font-dejavu$'
 assert_not_contains system/alpine/packages-v0.txt '^xwayland$|^gcompat$|^font-noto$'
 assert_contains system/alpine/scripts/sol-session-start 'SOLILOQUY_RUNTIME_STATE_ENV'
 assert_contains system/alpine/scripts/sol-session-start 'SOL_KERNEL_POLICY_REQUIRED'
+assert_contains system/alpine/scripts/sol-session-start 'wait_for_seatd_socket'
+assert_contains system/alpine/scripts/sol-session-start 'LIBSEAT_BACKEND=direct'
 assert_contains system/alpine/rootfs-overlay/etc/conf.d/sol-session '^SOL_KERNEL_POLICY_REQUIRED=1$'
 assert_contains system/alpine/rootfs-overlay/etc/conf.d/sol-session '^SOL_SESSION_X11_FALLBACK=0$'
 assert_contains system/alpine/scripts/sol-session-start 'WLR_XWAYLAND'

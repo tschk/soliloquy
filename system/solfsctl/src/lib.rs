@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 pub mod v2;
@@ -572,7 +574,7 @@ fn collect_dir(
                 parent: 0,
                 path: relative,
                 kind: KIND_FILE,
-                mode: file_mode,
+                mode: entry_file_mode(&metadata, file_mode),
                 uid: 0,
                 gid: 0,
                 data,
@@ -581,6 +583,16 @@ fn collect_dir(
         }
     }
     Ok(())
+}
+
+fn entry_file_mode(metadata: &fs::Metadata, base_mode: u32) -> u32 {
+    #[cfg(unix)]
+    {
+        if metadata.permissions().mode() & 0o111 != 0 {
+            return base_mode | 0o111;
+        }
+    }
+    base_mode
 }
 
 fn normalize_path(path: &Path) -> Result<String> {
@@ -795,6 +807,26 @@ mod tests {
             fs::remove_file(&image).unwrap();
         }
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn readonly_images_preserve_file_execute_bits() {
+        let root = temp_dir("exec");
+        fs::create_dir_all(root.join("sbin")).unwrap();
+        let init = root.join("sbin/init");
+        fs::write(&init, b"#!/bin/sh\n").unwrap();
+        #[cfg(unix)]
+        fs::set_permissions(&init, fs::Permissions::from_mode(0o755)).unwrap();
+        let image = root.with_extension("solfs");
+
+        build_image(&root, &image).unwrap();
+        let inspected = inspect_image(&image).unwrap();
+        let entry = inspected.find_path("sbin/init").unwrap();
+
+        assert_eq!(entry.mode & 0o111, 0o111);
+        assert_eq!(entry.mode & 0o222, 0);
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_file(&image).unwrap();
     }
 
     fn temp_dir(name: &str) -> PathBuf {

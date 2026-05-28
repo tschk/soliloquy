@@ -161,6 +161,18 @@ has_seatd_socket() {
   [ -S /run/seatd.sock ]
 }
 
+wait_for_seatd_socket() {
+  i=0
+  while ! has_seatd_socket; do
+    i=$((i + 1))
+    if [ "${i}" -ge "${SOL_SEATD_READY_RETRIES:-50}" ]; then
+      return 1
+    fi
+    sleep 0.1
+  done
+  return 0
+}
+
 launch_session() {
   backend="$1"
   export WLR_BACKENDS="${backend}"
@@ -201,9 +213,14 @@ if ! has_drm_device; then
   fi
 fi
 
-if ! has_seatd_socket && [ "${WLR_BACKENDS}" != "headless" ]; then
-  log "seatd socket not found at /run/seatd.sock; cannot start Wayland appliance"
-  exit 1
+if ! wait_for_seatd_socket && [ "${WLR_BACKENDS}" != "headless" ]; then
+  if [ "$(id -u)" = "0" ]; then
+    export LIBSEAT_BACKEND=direct
+    log "seatd socket not found at /run/seatd.sock; using libseat direct backend"
+  else
+    log "seatd socket not found at /run/seatd.sock; cannot start Wayland appliance"
+    exit 1
+  fi
 fi
 
 if ! command -v cage >/dev/null 2>&1; then

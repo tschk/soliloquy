@@ -4,7 +4,6 @@ description="Seat management daemon"
 
 command="/usr/bin/seatd"
 command_args="-u root"
-command_user="root"
 command_background="yes"
 pidfile="/run/seatd.pid"
 
