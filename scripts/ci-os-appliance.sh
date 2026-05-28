@@ -199,6 +199,8 @@ assert_contains system/alpine/scripts/sol-session-start 'sol-kernelctl attach --
 assert_contains system/alpine/scripts/sol-session-start 'attach_to_cgroup browser'
 assert_contains system/alpine/scripts/sol-servo-wrapper 'attach_to_cgroup foreground-renderer'
 assert_contains system/alpine/scripts/sol-servo-wrapper 'sol-kernelctl attach --group'
+assert_contains system/alpine/scripts/sol-servo-wrapper 'SOL_SERVO_LOG_FILTER'
+assert_contains system/alpine/scripts/sol-servo-wrapper 'filter_servo_logs'
 assert_contains system/alpine/openrc/sold 'attach_to_cgroup system'
 assert_contains system/alpine/openrc/sold 'sol-kernelctl attach --group'
 assert_contains system/alpine/services.json '"id": "networking"'

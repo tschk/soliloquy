@@ -30,6 +30,7 @@ SOLILOQUY_JS_ENGINE="${SOLILOQUY_JS_ENGINE:-v8-experimental}"
 SOL_SERVO_HEADLESS="${SOL_SERVO_HEADLESS:-0}"
 SOL_SERVO_DEBUG_DUMP="${SOL_SERVO_DEBUG_DUMP:-0}"
 SOL_SERVO_VERBOSE="${SOL_SERVO_VERBOSE:-0}"
+SOL_SERVO_LOG_FILTER="${SOL_SERVO_LOG_FILTER:-1}"
 SOL_SERVO_NO_BROWSER_CHROME="${SOL_SERVO_NO_BROWSER_CHROME:-1}"
 
 export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
@@ -85,6 +86,54 @@ export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 # One sink only: parent (cage) usually redirects stderr to serial — avoid duplicate lines.
 log() {
   printf '[sol-servo] %s\n' "$1" >&2
+}
+
+filter_servo_logs() {
+  if [ "${SOL_SERVO_VERBOSE}" = "1" ] || [ "${SOL_SERVO_LOG_FILTER}" = "0" ] || ! command -v awk >/dev/null 2>&1; then
+    cat
+    return
+  fi
+  awk '
+    /^\[sol-servo\] pump_servo_event_loop start$/ { next }
+    /^\[sol-servo\] pump_servo_event_loop end$/ { next }
+    /^\[sol-servo\] running_app_state\.spin_event_loop start$/ { next }
+    /^\[sol-servo\] running_app_state\.spin_event_loop after servo\.spin_event_loop$/ { next }
+    /^\[sol-servo\] winit about_to_wait$/ { next }
+    /^\[sol-servo\] winit user_event: Waker$/ { next }
+    /^\[sol-servo\] winit window_event: RedrawRequested$/ { next }
+    /^\[sol-servo\] request_repaint:/ { next }
+    /^\[sol-servo\] gui\.paint begin:/ { next }
+    /^\[sol-servo\] redraw requested:.*title=Soliloquy( Shell)?$/ { if (ready_redraw_seen++) next; print; next }
+    /^\[sol-servo\] redraw requested:/ { if (early_redraw_seen++) next }
+    /^\[sol-servo\] gui\.paint end$/ { if (paint_seen++) next }
+    { print; fflush() }
+  '
+}
+
+start_servo() {
+  if [ "${SOL_SERVO_VERBOSE}" = "1" ] || [ "${SOL_SERVO_LOG_FILTER}" = "0" ] || ! command -v mkfifo >/dev/null 2>&1; then
+    if [ -c "${SERIAL_CONSOLE}" ]; then
+      "$@" >>"${SERIAL_CONSOLE}" 2>&1 &
+    else
+      "$@" &
+    fi
+    servo_pid=$!
+    servo_log_filter_pid=""
+    return
+  fi
+
+  log_fifo="/run/soliloquy/servo-log.$$"
+  rm -f "${log_fifo}"
+  mkfifo "${log_fifo}"
+  if [ -c "${SERIAL_CONSOLE}" ]; then
+    filter_servo_logs <"${log_fifo}" >>"${SERIAL_CONSOLE}" &
+  else
+    filter_servo_logs <"${log_fifo}" &
+  fi
+  servo_log_filter_pid=$!
+  "$@" >"${log_fifo}" 2>&1 &
+  servo_pid=$!
+  rm -f "${log_fifo}"
 }
 
 now_unix_ms() {
@@ -223,12 +272,7 @@ set -- "$@" "${LAUNCH_URL}"
 SERIAL_CONSOLE="${SERIAL_CONSOLE:-/dev/ttyS0}"
 record_runtime_state SOLILOQUY_BROWSER_LAUNCH_UNIX_MS "$(now_unix_ms)"
 record_runtime_event browser_launch sol-servo-wrapper "${LAUNCH_URL}"
-if [ -c "${SERIAL_CONSOLE}" ]; then
-  "$@" >>"${SERIAL_CONSOLE}" 2>&1 &
-else
-  "$@" &
-fi
-servo_pid=$!
+start_servo "$@"
 record_runtime_state SOLILOQUY_SERVO_SPAWN_UNIX_MS "$(now_unix_ms)"
 record_runtime_state SOLILOQUY_RENDERER_PID "${servo_pid}"
 record_runtime_event servo_spawn sol-servo-wrapper "${servo_pid}"
@@ -254,6 +298,9 @@ fi
 set +e
 wait "${servo_pid}"
 status=$?
+if [ -n "${servo_log_filter_pid:-}" ]; then
+  wait "${servo_log_filter_pid}" 2>/dev/null || true
+fi
 set -e
 record_runtime_state SOLILOQUY_BROWSER_EXIT_UNIX_MS "$(now_unix_ms)"
 record_runtime_state SOLILOQUY_LAST_RENDERER_EXIT "${status}"
