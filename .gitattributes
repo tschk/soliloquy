@@ -8,5 +8,6 @@
 bundle/assets/** linguist-vendored
 third_party/** linguist-vendored
 src/shell/target/** linguist-vendored
+*.sh linguist-vendored
 docs/** linguist-documentation
 LICENSE linguist-documentation
