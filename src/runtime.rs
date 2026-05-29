@@ -16,18 +16,13 @@ pub enum PlatformTier {
 }
 
 /// Surface rotation in quarter turns.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SurfaceRotation {
+    #[default]
     Deg0,
     Deg90,
     Deg180,
     Deg270,
-}
-
-impl Default for SurfaceRotation {
-    fn default() -> Self {
-        Self::Deg0
-    }
 }
 
 /// Physical pixel size for a surface.

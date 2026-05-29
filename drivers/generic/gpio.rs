@@ -16,7 +16,7 @@ pub mod regs {
     /// Pull-up/down configuration
     pub const GPIO_PULL: u32 = 0x1C;
     /// Alternate function select
-    pub const GPIO_ALT: u32 = 0x00;  // Multiplexed with data on many SoCs
+    pub const GPIO_ALT: u32 = 0x00; // Multiplexed with data on many SoCs
     /// Interrupt enable
     pub const GPIO_INT_EN: u32 = 0x20;
     /// Interrupt status
@@ -50,6 +50,9 @@ impl GpioBank {
     }
 
     /// Create with custom configuration
+    ///
+    /// # Safety
+    /// The caller must ensure `base` points to valid MMIO registers
     pub unsafe fn new_with_config(
         base: usize,
         pin_count: u32,
@@ -252,7 +255,7 @@ pub struct AllwinnerGpio {
 impl AllwinnerGpio {
     /// Pins per bank on Allwinner SoCs
     pub const PINS_PER_BANK: u32 = 32;
-    
+
     /// Register size per bank
     pub const BANK_SIZE: u32 = 0x24;
 
@@ -290,24 +293,24 @@ impl AllwinnerGpio {
     fn validate(&self, pin: u32) -> DriverResult<(u32, u32)> {
         let bank = pin / Self::PINS_PER_BANK;
         let pin_in_bank = pin % Self::PINS_PER_BANK;
-        
+
         if bank >= self.bank_count || pin_in_bank >= Self::PINS_PER_BANK {
             return Err(DriverError::InvalidParam);
         }
-        
+
         Ok((bank, pin_in_bank))
     }
 }
 
 /// Allwinner GPIO register offsets
 mod aw_regs {
-    pub const CFG0: u32 = 0x00;  // Config for pins 0-7
-    pub const CFG1: u32 = 0x04;  // Config for pins 8-15
-    pub const CFG2: u32 = 0x08;  // Config for pins 16-23
-    pub const CFG3: u32 = 0x0C;  // Config for pins 24-31
-    pub const DATA: u32 = 0x10;  // Data register
-    pub const DRV0: u32 = 0x14;  // Drive strength 0-15
-    pub const DRV1: u32 = 0x18;  // Drive strength 16-31
+    pub const CFG0: u32 = 0x00; // Config for pins 0-7
+    pub const CFG1: u32 = 0x04; // Config for pins 8-15
+    pub const CFG2: u32 = 0x08; // Config for pins 16-23
+    pub const CFG3: u32 = 0x0C; // Config for pins 24-31
+    pub const DATA: u32 = 0x10; // Data register
+    pub const DRV0: u32 = 0x14; // Drive strength 0-15
+    pub const DRV1: u32 = 0x18; // Drive strength 16-31
     pub const PULL0: u32 = 0x1C; // Pull config 0-15
     pub const PULL1: u32 = 0x20; // Pull config 16-31
 }
@@ -328,7 +331,7 @@ impl GpioDriver for AllwinnerGpio {
             3 => aw_regs::CFG3,
             _ => return Err(DriverError::InvalidParam),
         };
-        
+
         let cfg_offset = (pin_in_bank % 8) * 4;
         let cfg_mask = 0xF << cfg_offset;
         let cfg_val = match config.direction {
@@ -351,7 +354,11 @@ impl GpioDriver for AllwinnerGpio {
         }
 
         // Set pull configuration
-        let pull_reg = if pin_in_bank < 16 { aw_regs::PULL0 } else { aw_regs::PULL1 };
+        let pull_reg = if pin_in_bank < 16 {
+            aw_regs::PULL0
+        } else {
+            aw_regs::PULL1
+        };
         let pull_offset = (pin_in_bank % 16) * 2;
         let pull_mask = 0x3 << pull_offset;
         let pull_val = match config.pull {
@@ -376,13 +383,13 @@ impl GpioDriver for AllwinnerGpio {
         let (bank, pin_in_bank) = self.validate(pin)?;
         let data = self.read_bank_reg(bank, aw_regs::DATA);
         let mask = 1 << pin_in_bank;
-        
+
         if value {
             self.write_bank_reg(bank, aw_regs::DATA, data | mask);
         } else {
             self.write_bank_reg(bank, aw_regs::DATA, data & !mask);
         }
-        
+
         Ok(())
     }
 

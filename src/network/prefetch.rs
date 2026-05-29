@@ -95,7 +95,11 @@ impl PrefetchManager {
             return;
         }
 
-        if self.pending.iter().any(|r| r.url == url && r.resource_type == resource_type) {
+        if self
+            .pending
+            .iter()
+            .any(|r| r.url == url && r.resource_type == resource_type)
+        {
             debug!("Prefetch already pending: {}", url);
             return;
         }
@@ -103,7 +107,10 @@ impl PrefetchManager {
         let request = PrefetchRequest::new(url.clone(), resource_type, priority);
         self.pending.push(request);
 
-        info!("Queued prefetch: {} ({:?}, {:?})", url, resource_type, priority);
+        info!(
+            "Queued prefetch: {} ({:?}, {:?})",
+            url, resource_type, priority
+        );
     }
 
     /// Record link hover for predictive prefetching
@@ -112,7 +119,10 @@ impl PrefetchManager {
             return;
         }
 
-        let history = self.hover_history.entry(url.clone()).or_insert_with(Vec::new);
+        let history = self
+            .hover_history
+            .entry(url.clone())
+            .or_default();
         history.push(Instant::now());
 
         // If hovered multiple times or for extended period, prefetch
@@ -130,7 +140,7 @@ impl PrefetchManager {
 
         // Sort by priority (lowest first) so highest is at the end
         self.pending.sort_by(|a, b| a.priority.cmp(&b.priority));
-        
+
         // Take highest priority request in O(1)
         self.pending.pop()
     }
@@ -149,7 +159,10 @@ impl PrefetchManager {
     /// Enable/disable predictive prefetching
     pub fn set_predictive(&mut self, enabled: bool) {
         self.predictive_enabled = enabled;
-        info!("Predictive prefetching: {}", if enabled { "enabled" } else { "disabled" });
+        info!(
+            "Predictive prefetching: {}",
+            if enabled { "enabled" } else { "disabled" }
+        );
     }
 
     /// Clear completed prefetches (for memory management)
@@ -234,7 +247,7 @@ mod tests {
             ResourceType::Resource,
             PrefetchPriority::High,
         );
-        
+
         assert_eq!(req.priority, PrefetchPriority::High);
         assert_eq!(req.resource_type, ResourceType::Resource);
     }
@@ -242,15 +255,15 @@ mod tests {
     #[test]
     fn test_prefetch_manager() {
         let mut manager = PrefetchManager::new();
-        
+
         manager.request_prefetch(
             "https://example.com".to_string(),
             ResourceType::Dns,
             PrefetchPriority::Medium,
         );
-        
+
         assert_eq!(manager.pending_count(), 1);
-        
+
         let req = manager.next_request();
         assert!(req.is_some());
         assert_eq!(req.unwrap().url, "https://example.com");
@@ -259,19 +272,19 @@ mod tests {
     #[test]
     fn test_prefetch_deduplication() {
         let mut manager = PrefetchManager::new();
-        
+
         manager.request_prefetch(
             "https://example.com".to_string(),
             ResourceType::Dns,
             PrefetchPriority::Medium,
         );
-        
+
         manager.request_prefetch(
             "https://example.com".to_string(),
             ResourceType::Dns,
             PrefetchPriority::High,
         );
-        
+
         // Should only have one request
         assert_eq!(manager.pending_count(), 1);
     }
@@ -279,11 +292,19 @@ mod tests {
     #[test]
     fn test_prefetch_priority_sorting() {
         let mut manager = PrefetchManager::new();
-        
+
         manager.request_prefetch("low".to_string(), ResourceType::Dns, PrefetchPriority::Low);
-        manager.request_prefetch("high".to_string(), ResourceType::Dns, PrefetchPriority::High);
-        manager.request_prefetch("medium".to_string(), ResourceType::Dns, PrefetchPriority::Medium);
-        
+        manager.request_prefetch(
+            "high".to_string(),
+            ResourceType::Dns,
+            PrefetchPriority::High,
+        );
+        manager.request_prefetch(
+            "medium".to_string(),
+            ResourceType::Dns,
+            PrefetchPriority::Medium,
+        );
+
         let first = manager.next_request().unwrap();
         assert_eq!(first.url, "high");
         assert_eq!(first.priority, PrefetchPriority::High);
@@ -292,10 +313,10 @@ mod tests {
     #[test]
     fn test_hover_prediction() {
         let mut manager = PrefetchManager::new();
-        
+
         manager.record_hover("https://example.com".to_string());
         manager.record_hover("https://example.com".to_string());
-        
+
         // Should trigger prefetch
         assert!(manager.pending_count() > 0);
     }
@@ -303,12 +324,12 @@ mod tests {
     #[test]
     fn test_dns_prefetch_cache() {
         let mut cache = DnsPrefetchCache::new();
-        
+
         cache.prefetch("example.com".to_string());
         assert_eq!(cache.next_hostname(), Some("example.com".to_string()));
-        
+
         cache.store_resolution("example.com".to_string(), vec!["93.184.216.34".to_string()]);
-        
+
         let resolution = cache.get_resolution("example.com");
         assert_eq!(resolution, Some(&["93.184.216.34".to_string()][..]));
     }
@@ -316,25 +337,25 @@ mod tests {
     #[test]
     fn test_completed_marking() {
         let mut manager = PrefetchManager::new();
-        
+
         manager.request_prefetch(
             "https://example.com".to_string(),
             ResourceType::Dns,
             PrefetchPriority::High,
         );
-        
+
         // Consume the pending request
         manager.next_request();
-        
+
         manager.mark_completed("https://example.com".to_string());
-        
+
         // Should not add duplicate since it's completed
         manager.request_prefetch(
             "https://example.com".to_string(),
             ResourceType::Dns,
             PrefetchPriority::High,
         );
-        
+
         assert_eq!(manager.pending_count(), 0);
     }
 }

@@ -5,8 +5,8 @@
 //! system can restore capability availability on the next boot.
 
 use crate::driver_manager::{
-    Capability, DriverError, DriverLease, DriverManifest, DriverManager, DriverRecord,
-    DriverState, RequireSignedPackages, TrustPolicy,
+    Capability, DriverError, DriverLease, DriverManager, DriverManifest, DriverRecord, DriverState,
+    RequireSignedPackages, TrustPolicy,
 };
 use serde::{Deserialize, Serialize};
 use sled::Db;
@@ -148,7 +148,10 @@ impl DriverCatalog {
         Ok(())
     }
 
-    pub fn capability_source(&self, capability: &Capability) -> Result<Option<String>, DriverCatalogError> {
+    pub fn capability_source(
+        &self,
+        capability: &Capability,
+    ) -> Result<Option<String>, DriverCatalogError> {
         let key = serde_json::to_vec(capability)?;
         let value = self.capability_sources.get(key)?;
         Ok(value.map(|bytes| String::from_utf8_lossy(&bytes).to_string()))
@@ -170,7 +173,10 @@ impl DriverCatalog {
         Ok(())
     }
 
-pub fn capability_enabled(&self, capability: &Capability) -> Result<Option<bool>, DriverCatalogError> {
+    pub fn capability_enabled(
+        &self,
+        capability: &Capability,
+    ) -> Result<Option<bool>, DriverCatalogError> {
         let key = serde_json::to_vec(capability)?;
         let value = self.capability_settings.get(key)?;
         Ok(value.map(|bytes| bytes.as_ref() == b"enabled"))
@@ -190,10 +196,10 @@ pub fn capability_enabled(&self, capability: &Capability) -> Result<Option<bool>
         &self,
         source_uri: &str,
     ) -> Result<DriverManifest, DriverCatalogError> {
-        let manifest = if source_uri.starts_with("file://") {
-            let path = &source_uri["file://".len()..];
-            let data = std::fs::read_to_string(path)
-                .map_err(|e| DriverCatalogError::Driver(DriverError::Serialization(e.to_string())))?;
+        let manifest = if let Some(path) = source_uri.strip_prefix("file://") {
+            let data = std::fs::read_to_string(path).map_err(|e| {
+                DriverCatalogError::Driver(DriverError::Serialization(e.to_string()))
+            })?;
             serde_json::from_str(&data)?
         } else if source_uri.starts_with("http://") || source_uri.starts_with("https://") {
             let body = reqwest::blocking::get(source_uri)
@@ -201,7 +207,9 @@ pub fn capability_enabled(&self, capability: &Capability) -> Result<Option<bool>
                 .error_for_status()
                 .map_err(|e| DriverCatalogError::Driver(DriverError::Serialization(e.to_string())))?
                 .text()
-                .map_err(|e| DriverCatalogError::Driver(DriverError::Serialization(e.to_string())))?;
+                .map_err(|e| {
+                    DriverCatalogError::Driver(DriverError::Serialization(e.to_string()))
+                })?;
             serde_json::from_str(&body)?
         } else {
             return Err(DriverCatalogError::Driver(DriverError::Serialization(
@@ -288,10 +296,11 @@ impl PersistentDriverManager {
     }
 
     pub fn sync(&self) -> Result<(), DriverCatalogError> {
-        let manager = self
-            .manager
-            .lock()
-            .map_err(|_| DriverCatalogError::Driver(DriverError::Serialization("driver manager lock poisoned".into())))?;
+        let manager = self.manager.lock().map_err(|_| {
+            DriverCatalogError::Driver(DriverError::Serialization(
+                "driver manager lock poisoned".into(),
+            ))
+        })?;
         self.catalog.sync_manager(&manager)
     }
 
@@ -312,7 +321,8 @@ impl PersistentDriverManager {
         capability: Capability,
         source_uri: String,
     ) -> Result<(), DriverCatalogError> {
-        self.catalog.register_capability_source(&capability, &source_uri)?;
+        self.catalog
+            .register_capability_source(&capability, &source_uri)?;
         Ok(())
     }
 
@@ -356,9 +366,9 @@ impl PersistentDriverManager {
                 Err(DriverError::CapabilityUnavailable(_)) => {
                     let source = self.catalog.capability_source(&capability)?;
                     let Some(source_uri) = source else {
-                        return Err(DriverCatalogError::Driver(DriverError::CapabilityUnavailable(
-                            capability,
-                        )));
+                        return Err(DriverCatalogError::Driver(
+                            DriverError::CapabilityUnavailable(capability),
+                        ));
                     };
 
                     let record = self.catalog.install_manifest_from_source(&source_uri)?;
@@ -398,9 +408,9 @@ impl PersistentDriverManager {
             Err(DriverError::CapabilityUnavailable(_)) => {
                 let source = self.catalog.capability_source(&capability)?;
                 let Some(source_uri) = source else {
-                    return Err(DriverCatalogError::Driver(DriverError::CapabilityUnavailable(
-                        capability,
-                    )));
+                    return Err(DriverCatalogError::Driver(
+                        DriverError::CapabilityUnavailable(capability),
+                    ));
                 };
 
                 let record = self.catalog.install_manifest_from_source(&source_uri)?;
@@ -471,10 +481,16 @@ impl PersistentDriverManager {
     }
 
     pub fn state(&self, id: &str) -> Option<DriverState> {
-        self.manager.lock().ok().and_then(|manager| manager.state(id))
+        self.manager
+            .lock()
+            .ok()
+            .and_then(|manager| manager.state(id))
     }
 
-    pub fn capability_enabled(&self, capability: &Capability) -> Result<Option<bool>, DriverCatalogError> {
+    pub fn capability_enabled(
+        &self,
+        capability: &Capability,
+    ) -> Result<Option<bool>, DriverCatalogError> {
         self.catalog.capability_enabled(capability)
     }
 
@@ -530,13 +546,18 @@ mod tests {
 
         {
             let mut manager = PersistentDriverManager::open(&path, trust_policy.clone())
-                .unwrap_or_else(|_| PersistentDriverManager::new_empty(&path, trust_policy).unwrap());
-            manager.register_driver(signed_manifest("bluetooth", Capability::Bluetooth)).unwrap();
+                .unwrap_or_else(|_| {
+                    PersistentDriverManager::new_empty(&path, trust_policy).unwrap()
+                });
+            manager
+                .register_driver(signed_manifest("bluetooth", Capability::Bluetooth))
+                .unwrap();
             manager.enable_driver("bluetooth").unwrap();
             assert_eq!(manager.state("bluetooth"), Some(DriverState::Enabled));
         }
 
-        let reopened = PersistentDriverManager::open(&path, Arc::new(RequireSignedPackages)).unwrap();
+        let reopened =
+            PersistentDriverManager::open(&path, Arc::new(RequireSignedPackages)).unwrap();
         assert_eq!(reopened.state("bluetooth"), Some(DriverState::Enabled));
         let manager = reopened.manager();
         assert_eq!(manager.lock().unwrap().active_leases("bluetooth"), Some(0));
@@ -554,8 +575,9 @@ mod tests {
         let manifest = signed_manifest("bluetooth", Capability::Bluetooth);
         std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
 
-        let mut manager = PersistentDriverManager::open(&path, trust_policy)
-            .unwrap_or_else(|_| PersistentDriverManager::new_empty(&path, Arc::new(AllowUnsignedPackages)).unwrap());
+        let mut manager = PersistentDriverManager::open(&path, trust_policy).unwrap_or_else(|_| {
+            PersistentDriverManager::new_empty(&path, Arc::new(AllowUnsignedPackages)).unwrap()
+        });
         manager
             .register_capability_source(
                 Capability::Bluetooth,
@@ -582,7 +604,9 @@ mod tests {
 
         {
             let mut manager = PersistentDriverManager::open(&path, trust_policy.clone())
-                .unwrap_or_else(|_| PersistentDriverManager::new_empty(&path, trust_policy).unwrap());
+                .unwrap_or_else(|_| {
+                    PersistentDriverManager::new_empty(&path, trust_policy).unwrap()
+                });
             manager
                 .register_capability_source(
                     Capability::Bluetooth,
@@ -599,7 +623,8 @@ mod tests {
             assert_eq!(manager.state("bluetooth"), Some(DriverState::Enabled));
         }
 
-        let reopened = PersistentDriverManager::open(&path, Arc::new(AllowUnsignedPackages)).unwrap();
+        let reopened =
+            PersistentDriverManager::open(&path, Arc::new(AllowUnsignedPackages)).unwrap();
         assert_eq!(
             reopened.capability_enabled(&Capability::Bluetooth).unwrap(),
             Some(true)
