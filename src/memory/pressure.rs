@@ -3,10 +3,9 @@
 //! Monitors system memory usage and triggers aggressive eviction when
 //! memory pressure is detected.
 
-use log::{info, warn, debug};
+use log::info;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 
 /// Memory pressure levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,8 +49,14 @@ impl MemoryPressureMonitor {
     pub fn start_monitoring(&self) {
         self.monitoring_active.store(true, Ordering::SeqCst);
         info!("Memory pressure monitoring started");
-        info!("Warning threshold: {} MB", self.warning_threshold / 1024 / 1024);
-        info!("Critical threshold: {} MB", self.critical_threshold / 1024 / 1024);
+        info!(
+            "Warning threshold: {} MB",
+            self.warning_threshold / 1024 / 1024
+        );
+        info!(
+            "Critical threshold: {} MB",
+            self.critical_threshold / 1024 / 1024
+        );
     }
 
     /// Stop monitoring
@@ -68,7 +73,7 @@ impl MemoryPressureMonitor {
     /// Get current memory pressure level
     pub fn get_pressure_level(&self) -> MemoryPressureLevel {
         let usage = self.current_usage.load(Ordering::SeqCst);
-        
+
         if usage >= self.critical_threshold {
             MemoryPressureLevel::Critical
         } else if usage >= self.warning_threshold {
@@ -99,8 +104,8 @@ impl Default for MemoryPressureMonitor {
     fn default() -> Self {
         // Default thresholds based on 3GB target
         Self::new(
-            2 * 1024 * 1024 * 1024,  // 2GB warning
-            3 * 1024 * 1024 * 1024,  // 3GB critical
+            2 * 1024 * 1024 * 1024, // 2GB warning
+            3 * 1024 * 1024 * 1024, // 3GB critical
         )
     }
 }
@@ -120,14 +125,14 @@ impl SystemMemoryInfo {
     #[cfg(target_os = "linux")]
     pub fn get() -> Result<Self, String> {
         use std::fs;
-        
+
         // Read /proc/meminfo
         let meminfo = fs::read_to_string("/proc/meminfo")
             .map_err(|e| format!("Failed to read /proc/meminfo: {}", e))?;
-        
+
         let mut total_memory = 0;
         let mut available_memory = 0;
-        
+
         for line in meminfo.lines() {
             if line.starts_with("MemTotal:") {
                 if let Some(value) = parse_meminfo_value(line) {
@@ -139,13 +144,13 @@ impl SystemMemoryInfo {
                 }
             }
         }
-        
+
         if total_memory == 0 {
             return Err("Failed to parse MemTotal from /proc/meminfo".to_string());
         }
-        
+
         let used_memory = total_memory.saturating_sub(available_memory);
-        
+
         Ok(SystemMemoryInfo {
             total_memory,
             available_memory,
@@ -183,8 +188,8 @@ mod tests {
     #[test]
     fn test_pressure_levels() {
         let monitor = MemoryPressureMonitor::new(
-            1024 * 1024 * 1024,  // 1GB warning
-            2 * 1024 * 1024 * 1024,  // 2GB critical
+            1024 * 1024 * 1024,     // 1GB warning
+            2 * 1024 * 1024 * 1024, // 2GB critical
         );
 
         monitor.update_usage(512 * 1024 * 1024); // 512MB
@@ -199,10 +204,7 @@ mod tests {
 
     #[test]
     fn test_usage_percentage() {
-        let monitor = MemoryPressureMonitor::new(
-            1024 * 1024 * 1024,
-            2 * 1024 * 1024 * 1024,
-        );
+        let monitor = MemoryPressureMonitor::new(1024 * 1024 * 1024, 2 * 1024 * 1024 * 1024);
 
         monitor.update_usage(1024 * 1024 * 1024); // 1GB
         let percentage = monitor.get_usage_percentage();
@@ -212,10 +214,10 @@ mod tests {
     #[test]
     fn test_monitoring_lifecycle() {
         let monitor = MemoryPressureMonitor::default();
-        
+
         monitor.start_monitoring();
         assert!(monitor.monitoring_active.load(Ordering::SeqCst));
-        
+
         monitor.stop_monitoring();
         assert!(!monitor.monitoring_active.load(Ordering::SeqCst));
     }
@@ -224,7 +226,7 @@ mod tests {
     fn test_system_memory_info() {
         let info = SystemMemoryInfo::get();
         assert!(info.is_ok());
-        
+
         let info = info.unwrap();
         assert!(info.total_memory > 0);
     }

@@ -10,8 +10,8 @@
 //! - Frozen (>15min): Serialized to disk, near-zero memory
 
 use log::{debug, info, warn};
-use std::time::{Duration, Instant};
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 /// Residency state for a browser tab
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,7 +96,7 @@ impl TabResidency {
             ResidencyState::Active => idle > Duration::from_secs(30),
             ResidencyState::Warm => idle > Duration::from_secs(300), // 5 minutes
             ResidencyState::Cold => idle > Duration::from_secs(900), // 15 minutes
-            ResidencyState::Frozen => false, // Already at lowest state
+            ResidencyState::Frozen => false,                         // Already at lowest state
         }
     }
 }
@@ -135,7 +135,7 @@ impl TabResidencyManager {
         let tab = TabResidency::new(tab_id, url);
         info!("Registered new tab {}: {}", tab_id, tab.url);
         self.tabs.insert(tab_id, tab);
-        
+
         tab_id
     }
 
@@ -166,7 +166,9 @@ impl TabResidencyManager {
 
     /// Transition tab to next eviction state
     pub fn evict_tab(&mut self, tab_id: u64) -> Result<ResidencyState, String> {
-        let tab = self.tabs.get_mut(&tab_id)
+        let tab = self
+            .tabs
+            .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
         let old_state = tab.state.clone();
@@ -194,14 +196,19 @@ impl TabResidencyManager {
 
         let tab = self.tabs.get_mut(&tab_id).unwrap();
         tab.state = new_state.clone();
-        
-        info!("Tab {} transitioned from {:?} to {:?}", tab_id, old_state, new_state);
+
+        info!(
+            "Tab {} transitioned from {:?} to {:?}",
+            tab_id, old_state, new_state
+        );
         Ok(new_state)
     }
 
     /// Restore tab to Active state
     pub fn restore_tab(&mut self, tab_id: u64) -> Result<(), String> {
-        let tab = self.tabs.get(&tab_id)
+        let tab = self
+            .tabs
+            .get(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
         let old_state = tab.state.clone();
@@ -240,12 +247,12 @@ impl TabResidencyManager {
 
         for tab_id in tab_ids {
             if let Some(tab) = self.tabs.get(&tab_id) {
-                if tab.should_evict() {
-                    debug!("Evicting idle tab {}", tab_id);
-                    if let Ok(_) = self.evict_tab(tab_id) {
-                        evicted_count += 1;
-                    }
+if tab.should_evict() {
+                debug!("Evicting idle tab {}", tab_id);
+                if self.evict_tab(tab_id).is_ok() {
+                    evicted_count += 1;
                 }
+            }
             }
         }
 
@@ -277,10 +284,8 @@ impl TabResidencyManager {
         for tab_id in tab_ids {
             if let Some(tab) = self.tabs.get(&tab_id) {
                 // Evict everything that's not currently active
-                if tab.idle_duration() > Duration::from_secs(5) {
-                    if let Ok(_) = self.evict_tab(tab_id) {
-                        evicted += 1;
-                    }
+                if tab.idle_duration() > Duration::from_secs(5) && self.evict_tab(tab_id).is_ok() {
+                    evicted += 1;
                 }
             }
         }
@@ -313,9 +318,11 @@ impl TabResidencyManager {
     fn create_snapshot(&mut self, tab_id: u64) -> Result<(), String> {
         // TODO: Integrate with actual compression
         // For now, just mark as having a snapshot
-        let tab = self.tabs.get_mut(&tab_id)
+        let tab = self
+            .tabs
+            .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
-        
+
         tab.snapshot = Some(TabSnapshot {
             dom_snapshot: Some(Vec::new()),
             render_snapshot: Some(Vec::new()),
@@ -324,42 +331,49 @@ impl TabResidencyManager {
             viewport_size: (1920, 1080),
         });
 
-        // Estimate memory savings
-        let old_usage = tab.memory_usage;
-        tab.memory_usage = tab.memory_usage / 4; // ~75% compression typical
-        self.current_memory_usage = self.current_memory_usage
-            .saturating_sub(old_usage)
-            .saturating_add(tab.memory_usage);
+// Estimate memory savings
+         let old_usage = tab.memory_usage;
+         tab.memory_usage /= 4; // ~75% compression typical
+         self.current_memory_usage = self
+             .current_memory_usage
+             .saturating_sub(old_usage)
+             .saturating_add(tab.memory_usage);
 
         debug!("Created snapshot for tab {}", tab_id);
         Ok(())
     }
 
     fn compress_snapshot(&mut self, tab_id: u64) -> Result<(), String> {
-        let tab = self.tabs.get_mut(&tab_id)
+        let tab = self
+            .tabs
+            .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
-        // Further compress snapshot
-        let old_usage = tab.memory_usage;
-        tab.memory_usage = tab.memory_usage / 2; // Additional compression
-        self.current_memory_usage = self.current_memory_usage
-            .saturating_sub(old_usage)
-            .saturating_add(tab.memory_usage);
+// Further compress snapshot
+         let old_usage = tab.memory_usage;
+         tab.memory_usage /= 2; // Additional compression
+         self.current_memory_usage = self
+             .current_memory_usage
+             .saturating_sub(old_usage)
+             .saturating_add(tab.memory_usage);
 
         debug!("Compressed snapshot for tab {}", tab_id);
         Ok(())
     }
 
     fn freeze_tab(&mut self, tab_id: u64) -> Result<(), String> {
-        let tab = self.tabs.get_mut(&tab_id)
+        let tab = self
+            .tabs
+            .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
         // Serialize to disk (placeholder)
         tab.frozen_path = Some(format!("/tmp/soliloquy/frozen_tab_{}.bin", tab_id));
-        
+
         let old_usage = tab.memory_usage;
         tab.memory_usage = 1024; // Keep minimal metadata in memory
-        self.current_memory_usage = self.current_memory_usage
+        self.current_memory_usage = self
+            .current_memory_usage
             .saturating_sub(old_usage)
             .saturating_add(tab.memory_usage);
 
@@ -412,7 +426,7 @@ mod tests {
         let mut manager = TabResidencyManager::new();
         let tab_id = manager.register_tab("https://example.com".to_string());
         assert_eq!(tab_id, 1);
-        
+
         let tab = manager.tabs.get(&tab_id).unwrap();
         assert_eq!(tab.state, ResidencyState::Active);
         assert_eq!(tab.url, "https://example.com");
@@ -422,7 +436,7 @@ mod tests {
     fn test_tab_unregistration() {
         let mut manager = TabResidencyManager::new();
         let tab_id = manager.register_tab("https://example.com".to_string());
-        
+
         let result = manager.unregister_tab(tab_id);
         assert!(result.is_ok());
         assert!(!manager.tabs.contains_key(&tab_id));
@@ -432,11 +446,11 @@ mod tests {
     fn test_tab_touch() {
         let mut manager = TabResidencyManager::new();
         let tab_id = manager.register_tab("https://example.com".to_string());
-        
+
         sleep(Duration::from_millis(100));
         let result = manager.touch_tab(tab_id);
         assert!(result.is_ok());
-        
+
         let tab = manager.tabs.get(&tab_id).unwrap();
         assert!(tab.idle_duration() < Duration::from_millis(50));
     }
@@ -445,15 +459,15 @@ mod tests {
     fn test_state_transitions() {
         let mut manager = TabResidencyManager::new();
         let tab_id = manager.register_tab("https://example.com".to_string());
-        
+
         // Active -> Warm
         let state = manager.evict_tab(tab_id).unwrap();
         assert_eq!(state, ResidencyState::Warm);
-        
+
         // Warm -> Cold
         let state = manager.evict_tab(tab_id).unwrap();
         assert_eq!(state, ResidencyState::Cold);
-        
+
         // Cold -> Frozen
         let state = manager.evict_tab(tab_id).unwrap();
         assert_eq!(state, ResidencyState::Frozen);
@@ -463,15 +477,15 @@ mod tests {
     fn test_tab_restoration() {
         let mut manager = TabResidencyManager::new();
         let tab_id = manager.register_tab("https://example.com".to_string());
-        
+
         // Evict to Cold
         manager.evict_tab(tab_id).unwrap();
         manager.evict_tab(tab_id).unwrap();
-        
+
         // Restore to Active
         let result = manager.restore_tab(tab_id);
         assert!(result.is_ok());
-        
+
         let tab = manager.tabs.get(&tab_id).unwrap();
         assert_eq!(tab.state, ResidencyState::Active);
     }
@@ -479,7 +493,7 @@ mod tests {
     #[test]
     fn test_should_evict_timing() {
         let tab = TabResidency::new(1, "https://example.com".to_string());
-        
+
         // Should not evict immediately
         assert!(!tab.should_evict());
     }
@@ -487,15 +501,15 @@ mod tests {
     #[test]
     fn test_stats_collection() {
         let mut manager = TabResidencyManager::new();
-        
+
         manager.register_tab("https://example1.com".to_string());
         let tab2 = manager.register_tab("https://example2.com".to_string());
         let tab3 = manager.register_tab("https://example3.com".to_string());
-        
+
         manager.evict_tab(tab2).unwrap(); // Warm
         manager.evict_tab(tab3).unwrap(); // Warm
         manager.evict_tab(tab3).unwrap(); // Cold
-        
+
         let stats = manager.get_stats();
         assert_eq!(stats.active_count, 1);
         assert_eq!(stats.warm_count, 1);
@@ -506,14 +520,14 @@ mod tests {
     #[test]
     fn test_memory_pressure() {
         let mut manager = TabResidencyManager::new();
-        
+
         for i in 0..5 {
             manager.register_tab(format!("https://example{}.com", i));
         }
-        
+
         manager.set_memory_pressure(true);
         assert!(manager.aggressive_mode);
-        
+
         manager.set_memory_pressure(false);
         assert!(!manager.aggressive_mode);
     }

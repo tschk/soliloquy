@@ -3,11 +3,11 @@
 //! Provides persistent storage for tabs in Frozen state to achieve
 //! near-zero memory footprint while maintaining instant restoration.
 
-use log::{debug, info, error};
-use serde::{Serialize, Deserialize};
-use std::path::{Path, PathBuf};
+use log::{debug, info};
+use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 
 /// Serialized tab state for disk storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,42 +67,42 @@ impl DiskStorage {
     /// * `max_disk_usage` - Maximum disk space to use (default: 1GB)
     pub fn new<P: AsRef<Path>>(storage_path: P, max_disk_usage: usize) -> Result<Self, String> {
         let storage_path = storage_path.as_ref().to_path_buf();
-        
+
         // Create storage directory if it doesn't exist
         fs::create_dir_all(&storage_path)
             .map_err(|e| format!("Failed to create storage directory: {}", e))?;
-        
+
         let mut storage = DiskStorage {
             storage_path,
             max_disk_usage,
             current_usage: 0,
         };
-        
+
         // Calculate current disk usage
         storage.recalculate_usage()?;
-        
+
         info!(
             "Disk storage initialized at {:?} (max: {} MB, current: {} MB)",
             storage.storage_path,
             max_disk_usage / 1024 / 1024,
             storage.current_usage / 1024 / 1024
         );
-        
+
         Ok(storage)
     }
 
     /// Serialize and save a frozen tab to disk
     pub fn save_tab(&mut self, state: &FrozenTabState) -> Result<(), String> {
         let file_path = self.get_tab_path(state.tab_id);
-        
+
         debug!("Saving frozen tab {} to {:?}", state.tab_id, file_path);
-        
+
         // Serialize using bincode for efficient binary format
         let serialized = bincode::serialize(state)
             .map_err(|e| format!("Failed to serialize tab state: {}", e))?;
-        
+
         let size = serialized.len();
-        
+
         // Check if we have space
         if self.current_usage + size > self.max_disk_usage {
             return Err(format!(
@@ -111,69 +111,68 @@ impl DiskStorage {
                 self.max_disk_usage / 1024 / 1024
             ));
         }
-        
+
         // Write to disk
-        let mut file = fs::File::create(&file_path)
-            .map_err(|e| format!("Failed to create file: {}", e))?;
-        
+        let mut file =
+            fs::File::create(&file_path).map_err(|e| format!("Failed to create file: {}", e))?;
+
         file.write_all(&serialized)
             .map_err(|e| format!("Failed to write file: {}", e))?;
-        
+
         self.current_usage += size;
-        
+
         info!(
             "Saved frozen tab {} ({} KB, compression ratio: {:.2}%)",
             state.tab_id,
             size / 1024,
             state.compression_ratio() * 100.0
         );
-        
+
         Ok(())
     }
 
     /// Load a frozen tab from disk
     pub fn load_tab(&self, tab_id: u64) -> Result<FrozenTabState, String> {
         let file_path = self.get_tab_path(tab_id);
-        
+
         debug!("Loading frozen tab {} from {:?}", tab_id, file_path);
-        
+
         // Read file
-        let mut file = fs::File::open(&file_path)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-        
+        let mut file =
+            fs::File::open(&file_path).map_err(|e| format!("Failed to open file: {}", e))?;
+
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)
             .map_err(|e| format!("Failed to read file: {}", e))?;
-        
+
         // Deserialize
         let state: FrozenTabState = bincode::deserialize(&buffer)
             .map_err(|e| format!("Failed to deserialize tab state: {}", e))?;
-        
+
         info!("Loaded frozen tab {} ({} KB)", tab_id, buffer.len() / 1024);
-        
+
         Ok(state)
     }
 
     /// Delete a frozen tab from disk
     pub fn delete_tab(&mut self, tab_id: u64) -> Result<(), String> {
         let file_path = self.get_tab_path(tab_id);
-        
+
         if !file_path.exists() {
             return Ok(()); // Already deleted
         }
-        
+
         // Get file size before deletion
         let size = fs::metadata(&file_path)
             .map(|m| m.len() as usize)
             .unwrap_or(0);
-        
-        fs::remove_file(&file_path)
-            .map_err(|e| format!("Failed to delete file: {}", e))?;
-        
+
+        fs::remove_file(&file_path).map_err(|e| format!("Failed to delete file: {}", e))?;
+
         self.current_usage = self.current_usage.saturating_sub(size);
-        
+
         debug!("Deleted frozen tab {} ({} KB freed)", tab_id, size / 1024);
-        
+
         Ok(())
     }
 
@@ -185,24 +184,25 @@ impl DiskStorage {
     /// List all frozen tabs
     pub fn list_tabs(&self) -> Result<Vec<u64>, String> {
         let mut tab_ids = Vec::new();
-        
+
         let entries = fs::read_dir(&self.storage_path)
             .map_err(|e| format!("Failed to read storage directory: {}", e))?;
-        
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.starts_with("tab_") && name.ends_with(".bin") {
-                        if let Some(id_str) = name.strip_prefix("tab_").and_then(|s| s.strip_suffix(".bin")) {
-                            if let Ok(id) = id_str.parse::<u64>() {
-                                tab_ids.push(id);
-                            }
+
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.starts_with("tab_") && name.ends_with(".bin") {
+                    if let Some(id_str) = name
+                        .strip_prefix("tab_")
+                        .and_then(|s| s.strip_suffix(".bin"))
+                    {
+                        if let Ok(id) = id_str.parse::<u64>() {
+                            tab_ids.push(id);
                         }
                     }
                 }
             }
         }
-        
+
         Ok(tab_ids)
     }
 
@@ -220,13 +220,13 @@ impl DiskStorage {
     pub fn clear_all(&mut self) -> Result<usize, String> {
         let tab_ids = self.list_tabs()?;
         let count = tab_ids.len();
-        
+
         for tab_id in tab_ids {
             self.delete_tab(tab_id)?;
         }
-        
+
         info!("Cleared {} frozen tabs from disk", count);
-        
+
         Ok(count)
     }
 
@@ -238,18 +238,16 @@ impl DiskStorage {
     /// Recalculate current disk usage
     fn recalculate_usage(&mut self) -> Result<(), String> {
         self.current_usage = 0;
-        
+
         let entries = fs::read_dir(&self.storage_path)
             .map_err(|e| format!("Failed to read storage directory: {}", e))?;
-        
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if let Ok(metadata) = entry.metadata() {
-                    self.current_usage += metadata.len() as usize;
-                }
+
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                self.current_usage += metadata.len() as usize;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -303,8 +301,8 @@ mod tests {
     #[test]
     fn test_disk_storage_save_load() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut storage = DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create storage");
+        let mut storage =
+            DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create storage");
 
         let state = FrozenTabState {
             tab_id: 456,
@@ -337,8 +335,8 @@ mod tests {
     #[test]
     fn test_disk_storage_list_tabs() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut storage = DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create storage");
+        let mut storage =
+            DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create storage");
 
         // Save multiple tabs
         for i in 1..=5 {
@@ -366,8 +364,8 @@ mod tests {
     #[test]
     fn test_disk_storage_stats() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut storage = DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create storage");
+        let mut storage =
+            DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create storage");
 
         let state = FrozenTabState {
             tab_id: 789,
@@ -393,8 +391,8 @@ mod tests {
     #[test]
     fn test_disk_storage_clear_all() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut storage = DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create storage");
+        let mut storage =
+            DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create storage");
 
         // Save multiple tabs
         for i in 1..=3 {
