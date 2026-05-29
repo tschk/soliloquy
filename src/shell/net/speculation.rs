@@ -3,11 +3,11 @@
 //! Implements speculation rules for prefetching and prerendering resources
 //! based on user behavior, navigation patterns, and explicit rules.
 
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use log::{debug, info, warn};
-use serde::{Deserialize, Serialize};
 use glob::Pattern;
+use log::{debug, info};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::time::{Duration, SystemTime};
 
 /// Speculation action type
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,11 +40,9 @@ impl UrlPattern {
             UrlPattern::Exact { url: pattern_url } => url == pattern_url,
             UrlPattern::Prefix { prefix } => url.starts_with(prefix),
             UrlPattern::Contains { substring } => url.contains(substring),
-            UrlPattern::Glob { pattern } => {
-                Pattern::new(pattern)
-                    .map(|p| p.matches(url))
-                    .unwrap_or(false)
-            }
+            UrlPattern::Glob { pattern } => Pattern::new(pattern)
+                .map(|p| p.matches(url))
+                .unwrap_or(false),
         }
     }
 }
@@ -88,8 +86,7 @@ pub struct SpeculationRules {
 impl SpeculationRules {
     /// Parse speculation rules from JSON
     pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json)
-            .map_err(|e| format!("Failed to parse speculation rules: {}", e))
+        serde_json::from_str(json).map_err(|e| format!("Failed to parse speculation rules: {}", e))
     }
 
     /// Create empty rule set
@@ -138,7 +135,10 @@ impl HoverTracker {
                 .duration_since(start_time)
                 .unwrap_or(Duration::from_secs(0));
 
-            let entry = self.hover_data.entry(url.clone()).or_insert((0, Duration::from_secs(0)));
+            let entry = self
+                .hover_data
+                .entry(url.clone())
+                .or_insert((0, Duration::from_secs(0)));
             entry.0 += 1;
             entry.1 += duration;
 
@@ -152,7 +152,7 @@ impl HoverTracker {
             // Simple heuristic: combine count and duration
             let count_score = (*count as f32) / 10.0; // Max out at 10 hovers
             let duration_score = duration.as_secs_f32() / 5.0; // Max out at 5 seconds
-            
+
             ((count_score + duration_score) / 2.0).min(1.0)
         } else {
             0.0
@@ -310,7 +310,8 @@ impl SpeculationEngine {
 
             let probability = self.hover_tracker.get_probability(url);
 
-            matching_rules.iter()
+            matching_rules
+                .iter()
                 .filter(|rule| probability >= rule.min_probability)
                 .map(|rule| rule.action.clone())
                 .collect()
@@ -344,7 +345,7 @@ impl SpeculationEngine {
 
         self.prefetched.insert(url.to_string());
         info!("Triggering prefetch: {}", url);
-        
+
         // TODO: Actually trigger prefetch via ResourceLoader
     }
 
@@ -361,7 +362,7 @@ impl SpeculationEngine {
 
         self.prerendered.insert(url.to_string());
         info!("Triggering prerender: {}", url);
-        
+
         // TODO: Actually trigger prerender
     }
 
@@ -459,11 +460,9 @@ mod tests {
     fn test_speculation_rule_matches() {
         let rule = SpeculationRule {
             action: SpeculationAction::Prefetch,
-            patterns: vec![
-                UrlPattern::Prefix {
-                    prefix: "https://example.com".to_string(),
-                },
-            ],
+            patterns: vec![UrlPattern::Prefix {
+                prefix: "https://example.com".to_string(),
+            }],
             min_probability: 0.5,
             eagerness: "moderate".to_string(),
         };
@@ -495,7 +494,7 @@ mod tests {
     #[test]
     fn test_hover_tracker() {
         let mut tracker = HoverTracker::new();
-        
+
         tracker.hover_start("https://example.com");
         std::thread::sleep(Duration::from_millis(100));
         tracker.hover_end();
@@ -507,7 +506,7 @@ mod tests {
     #[test]
     fn test_omnibox_predictor() {
         let mut predictor = OmniboxPredictor::new(100);
-        
+
         predictor.record_navigation("https://example.com/page1");
         predictor.record_navigation("https://example.com/page2");
         predictor.record_navigation("https://other.com");
@@ -519,7 +518,7 @@ mod tests {
     #[test]
     fn test_speculation_engine_prefetch() {
         let mut engine = SpeculationEngine::new();
-        
+
         let mut rules = SpeculationRules::empty();
         rules.add_rule(SpeculationRule {
             action: SpeculationAction::Prefetch,
@@ -541,7 +540,7 @@ mod tests {
     fn test_speculation_engine_stats() {
         let mut engine = SpeculationEngine::new();
         engine.on_navigation("https://example.com");
-        
+
         let stats = engine.stats();
         assert_eq!(stats.history_size, 1);
     }
@@ -550,9 +549,9 @@ mod tests {
     fn test_speculation_engine_clear() {
         let mut engine = SpeculationEngine::new();
         engine.trigger_prefetch("https://example.com");
-        
+
         assert!(engine.is_prefetched("https://example.com"));
-        
+
         engine.clear();
         assert!(!engine.is_prefetched("https://example.com"));
     }

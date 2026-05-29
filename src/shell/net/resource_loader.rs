@@ -3,11 +3,11 @@
 //! HTTP resource loader with redirect handling, compression support,
 //! and integration with connection manager and QUIC transport.
 
-use std::collections::HashMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use log::{debug, warn, error};
-use url::Url;
+use log::debug;
 use reqwest::{Client, Method};
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
+use url::Url;
 
 /// HTTP methods
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,13 +114,13 @@ impl ResourceResponse {
 
     /// Get response body as UTF-8 string
     pub fn text(&self) -> Result<String, String> {
-        String::from_utf8(self.body.clone())
-            .map_err(|e| format!("Invalid UTF-8: {}", e))
+        String::from_utf8(self.body.clone()).map_err(|e| format!("Invalid UTF-8: {}", e))
     }
 
     /// Get Location header for redirects
     pub fn location(&self) -> Option<&String> {
-        self.headers.get("location")
+        self.headers
+            .get("location")
             .or_else(|| self.headers.get("Location"))
     }
 }
@@ -178,10 +178,14 @@ impl ResourceLoader {
 
         // Add default headers
         if !request.headers.contains_key("user-agent") {
-            request.headers.insert("user-agent".to_string(), self.user_agent.clone());
+            request
+                .headers
+                .insert("user-agent".to_string(), self.user_agent.clone());
         }
         if !request.headers.contains_key("accept-encoding") {
-            request.headers.insert("accept-encoding".to_string(), self.accept_encoding.clone());
+            request
+                .headers
+                .insert("accept-encoding".to_string(), self.accept_encoding.clone());
         }
 
         let mut current_url = request.url.clone();
@@ -196,19 +200,22 @@ impl ResourceLoader {
             if response.is_redirect() && redirect_count < self.max_redirects {
                 if let Some(location) = response.location() {
                     debug!("Following redirect to {}", location);
-                    
+
                     current_url = self.resolve_redirect_url(&current_url, location)?;
                     redirect_count += 1;
-                    
+
                     // For 303 See Other, change method to GET
                     if response.status_code == 303 {
                         request.method = HttpMethod::GET;
                         request.body = None;
                     }
-                    
+
                     continue;
                 } else {
-                    return Err(format!("Redirect without Location header (status {})", response.status_code));
+                    return Err(format!(
+                        "Redirect without Location header (status {})",
+                        response.status_code
+                    ));
                 }
             }
 
@@ -263,18 +270,23 @@ impl ResourceLoader {
         let start_time = SystemTime::now();
 
         // Send request
-        let response = req_builder.send().await
+        let response = req_builder
+            .send()
+            .await
             .map_err(|e| format!("Request failed: {}", e))?;
 
         let status_code = response.status().as_u16();
         let final_url = response.url().to_string();
 
-        let headers: HashMap<String, String> = response.headers()
+        let headers: HashMap<String, String> = response
+            .headers()
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
             .collect();
 
-        let body_bytes = response.bytes().await
+        let body_bytes = response
+            .bytes()
+            .await
             .map_err(|e| format!("Failed to read response body: {}", e))?
             .to_vec();
 
@@ -294,14 +306,12 @@ impl ResourceLoader {
     /// Resolve redirect URL (handle relative URLs)
     fn resolve_redirect_url(&self, base_url: &str, location: &str) -> Result<String, String> {
         // Parse base URL
-        let base = Url::parse(base_url)
-            .map_err(|e| format!("Invalid base URL: {}", e))?;
+        let base = Url::parse(base_url).map_err(|e| format!("Invalid base URL: {}", e))?;
 
         // Parse location (might be relative)
         let resolved = if location.starts_with("http://") || location.starts_with("https://") {
             // Absolute URL
-            Url::parse(location)
-                .map_err(|e| format!("Invalid redirect URL: {}", e))?
+            Url::parse(location).map_err(|e| format!("Invalid redirect URL: {}", e))?
         } else {
             // Relative URL
             base.join(location)
@@ -349,13 +359,16 @@ mod tests {
     fn test_resource_request_with_header() {
         let request = ResourceRequest::get("https://example.com")
             .with_header("Authorization", "Bearer token");
-        assert_eq!(request.headers.get("Authorization"), Some(&"Bearer token".to_string()));
+        assert_eq!(
+            request.headers.get("Authorization"),
+            Some(&"Bearer token".to_string())
+        );
     }
 
     #[test]
     fn test_resource_request_with_timeout() {
-        let request = ResourceRequest::get("https://example.com")
-            .with_timeout(Duration::from_secs(60));
+        let request =
+            ResourceRequest::get("https://example.com").with_timeout(Duration::from_secs(60));
         assert_eq!(request.timeout, Duration::from_secs(60));
     }
 
@@ -407,8 +420,11 @@ mod tests {
     #[test]
     fn test_resource_response_location() {
         let mut headers = HashMap::new();
-        headers.insert("Location".to_string(), "https://example.com/new".to_string());
-        
+        headers.insert(
+            "Location".to_string(),
+            "https://example.com/new".to_string(),
+        );
+
         let response = ResourceResponse {
             status_code: 301,
             headers,
@@ -416,14 +432,17 @@ mod tests {
             final_url: "https://example.com".to_string(),
             duration: Duration::from_secs(1),
         };
-        
-        assert_eq!(response.location(), Some(&"https://example.com/new".to_string()));
+
+        assert_eq!(
+            response.location(),
+            Some(&"https://example.com/new".to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_resource_loader_fetch() {
-        use std::io::{Read, Write};
         use std::io::ErrorKind;
+        use std::io::{Read, Write};
         use std::net::TcpListener;
         use std::thread;
 
@@ -446,7 +465,7 @@ mod tests {
         let loader = ResourceLoader::new();
         let request = ResourceRequest::get(&format!("http://{}/", addr));
         let response = loader.fetch(request).await.unwrap();
-        
+
         assert!(response.is_success());
 
         let _ = server.join();
@@ -455,36 +474,32 @@ mod tests {
     #[test]
     fn test_resolve_redirect_url_absolute() {
         let loader = ResourceLoader::new();
-        let result = loader.resolve_redirect_url(
-            "https://example.com/path",
-            "https://other.com/newpath"
-        ).unwrap();
-        
+        let result = loader
+            .resolve_redirect_url("https://example.com/path", "https://other.com/newpath")
+            .unwrap();
+
         assert_eq!(result, "https://other.com/newpath");
     }
 
     #[test]
     fn test_resolve_redirect_url_relative() {
         let loader = ResourceLoader::new();
-        let result = loader.resolve_redirect_url(
-            "https://example.com/path/page.html",
-            "../other.html"
-        ).unwrap();
-        
+        let result = loader
+            .resolve_redirect_url("https://example.com/path/page.html", "../other.html")
+            .unwrap();
+
         assert_eq!(result, "https://example.com/other.html");
     }
 
     #[test]
     fn test_resource_loader_with_user_agent() {
-        let loader = ResourceLoader::new()
-            .with_user_agent("Custom/1.0");
+        let loader = ResourceLoader::new().with_user_agent("Custom/1.0");
         assert_eq!(loader.user_agent, "Custom/1.0");
     }
 
     #[test]
     fn test_resource_loader_with_max_redirects() {
-        let loader = ResourceLoader::new()
-            .with_max_redirects(5);
+        let loader = ResourceLoader::new().with_max_redirects(5);
         assert_eq!(loader.max_redirects, 5);
     }
 }

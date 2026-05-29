@@ -3,11 +3,11 @@
 //! Manages DNS caching, TLS session resumption, and HTTP connection pooling
 //! for improved performance and reduced latency.
 
+use log::debug;
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use log::{debug, warn};
 use tokio::time;
 
 /// Default DNS cache TTL (5 minutes)
@@ -195,7 +195,7 @@ impl ConnectionManager {
     /// Optional connection ID if available
     pub fn get_connection(&self, hostname: &str) -> Option<u64> {
         let mut pool = self.connection_pool.lock().unwrap();
-        
+
         for (id, conn) in pool.iter_mut() {
             if conn.hostname == hostname && !conn.in_use && !conn.is_idle_timeout() {
                 conn.in_use = true;
@@ -223,7 +223,10 @@ impl ConnectionManager {
             };
 
             pool.insert(connection_id, conn);
-            debug!("Created new pooled connection {} for {}", connection_id, hostname);
+            debug!(
+                "Created new pooled connection {} for {}",
+                connection_id, hostname
+            );
             return Some(connection_id);
         }
 
@@ -249,13 +252,13 @@ impl ConnectionManager {
     /// * `hostname` - Target hostname
     pub async fn prewarm_connection(&self, hostname: &str) -> Result<(), String> {
         debug!("Prewarming connection to {}", hostname);
-        
+
         // Resolve DNS
         let _ = self.resolve_dns(hostname).await?;
-        
+
         // Reserve connection slot
         let _ = self.get_connection(hostname);
-        
+
         Ok(())
     }
 
@@ -331,10 +334,10 @@ mod tests {
     #[tokio::test]
     async fn test_dns_caching() {
         let manager = ConnectionManager::new();
-        
+
         let result1 = manager.resolve_dns("example.com").await.unwrap();
         let result2 = manager.resolve_dns("example.com").await.unwrap();
-        
+
         assert_eq!(result1, result2);
     }
 
@@ -342,20 +345,20 @@ mod tests {
     fn test_tls_session_caching() {
         let manager = ConnectionManager::new();
         let ticket = vec![1, 2, 3, 4, 5];
-        
+
         manager.cache_tls_session("example.com", ticket.clone());
         let cached = manager.get_tls_session("example.com");
-        
+
         assert_eq!(cached, Some(ticket));
     }
 
     #[test]
     fn test_connection_pooling() {
         let manager = ConnectionManager::new();
-        
+
         let conn1 = manager.get_connection("example.com");
         assert!(conn1.is_some());
-        
+
         let conn2 = manager.get_connection("example.com");
         assert!(conn2.is_some());
         assert_ne!(conn1, conn2);
@@ -364,10 +367,10 @@ mod tests {
     #[test]
     fn test_connection_reuse() {
         let manager = ConnectionManager::new();
-        
+
         let conn1 = manager.get_connection("example.com").unwrap();
         manager.release_connection(conn1);
-        
+
         let conn2 = manager.get_connection("example.com").unwrap();
         assert_eq!(conn1, conn2);
     }
@@ -379,7 +382,7 @@ mod tests {
             cached_at: 0,
             ttl: 1,
         };
-        
+
         assert!(entry.is_expired());
     }
 
@@ -391,7 +394,7 @@ mod tests {
             created_at: 0,
             lifetime: 1,
         };
-        
+
         assert!(session.is_expired());
     }
 
@@ -403,7 +406,7 @@ mod tests {
             last_used: 0,
             connection_id: 1,
         };
-        
+
         assert!(conn.is_idle_timeout());
     }
 }

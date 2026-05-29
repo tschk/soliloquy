@@ -3,14 +3,13 @@
 //! Provides persistent caching of compiled V8 bytecode to speed up JavaScript execution.
 //! Uses SHA-256 hashing for cache validation and LRU eviction for size management.
 
-use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
-use sha2::{Digest, Sha256};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
-use log::{debug, warn, error};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Maximum cache size in bytes (100 MB default)
 const DEFAULT_MAX_CACHE_SIZE: u64 = 100 * 1024 * 1024;
@@ -105,7 +104,7 @@ impl CodeCache {
     /// Option containing cached bytecode if valid
     pub fn get(&mut self, url: &str, source_code: &str) -> Option<Vec<u8>> {
         let content_hash = Self::compute_hash(source_code);
-        
+
         if let Some(entry) = self.entries.get_mut(url) {
             // Verify hash matches
             if entry.content_hash == content_hash {
@@ -247,8 +246,8 @@ impl CodeCache {
             return Ok(());
         }
 
-        let entries: Vec<CacheEntry> = serde_json::from_str(&data)
-            .map_err(|e| format!("Failed to parse metadata: {}", e))?;
+        let entries: Vec<CacheEntry> =
+            serde_json::from_str(&data).map_err(|e| format!("Failed to parse metadata: {}", e))?;
 
         self.entries.clear();
         self.current_size = 0;
@@ -267,7 +266,7 @@ impl CodeCache {
     /// Save metadata to disk
     fn save_metadata(&self) -> Result<(), String> {
         let entries: Vec<&CacheEntry> = self.entries.values().collect();
-        
+
         let json = serde_json::to_string_pretty(&entries)
             .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
 
@@ -364,7 +363,7 @@ mod tests {
 
         cache.put(url, source, &bytecode).unwrap();
         let result = cache.get(url, source);
-        
+
         assert!(result.is_some());
         assert_eq!(result.unwrap(), bytecode);
     }
@@ -378,7 +377,7 @@ mod tests {
         let bytecode = vec![1, 2, 3, 4, 5];
 
         cache.put(url, source1, &bytecode).unwrap();
-        
+
         // Different source should invalidate cache
         let result = cache.get(url, source2);
         assert!(result.is_none());
@@ -426,7 +425,7 @@ mod tests {
         cache.put("url2", "code2", &vec![0; 200]).unwrap();
 
         cache.clear().unwrap();
-        
+
         let stats = cache.stats();
         assert_eq!(stats.entry_count, 0);
         assert_eq!(stats.total_size, 0);
@@ -434,14 +433,17 @@ mod tests {
 
     #[test]
     fn test_sanitize_filename() {
-        assert_eq!(sanitize_filename("https://example.com/script.js"), "https___example.com_script.js");
+        assert_eq!(
+            sanitize_filename("https://example.com/script.js"),
+            "https___example.com_script.js"
+        );
         assert_eq!(sanitize_filename("test<>?:file"), "test___file");
     }
 
     #[test]
     fn test_metadata_persistence() {
         let temp_dir = test_cache_dir();
-        
+
         {
             let mut cache = CodeCache::new(temp_dir.clone(), Some(1024 * 1024)).unwrap();
             cache.put("url1", "code1", &vec![0; 100]).unwrap();
