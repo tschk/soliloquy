@@ -3,7 +3,7 @@
 //! Packs multiple small textures into larger atlases to reduce
 //! draw calls and memory overhead.
 
-use log::{debug, info, warn};
+use log::{debug, info};
 use std::collections::HashMap;
 
 /// Rectangle representing a region in the atlas
@@ -18,7 +18,12 @@ pub struct AtlasRect {
 impl AtlasRect {
     /// Create a new atlas rect
     pub fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
-        AtlasRect { x, y, width, height }
+        AtlasRect {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// Get the area of this rect
@@ -87,7 +92,7 @@ impl RectPacker {
         for y in (0..self.height).step_by(32) {
             for x in (0..self.width).step_by(32) {
                 let rect = AtlasRect::new(x, y, width, height);
-                
+
                 // Check if this position fits
                 if x + width > self.width || y + height > self.height {
                     continue;
@@ -131,7 +136,7 @@ impl TextureAtlas {
     /// Create a new texture atlas
     pub fn new(atlas_id: u32, width: u32, height: u32) -> Self {
         info!("Creating texture atlas {} ({}x{})", atlas_id, width, height);
-        
+
         TextureAtlas {
             width,
             height,
@@ -146,7 +151,7 @@ impl TextureAtlas {
     pub fn add_texture(&mut self, width: u32, height: u32) -> Option<TextureHandle> {
         // Try to pack the texture
         let rect = self.packer.pack(width, height)?;
-        
+
         let texture_id = self.next_texture_id;
         self.next_texture_id += 1;
 
@@ -298,7 +303,7 @@ mod tests {
     fn test_atlas_rect_normalized() {
         let rect = AtlasRect::new(0, 0, 512, 512);
         let (x1, y1, x2, y2) = rect.normalized(1024, 1024);
-        
+
         assert_eq!(x1, 0.0);
         assert_eq!(y1, 0.0);
         assert_eq!(x2, 0.5);
@@ -315,10 +320,10 @@ mod tests {
     #[test]
     fn test_add_texture() {
         let mut atlas = TextureAtlas::new(1, 1024, 1024);
-        
+
         let handle = atlas.add_texture(256, 256);
         assert!(handle.is_some());
-        
+
         let handle = handle.unwrap();
         assert_eq!(handle.atlas_id, 1);
         assert_eq!(atlas.texture_count(), 1);
@@ -328,10 +333,10 @@ mod tests {
     fn test_get_texture() {
         let mut atlas = TextureAtlas::new(1, 1024, 1024);
         let handle = atlas.add_texture(256, 256).unwrap();
-        
+
         let entry = atlas.get_texture(handle);
         assert!(entry.is_some());
-        
+
         let entry = entry.unwrap();
         assert_eq!(entry.original_width, 256);
         assert_eq!(entry.original_height, 256);
@@ -341,7 +346,7 @@ mod tests {
     fn test_remove_texture() {
         let mut atlas = TextureAtlas::new(1, 1024, 1024);
         let handle = atlas.add_texture(256, 256).unwrap();
-        
+
         assert!(atlas.remove_texture(handle));
         assert_eq!(atlas.texture_count(), 0);
     }
@@ -349,10 +354,10 @@ mod tests {
     #[test]
     fn test_atlas_utilization() {
         let mut atlas = TextureAtlas::new(1, 1024, 1024);
-        
+
         atlas.add_texture(512, 512);
         atlas.add_texture(256, 256);
-        
+
         let util = atlas.utilization();
         assert!(util > 0.0 && util <= 100.0);
     }
@@ -360,10 +365,10 @@ mod tests {
     #[test]
     fn test_atlas_manager() {
         let mut manager = TextureAtlasManager::new(1024, 1024);
-        
+
         let handle = manager.add_texture(256, 256);
         assert!(handle.is_some());
-        
+
         assert_eq!(manager.atlas_count(), 1);
         assert_eq!(manager.total_textures(), 1);
     }
@@ -371,12 +376,12 @@ mod tests {
     #[test]
     fn test_atlas_manager_multiple_atlases() {
         let mut manager = TextureAtlasManager::new(512, 512);
-        
+
         // Add many textures to force multiple atlases
         for _ in 0..10 {
             manager.add_texture(256, 256);
         }
-        
+
         assert!(manager.atlas_count() >= 1);
         assert_eq!(manager.total_textures(), 10);
     }

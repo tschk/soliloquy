@@ -2,9 +2,9 @@
 //!
 //! Provides persistent caching for resources that can be reused across sessions.
 
-use log::{debug, info, error};
-use serde::{Serialize, Deserialize};
-use std::path::{Path, PathBuf};
+use log::{debug, info};
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// Disk cache entry metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,7 +44,7 @@ impl DiskCache {
     pub fn new<P: AsRef<Path>>(path: P, max_size: usize) -> Result<Self, String> {
         let db = sled::open(path.as_ref())
             .map_err(|e| format!("Failed to open sled database: {}", e))?;
-        
+
         let mut cache = DiskCache {
             db,
             current_size: 0,
@@ -52,33 +52,33 @@ impl DiskCache {
             hits: 0,
             misses: 0,
         };
-        
+
         // Calculate current size
         cache.recalculate_size()?;
-        
+
         info!(
             "Disk cache initialized at {:?} (max: {} MB, current: {} MB)",
             path.as_ref(),
             max_size / 1024 / 1024,
             cache.current_size / 1024 / 1024
         );
-        
+
         Ok(cache)
     }
 
     /// Insert or update a cache entry
     pub fn insert(&mut self, key: &str, data: &[u8], content_type: &str) -> Result<(), String> {
         let size = data.len();
-        
+
         // Check if we need to evict
         while self.current_size + size > self.max_size && !self.db.is_empty() {
             self.evict_one()?;
         }
-        
+
         if self.current_size + size > self.max_size {
             return Err("Cache is full and cannot evict more entries".to_string());
         }
-        
+
         // Create metadata
         let metadata = DiskCacheEntry {
             key: key.to_string(),
@@ -87,36 +87,40 @@ impl DiskCache {
             last_access: current_timestamp(),
             content_type: content_type.to_string(),
         };
-        
+
         let metadata_key = format!("meta:{}", key);
         let metadata_bytes = bincode::serialize(&metadata)
             .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
-        
+
         // Insert data and metadata
-        self.db.insert(key.as_bytes(), data)
+        self.db
+            .insert(key.as_bytes(), data)
             .map_err(|e| format!("Failed to insert data: {}", e))?;
-        
-        self.db.insert(metadata_key.as_bytes(), metadata_bytes)
+
+        self.db
+            .insert(metadata_key.as_bytes(), metadata_bytes)
             .map_err(|e| format!("Failed to insert metadata: {}", e))?;
-        
+
         self.current_size += size;
-        
+
         debug!("Cached {} ({} bytes, type: {})", key, size, content_type);
-        
+
         Ok(())
     }
 
     /// Retrieve a cache entry
     pub fn get(&mut self, key: &str) -> Result<Option<Vec<u8>>, String> {
-        let result = self.db.get(key.as_bytes())
+        let result = self
+            .db
+            .get(key.as_bytes())
             .map_err(|e| format!("Failed to get data: {}", e))?;
-        
+
         if let Some(data) = result {
             self.hits += 1;
-            
+
             // Update metadata
             self.update_access(key)?;
-            
+
             debug!("Cache hit: {}", key);
             Ok(Some(data.to_vec()))
         } else {
@@ -133,34 +137,38 @@ impl DiskCache {
 
     /// Remove an entry from cache
     pub fn remove(&mut self, key: &str) -> Result<(), String> {
-        if let Some(data) = self.db.remove(key.as_bytes())
-            .map_err(|e| format!("Failed to remove data: {}", e))? 
+        if let Some(data) = self
+            .db
+            .remove(key.as_bytes())
+            .map_err(|e| format!("Failed to remove data: {}", e))?
         {
             let size = data.len();
             self.current_size = self.current_size.saturating_sub(size);
-            
+
             // Remove metadata
             let metadata_key = format!("meta:{}", key);
-            self.db.remove(metadata_key.as_bytes())
+            self.db
+                .remove(metadata_key.as_bytes())
                 .map_err(|e| format!("Failed to remove metadata: {}", e))?;
-            
+
             debug!("Removed {} from cache ({} bytes freed)", key, size);
         }
-        
+
         Ok(())
     }
 
     /// Clear all cache entries
     pub fn clear(&mut self) -> Result<(), String> {
-        self.db.clear()
+        self.db
+            .clear()
             .map_err(|e| format!("Failed to clear database: {}", e))?;
-        
+
         self.current_size = 0;
         self.hits = 0;
         self.misses = 0;
-        
+
         info!("Cache cleared");
-        
+
         Ok(())
     }
 
@@ -183,7 +191,8 @@ impl DiskCache {
 
     /// Flush to disk
     pub fn flush(&self) -> Result<(), String> {
-        self.db.flush()
+        self.db
+            .flush()
             .map_err(|e| format!("Failed to flush database: {}", e))?;
         Ok(())
     }
@@ -191,23 +200,26 @@ impl DiskCache {
     /// Update access metadata for a key
     fn update_access(&mut self, key: &str) -> Result<(), String> {
         let metadata_key = format!("meta:{}", key);
-        
-        if let Some(meta_bytes) = self.db.get(metadata_key.as_bytes())
-            .map_err(|e| format!("Failed to get metadata: {}", e))? 
+
+        if let Some(meta_bytes) = self
+            .db
+            .get(metadata_key.as_bytes())
+            .map_err(|e| format!("Failed to get metadata: {}", e))?
         {
             let mut metadata: DiskCacheEntry = bincode::deserialize(&meta_bytes)
                 .map_err(|e| format!("Failed to deserialize metadata: {}", e))?;
-            
+
             metadata.access_count += 1;
             metadata.last_access = current_timestamp();
-            
+
             let updated_bytes = bincode::serialize(&metadata)
                 .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
-            
-            self.db.insert(metadata_key.as_bytes(), updated_bytes)
+
+            self.db
+                .insert(metadata_key.as_bytes(), updated_bytes)
                 .map_err(|e| format!("Failed to update metadata: {}", e))?;
         }
-        
+
         Ok(())
     }
 
@@ -215,52 +227,51 @@ impl DiskCache {
     fn evict_one(&mut self) -> Result<(), String> {
         let mut oldest_key: Option<String> = None;
         let mut oldest_time = u64::MAX;
-        
+
         // Find entry with oldest access time
-        for item in self.db.iter() {
-            if let Ok((key, value)) = item {
-                if let Ok(key_str) = std::str::from_utf8(&key) {
-                    if key_str.starts_with("meta:") {
-                        if let Ok(metadata) = bincode::deserialize::<DiskCacheEntry>(&value) {
-                            if metadata.last_access < oldest_time {
-                                oldest_time = metadata.last_access;
-                                oldest_key = Some(metadata.key.clone());
-                            }
+        for item in self.db.iter().flatten() {
+            let (key, value) = item;
+            if let Ok(key_str) = std::str::from_utf8(&key) {
+                if key_str.starts_with("meta:") {
+                    if let Ok(metadata) = bincode::deserialize::<DiskCacheEntry>(&value) {
+                        if metadata.last_access < oldest_time {
+                            oldest_time = metadata.last_access;
+                            oldest_key = Some(metadata.key.clone());
                         }
                     }
                 }
             }
         }
-        
+
         if let Some(key) = oldest_key {
             self.remove(&key)?;
             debug!("Evicted cache entry: {}", key);
         }
-        
+
         Ok(())
     }
 
     /// Recalculate current cache size
     fn recalculate_size(&mut self) -> Result<(), String> {
         self.current_size = 0;
-        
-        for item in self.db.iter() {
-            if let Ok((key, value)) = item {
-                if let Ok(key_str) = std::str::from_utf8(&key) {
-                    // Only count data entries, not metadata
-                    if !key_str.starts_with("meta:") {
-                        self.current_size += value.len();
-                    }
+
+        for item in self.db.iter().flatten() {
+            let (key, value) = item;
+            if let Ok(key_str) = std::str::from_utf8(&key) {
+                // Only count data entries, not metadata
+                if !key_str.starts_with("meta:") {
+                    self.current_size += value.len();
                 }
             }
         }
-        
+
         Ok(())
     }
 
     /// Count total entries
     fn count_entries(&self) -> usize {
-        self.db.iter()
+        self.db
+            .iter()
             .filter_map(|item| item.ok())
             .filter(|(key, _)| {
                 std::str::from_utf8(key)
@@ -306,11 +317,13 @@ mod tests {
     #[test]
     fn test_disk_cache_insert_get() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create cache");
+        let mut cache =
+            DiskCache::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create cache");
 
         let data = b"Hello, disk cache!";
-        cache.insert("test_key", data, "text/plain").expect("Failed to insert");
+        cache
+            .insert("test_key", data, "text/plain")
+            .expect("Failed to insert");
 
         let retrieved = cache.get("test_key").expect("Failed to get");
         assert_eq!(retrieved, Some(data.to_vec()));
@@ -319,8 +332,8 @@ mod tests {
     #[test]
     fn test_disk_cache_miss() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create cache");
+        let mut cache =
+            DiskCache::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create cache");
 
         let result = cache.get("nonexistent").expect("Failed to get");
         assert_eq!(result, None);
@@ -329,10 +342,12 @@ mod tests {
     #[test]
     fn test_disk_cache_remove() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create cache");
+        let mut cache =
+            DiskCache::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create cache");
 
-        cache.insert("remove_me", b"data", "test").expect("Failed to insert");
+        cache
+            .insert("remove_me", b"data", "test")
+            .expect("Failed to insert");
         assert!(cache.contains("remove_me"));
 
         cache.remove("remove_me").expect("Failed to remove");
@@ -342,13 +357,13 @@ mod tests {
     #[test]
     fn test_disk_cache_eviction() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 1024)
-            .expect("Failed to create cache");
+        let mut cache = DiskCache::new(temp_dir.path(), 1024).expect("Failed to create cache");
 
         // Fill cache
         for i in 0..10 {
             let data = vec![i; 200];
-            cache.insert(&format!("key_{}", i), &data, "test")
+            cache
+                .insert(&format!("key_{}", i), &data, "test")
                 .expect("Failed to insert");
         }
 
@@ -359,10 +374,12 @@ mod tests {
     #[test]
     fn test_disk_cache_stats() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create cache");
+        let mut cache =
+            DiskCache::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create cache");
 
-        cache.insert("key1", b"data1", "test").expect("Failed to insert");
+        cache
+            .insert("key1", b"data1", "test")
+            .expect("Failed to insert");
         cache.get("key1").expect("Failed to get");
         cache.get("nonexistent").expect("Failed to get");
 
@@ -375,11 +392,15 @@ mod tests {
     #[test]
     fn test_disk_cache_clear() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 10 * 1024 * 1024)
-            .expect("Failed to create cache");
+        let mut cache =
+            DiskCache::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create cache");
 
-        cache.insert("key1", b"data1", "test").expect("Failed to insert");
-        cache.insert("key2", b"data2", "test").expect("Failed to insert");
+        cache
+            .insert("key1", b"data1", "test")
+            .expect("Failed to insert");
+        cache
+            .insert("key2", b"data2", "test")
+            .expect("Failed to insert");
 
         cache.clear().expect("Failed to clear");
         assert_eq!(cache.stats().entry_count, 0);

@@ -6,9 +6,8 @@
 //! - Network resources
 //! - GPU textures
 
-use log::{debug, info, warn};
+use log::{debug, info};
 use std::collections::HashMap;
-use std::hash::Hash;
 
 /// Cache entry with cost/benefit tracking
 #[derive(Debug, Clone)]
@@ -48,7 +47,7 @@ impl<T> CachedResource<T> {
         let age = current_timestamp().saturating_sub(self.last_access) as f64;
         let frequency = self.access_count as f64;
         let cost = self.recreation_cost as f64;
-        
+
         // Formula: (frequency * cost) / (age + 1)
         // High frequency + high cost + recent access = high priority
         (frequency * cost) / (age + 1.0)
@@ -75,8 +74,11 @@ pub struct LruCache<T> {
 impl<T: Clone> LruCache<T> {
     /// Create a new LRU cache
     pub fn new(max_size: usize) -> Self {
-        info!("Creating LRU cache with max size: {} MB", max_size / 1024 / 1024);
-        
+        info!(
+            "Creating LRU cache with max size: {} MB",
+            max_size / 1024 / 1024
+        );
+
         LruCache {
             entries: HashMap::new(),
             max_size,
@@ -132,7 +134,7 @@ impl<T: Clone> LruCache<T> {
     }
 
     /// Evict one entry based on priority score
-    /// 
+    ///
     /// Note: This uses O(n) linear search to find minimum priority.
     /// For production with many entries, consider using a min-heap (BinaryHeap with Reverse)
     /// to achieve O(log n) evictions.
@@ -142,7 +144,8 @@ impl<T: Clone> LruCache<T> {
         }
 
         // Find entry with lowest priority
-        let key_to_evict = self.entries
+        let key_to_evict = self
+            .entries
             .iter()
             .min_by(|(_, a), (_, b)| {
                 a.priority_score()
@@ -217,10 +220,10 @@ mod tests {
         let mut resource = CachedResource::new("data", 10, 10);
         let initial_count = resource.access_count;
         let initial_time = resource.last_access;
-        
+
         std::thread::sleep(std::time::Duration::from_millis(10));
         resource.touch();
-        
+
         assert_eq!(resource.access_count, initial_count + 1);
         assert!(resource.last_access >= initial_time);
     }
@@ -228,12 +231,9 @@ mod tests {
     #[test]
     fn test_lru_cache_insert_get() {
         let mut cache = LruCache::new(1024);
-        
-        cache.insert(
-            "key1".to_string(),
-            CachedResource::new("value1", 100, 10),
-        );
-        
+
+        cache.insert("key1".to_string(), CachedResource::new("value1", 100, 10));
+
         let value = cache.get("key1");
         assert_eq!(value, Some(&"value1"));
     }
@@ -248,11 +248,11 @@ mod tests {
     #[test]
     fn test_lru_cache_eviction() {
         let mut cache = LruCache::new(250); // Space for ~2 entries
-        
+
         cache.insert("key1".to_string(), CachedResource::new("value1", 100, 10));
         cache.insert("key2".to_string(), CachedResource::new("value2", 100, 10));
         cache.insert("key3".to_string(), CachedResource::new("value3", 100, 10));
-        
+
         // One entry should have been evicted
         assert!(cache.entries.len() <= 2);
     }
@@ -260,11 +260,11 @@ mod tests {
     #[test]
     fn test_cache_stats() {
         let mut cache = LruCache::new(1024);
-        
+
         cache.insert("key1".to_string(), CachedResource::new("value1", 100, 10));
         cache.get("key1");
         cache.get("key2"); // Miss
-        
+
         let stats = cache.stats();
         assert_eq!(stats.hits, 1);
         assert_eq!(stats.misses, 1);
@@ -275,24 +275,24 @@ mod tests {
     fn test_priority_score() {
         let resource1 = CachedResource::new("data", 100, 100); // High cost
         let mut resource2 = CachedResource::new("data", 100, 10); // Low cost
-        
+
         // resource2 with higher access count should have higher priority
         for _ in 0..10 {
             resource2.touch();
         }
-        
+
         assert!(resource2.priority_score() > resource1.priority_score());
     }
 
     #[test]
     fn test_cache_clear() {
         let mut cache = LruCache::new(1024);
-        
+
         cache.insert("key1".to_string(), CachedResource::new("value1", 100, 10));
         cache.insert("key2".to_string(), CachedResource::new("value2", 100, 10));
-        
+
         cache.clear();
-        
+
         assert_eq!(cache.entries.len(), 0);
         assert_eq!(cache.current_size, 0);
     }
