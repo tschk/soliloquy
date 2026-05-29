@@ -17,7 +17,12 @@ pub struct DamageRect {
 impl DamageRect {
     /// Create a new damage rect
     pub fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
-        DamageRect { x, y, width, height }
+        DamageRect {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     /// Check if this rect intersects another
@@ -34,7 +39,7 @@ impl DamageRect {
         let y = self.y.min(other.y);
         let x2 = (self.x + self.width).max(other.x + other.width);
         let y2 = (self.y + self.height).max(other.y + other.height);
-        
+
         DamageRect {
             x,
             y,
@@ -135,8 +140,8 @@ impl DamageTracker {
             // Calculate tile range for this damage rect
             let start_tile_x = damage.x / self.tile_size;
             let start_tile_y = damage.y / self.tile_size;
-            let end_tile_x = (damage.x + damage.width + self.tile_size - 1) / self.tile_size;
-            let end_tile_y = (damage.y + damage.height + self.tile_size - 1) / self.tile_size;
+            let end_tile_x = (damage.x + damage.width).div_ceil(self.tile_size);
+            let end_tile_y = (damage.y + damage.height).div_ceil(self.tile_size);
 
             for ty in start_tile_y..end_tile_y {
                 for tx in start_tile_x..end_tile_x {
@@ -186,9 +191,24 @@ pub struct DisplayListEntry {
 /// Rendering commands
 #[derive(Debug, Clone, PartialEq)]
 pub enum RenderCommand {
-    DrawRect { x: f32, y: f32, width: f32, height: f32, color: [f32; 4] },
-    DrawTexture { texture_id: u32, src_rect: DamageRect, dst_rect: DamageRect },
-    DrawText { text: String, x: f32, y: f32, font_size: f32 },
+    DrawRect {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        color: [f32; 4],
+    },
+    DrawTexture {
+        texture_id: u32,
+        src_rect: DamageRect,
+        dst_rect: DamageRect,
+    },
+    DrawText {
+        text: String,
+        x: f32,
+        y: f32,
+        font_size: f32,
+    },
 }
 
 /// Display list cache with incremental diffing
@@ -235,7 +255,10 @@ impl DisplayListCache {
         // Update cache
         std::mem::swap(&mut self.cached_list, &mut self.current_list);
 
-        debug!("Display list diff: {} entries changed", changed_indices.len());
+        debug!(
+            "Display list diff: {} entries changed",
+            changed_indices.len()
+        );
         changed_indices
     }
 }
@@ -275,7 +298,7 @@ mod tests {
     #[test]
     fn test_damage_tracker() {
         let mut tracker = DamageTracker::new(1920, 1080, 64);
-        
+
         tracker.add_damage(DamageRect::new(0, 0, 100, 100));
         tracker.add_damage(DamageRect::new(200, 200, 100, 100));
 
@@ -286,7 +309,7 @@ mod tests {
     #[test]
     fn test_damage_tracker_clear() {
         let mut tracker = DamageTracker::new(1920, 1080, 64);
-        
+
         tracker.add_damage(DamageRect::new(0, 0, 100, 100));
         tracker.clear_damage();
 
@@ -297,7 +320,7 @@ mod tests {
     #[test]
     fn test_merged_damage() {
         let mut tracker = DamageTracker::new(1920, 1080, 64);
-        
+
         tracker.add_damage(DamageRect::new(0, 0, 50, 50));
         tracker.add_damage(DamageRect::new(100, 100, 50, 50));
 
@@ -318,7 +341,7 @@ mod tests {
     #[test]
     fn test_display_list_cache() {
         let mut cache = DisplayListCache::new();
-        
+
         cache.begin();
         cache.add_entry(DisplayListEntry {
             layer_id: 1,
@@ -330,7 +353,7 @@ mod tests {
                 color: [1.0, 0.0, 0.0, 1.0],
             },
         });
-        
+
         let changed = cache.finish();
         assert_eq!(changed.len(), 1);
     }

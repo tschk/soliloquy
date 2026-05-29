@@ -2,9 +2,9 @@
 //!
 //! Offloads box model calculations to compute shaders for parallel processing.
 
-use log::{debug, info, warn};
-use bytemuck::{Pod, Zeroable};
 use crate::gpu::wgpu_integration::WgpuContext;
+use bytemuck::{Pod, Zeroable};
+use log::{debug, info, warn};
 use wgpu::util::DeviceExt;
 
 /// Layout node for GPU computation
@@ -15,17 +15,17 @@ pub struct LayoutNode {
     pub child_count: u32,
     pub style_flags: u32,
     _padding: u32,
-    
+
     pub computed_x: f32,
     pub computed_y: f32,
     pub computed_width: f32,
     pub computed_height: f32,
-    
+
     pub margin_left: f32,
     pub margin_top: f32,
     pub margin_right: f32,
     pub margin_bottom: f32,
-    
+
     pub padding_left: f32,
     pub padding_top: f32,
     pub padding_right: f32,
@@ -96,21 +96,24 @@ pub struct GpuLayoutCompute {
 impl GpuLayoutCompute {
     /// Create a new GPU layout compute instance
     pub fn new(viewport_width: f32, viewport_height: f32) -> Self {
-        info!("Initializing GPU layout compute ({}x{})", viewport_width, viewport_height);
-        
+        info!(
+            "Initializing GPU layout compute ({}x{})",
+            viewport_width, viewport_height
+        );
+
         // Try to initialize WGPU
         let wgpu_ctx = pollster::block_on(WgpuContext::new()).ok();
         let mut pipeline = None;
         let mut gpu_available = false;
 
         if let Some(ref ctx) = wgpu_ctx {
-             if let Ok(p) = ctx.create_layout_pipeline() {
-                 pipeline = Some(p);
-                 gpu_available = true;
-                 debug!("WGPU compute pipeline initialized");
-             } else {
-                 warn!("Failed to create layout pipeline");
-             }
+            if let Ok(p) = ctx.create_layout_pipeline() {
+                pipeline = Some(p);
+                gpu_available = true;
+                debug!("WGPU compute pipeline initialized");
+            } else {
+                warn!("Failed to create layout pipeline");
+            }
         } else {
             warn!("Failed to initialize WGPU context");
         }
@@ -145,17 +148,23 @@ impl GpuLayoutCompute {
         };
 
         // Create buffers
-        let nodes_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Nodes Buffer"),
-            contents: bytemuck::cast_slice(nodes),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-        });
+        let nodes_buffer = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Nodes Buffer"),
+                contents: bytemuck::cast_slice(nodes),
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+            });
 
-        let params_buffer = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Params Buffer"),
-            contents: bytemuck::bytes_of(&params),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let params_buffer = ctx
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Params Buffer"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
         // Create bind group
         // We rely on implicit bind group layout from pipeline
@@ -176,9 +185,11 @@ impl GpuLayoutCompute {
         });
 
         // Encode commands
-        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Layout Compute Encoder"),
-        });
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Layout Compute Encoder"),
+            });
 
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -187,13 +198,13 @@ impl GpuLayoutCompute {
             });
             cpass.set_pipeline(pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-            // Dispatch: workgroup size is 64
-            let workgroup_count = (node_count + 63) / 64;
+// Dispatch: workgroup size is 64
+         let workgroup_count = node_count.div_ceil(64);
             cpass.dispatch_workgroups(workgroup_count, 1, 1);
         }
 
-        // Read back
-        let buffer_size = (nodes.len() * std::mem::size_of::<LayoutNode>()) as u64;
+// Read back
+         let buffer_size = std::mem::size_of_val(nodes) as u64;
         let staging_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Staging Buffer"),
             size: buffer_size,
@@ -208,9 +219,12 @@ impl GpuLayoutCompute {
         // Map and read
         let buffer_slice = staging_buffer.slice(..);
         let (sender, receiver) = futures::channel::oneshot::channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |v: Result<(), wgpu::BufferAsyncError>| {
-            sender.send(v).ok();
-        });
+        buffer_slice.map_async(
+            wgpu::MapMode::Read,
+            move |v: Result<(), wgpu::BufferAsyncError>| {
+                sender.send(v).ok();
+            },
+        );
 
         ctx.device.poll(wgpu::Maintain::Wait);
 
@@ -228,7 +242,10 @@ impl GpuLayoutCompute {
 
     /// CPU fallback layout computation
     fn cpu_layout_fallback(&self, nodes: &mut [LayoutNode]) -> Result<(), String> {
-        debug!("Computing layout for {} nodes on CPU (fallback)", nodes.len());
+        debug!(
+            "Computing layout for {} nodes on CPU (fallback)",
+            nodes.len()
+        );
 
         // Simple top-down layout pass
         for i in 0..nodes.len() {
@@ -255,9 +272,12 @@ impl GpuLayoutCompute {
             if (node.style_flags & style_flags::DISPLAY_BLOCK) != 0 {
                 node.computed_x = parent_x + node.margin_left + node.padding_left;
                 node.computed_y = parent_y + node.margin_top + node.padding_top;
-                node.computed_width = parent_width - node.margin_left - node.margin_right
-                                    - node.padding_left - node.padding_right;
-                
+                node.computed_width = parent_width
+                    - node.margin_left
+                    - node.margin_right
+                    - node.padding_left
+                    - node.padding_right;
+
                 if node.computed_height == 0.0 {
                     node.computed_height = 100.0; // Default
                 }
@@ -297,7 +317,7 @@ mod tests {
     #[test]
     fn test_simple_layout() {
         let compute = GpuLayoutCompute::new(800.0, 600.0);
-        
+
         let mut nodes = vec![
             LayoutNode {
                 parent_idx: u32::MAX,
@@ -315,7 +335,7 @@ mod tests {
 
         let result = compute.compute_layout(&mut nodes);
         assert!(result.is_ok());
-        
+
         // Root should be at 0,0 with full width
         assert_eq!(nodes[0].computed_x, 0.0);
         assert_eq!(nodes[0].computed_y, 0.0);
@@ -325,7 +345,7 @@ mod tests {
     fn test_viewport_resize() {
         let mut compute = GpuLayoutCompute::new(1920.0, 1080.0);
         compute.set_viewport_size(1280.0, 720.0);
-        
+
         assert_eq!(compute.viewport_width, 1280.0);
         assert_eq!(compute.viewport_height, 720.0);
     }
