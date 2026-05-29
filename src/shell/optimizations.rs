@@ -297,19 +297,10 @@ impl MemoryManager {
 }
 
 /// Combined optimization settings
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OptimizationSettings {
     pub v8: V8Optimizations,
     pub render: RenderOptimizations,
-}
-
-impl Default for OptimizationSettings {
-    fn default() -> Self {
-        OptimizationSettings {
-            v8: V8Optimizations::default(),
-            render: RenderOptimizations::default(),
-        }
-    }
 }
 
 impl OptimizationSettings {

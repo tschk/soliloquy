@@ -1,16 +1,16 @@
 //! Servo embedder for Soliloquy
-//! 
+//!
 //! This module provides the integration layer between Servo and the local shell,
 //! implementing the necessary traits for windowing, events, and graphics.
 //! It also integrates V8 for JavaScript execution and tab memory optimization.
 
-use log::{info, debug, warn, error};
-use std::sync::{Arc, Mutex};
+use log::{debug, info, warn};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
+use crate::browser_optimizations::{GcScheduler, MemoryPressureMonitor, TabResidencyManager};
 use crate::js_engine::JsEngineStatus;
 use crate::v8_runtime::V8Runtime;
-use crate::browser_optimizations::{TabResidencyManager, GcScheduler, MemoryPressureMonitor};
 /// Main embedder context that bridges Servo browser engine with the shell runtime.
 ///
 /// `ServoEmbedder` manages the lifecycle of a web browser instance running on Soliloquy.
@@ -122,8 +122,8 @@ impl EmbedderJsRuntime {
 
     fn ensure_v8_runtime(&mut self) -> Result<&mut V8Runtime, String> {
         if matches!(self, Self::ServoManaged(_)) {
-            let mut runtime = V8Runtime::new()
-                .map_err(|e| format!("V8 initialization failed: {}", e))?;
+            let mut runtime =
+                V8Runtime::new().map_err(|e| format!("V8 initialization failed: {}", e))?;
             runtime.begin_embedder_experiment();
             *self = Self::V8(runtime);
         }
@@ -156,7 +156,7 @@ impl ServoEmbedder {
     /// ```
     pub fn new() -> Result<Self, String> {
         info!("Initializing Servo embedder with lazy browser startup");
-        
+
         let mut embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
@@ -166,12 +166,12 @@ impl ServoEmbedder {
             state: EmbedderState::Uninitialized,
             tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
             gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
             tab_id_map: HashMap::new(),
         };
-        
+
         embedder.state = EmbedderState::Initializing;
-        
+
         // Initialize memory monitoring.
         // This is intentionally cheap compared to bringing up the browser runtime.
         {
@@ -179,10 +179,10 @@ impl ServoEmbedder {
             monitor.start_monitoring();
         }
         info!("Memory pressure monitoring started");
-        
+
         embedder.state = EmbedderState::Ready;
         info!("Servo embedder initialized successfully without eager runtime init");
-        
+
         Ok(embedder)
     }
 
@@ -220,14 +220,14 @@ impl ServoEmbedder {
     /// Initializes a local display session for graphics output.
     fn init_display_session(&self) -> Result<DisplaySession, String> {
         debug!("Initializing display session");
-        
+
         Ok(DisplaySession {
             session_id: 1,
             width: 1920,
             height: 1080,
         })
     }
-    
+
     /// Loads a URL into the webview and initializes the page.
     ///
     /// This method:
@@ -253,15 +253,18 @@ impl ServoEmbedder {
     /// ```
     pub fn load_url(&mut self, url: &str) -> Result<(), String> {
         if self.state != EmbedderState::Ready && self.state != EmbedderState::Running {
-            return Err(format!("Embedder not ready for loading URLs. Current state: {:?}", self.state));
+            return Err(format!(
+                "Embedder not ready for loading URLs. Current state: {:?}",
+                self.state
+            ));
         }
-        
+
         validate_url(url)?;
-        
+
         info!("Loading URL: {}", url);
         self.state = EmbedderState::Loading;
         self.current_url = Some(url.to_string());
-        
+
         // Create Servo webview
         let webview = ServoWebview {
             url: Some(url.to_string()),
@@ -269,7 +272,7 @@ impl ServoEmbedder {
             is_loading: true,
         };
         self.webview = Some(Arc::new(Mutex::new(webview)));
-        
+
         // Record navigation in the V8 runtime DOM snapshot bridge so that
         // `document.readyState`, `location.href`, and `window.__soliloquyEval`
         // bridge calls reflect the current page.
@@ -291,12 +294,12 @@ impl ServoEmbedder {
                 webview.is_loading = false;
             }
         }
-        
+
         self.state = EmbedderState::Running;
         info!("URL loaded successfully: {}", url);
         Ok(())
     }
-    
+
     /// Processes and dispatches input events to the webview.
     ///
     /// Input events are:
@@ -317,15 +320,15 @@ impl ServoEmbedder {
     /// ```
     pub fn handle_input(&mut self, event: InputEvent) {
         debug!("Handling input event: {:?}", event);
-        
+
         // Add to event queue (clone to avoid move)
         if let Ok(mut queue) = self.event_queue.lock() {
             queue.push(event.clone());
         }
-        
+
         // TODO: Convert platform input events to Servo events
         // servo::input::handle_event(event);
-        
+
         // Execute JavaScript for input handling if needed
         if let Some(runtime) = self.js_runtime.maybe_runtime_mut() {
             match event {
@@ -339,7 +342,7 @@ impl ServoEmbedder {
                         "#,
                         x, y, x, y
                     );
-                    
+
                     if let Ok(result) = runtime.execute_script(&script) {
                         debug!("Touch handling script result: {}", result);
                     }
@@ -354,7 +357,7 @@ impl ServoEmbedder {
                         "#,
                         code, code
                     );
-                    
+
                     if let Ok(result) = runtime.execute_script(&script) {
                         debug!("Key handling script result: {}", result);
                     }
@@ -374,7 +377,7 @@ impl ServoEmbedder {
             }
         }
     }
-    
+
     /// Submits the current frame to the display pipeline.
     ///
     /// This method is called on each frame of the render loop and:
@@ -391,7 +394,7 @@ impl ServoEmbedder {
     pub fn present(&mut self) -> Result<(), String> {
         debug!("Presenting frame");
         self.ensure_display_session();
-        
+
         if let Some(ref session_arc) = self.display_session {
             if let Ok(mut session) = session_arc.lock() {
                 session.width = session.width.max(1);
@@ -399,7 +402,7 @@ impl ServoEmbedder {
                 debug!("Presenting to display session {}", session.session_id);
             }
         }
-        
+
         // Execute JavaScript for frame presentation
         if let Some(runtime) = self.js_runtime.maybe_runtime_mut() {
             let frame_script = r#"
@@ -408,23 +411,23 @@ impl ServoEmbedder {
             }
             'Frame presented';
             "#;
-            
+
             match runtime.execute_script(frame_script) {
                 Ok(result) => debug!("Frame script result: {}", result),
                 Err(e) => warn!("Frame script failed: {}", e),
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Returns the current embedder lifecycle state.
     ///
     /// Use this to check if the embedder is ready for operations like URL loading.
     pub fn get_state(&self) -> &EmbedderState {
         &self.state
     }
-    
+
     /// Returns the currently loaded URL, if any.
     ///
     /// # Returns
@@ -438,7 +441,7 @@ impl ServoEmbedder {
     pub fn js_engine_status(&self) -> JsEngineStatus {
         self.js_runtime.status()
     }
-    
+
     /// Retrieves metadata about the current webview state.
     ///
     /// # Returns
@@ -464,7 +467,7 @@ impl ServoEmbedder {
         }
         None
     }
-    
+
     /// Executes arbitrary JavaScript code in the page context.
     ///
     /// Provides direct access to the V8 runtime for executing scripts.
@@ -487,7 +490,7 @@ impl ServoEmbedder {
         let runtime = self.ensure_v8_runtime()?;
         runtime.execute_script(script)
     }
-    
+
     /// Register a new tab with the memory optimization system.
     ///
     /// Integrates the tab into the residency manager for automatic memory eviction.
@@ -501,16 +504,21 @@ impl ServoEmbedder {
     /// - `Ok(())`: Tab registered successfully
     /// - `Err(String)`: Failed to acquire lock on residency manager
     pub fn register_tab(&mut self, tab_id: u64, url: String) -> Result<(), String> {
-        let mut residency = self.tab_residency.lock()
+        let mut residency = self
+            .tab_residency
+            .lock()
             .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
-        
+
         let residency_id = residency.register_tab(url.clone());
         self.tab_id_map.insert(tab_id, residency_id);
-        
-        info!("Registered tab {} (residency ID: {}) for URL: {}", tab_id, residency_id, url);
+
+        info!(
+            "Registered tab {} (residency ID: {}) for URL: {}",
+            tab_id, residency_id, url
+        );
         Ok(())
     }
-    
+
     /// Mark a tab as active (user is currently viewing it).
     ///
     /// Restores tab to Active state if it was evicted and records interaction
@@ -520,36 +528,42 @@ impl ServoEmbedder {
     /// * `tab_id` - Tab to mark as active
     pub fn activate_tab(&mut self, tab_id: u64) -> Result<(), String> {
         if let Some(&residency_id) = self.tab_id_map.get(&tab_id) {
-            let mut residency = self.tab_residency.lock()
+            let mut residency = self
+                .tab_residency
+                .lock()
                 .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
-            
+
             residency.touch_tab(residency_id)?;
-            
+
             // Record interaction for GC scheduler
-            let mut gc = self.gc_scheduler.lock()
+            let mut gc = self
+                .gc_scheduler
+                .lock()
                 .map_err(|e| format!("Failed to lock GC scheduler: {}", e))?;
             gc.record_interaction();
-            
+
             debug!("Activated tab {}", tab_id);
         }
         Ok(())
     }
-    
+
     /// Unregister a tab when it's closed.
     ///
     /// # Arguments
     /// * `tab_id` - Tab to remove from tracking
     pub fn unregister_tab(&mut self, tab_id: u64) -> Result<(), String> {
         if let Some(residency_id) = self.tab_id_map.remove(&tab_id) {
-            let mut residency = self.tab_residency.lock()
+            let mut residency = self
+                .tab_residency
+                .lock()
                 .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
-            
+
             residency.unregister_tab(residency_id)?;
             info!("Unregistered tab {}", tab_id);
         }
         Ok(())
     }
-    
+
     /// Run periodic maintenance tasks.
     ///
     /// Should be called regularly (e.g., every 5 seconds) to:
@@ -561,35 +575,43 @@ impl ServoEmbedder {
     pub fn run_maintenance(&mut self) -> Result<(), String> {
         // Check memory pressure
         let is_under_pressure = {
-            let monitor = self.memory_monitor.lock()
+            let monitor = self
+                .memory_monitor
+                .lock()
                 .map_err(|e| format!("Failed to lock memory monitor: {}", e))?;
             monitor.is_under_pressure()
         };
-        
+
         // Update tab residency manager with memory pressure state
         {
-            let mut residency = self.tab_residency.lock()
+            let mut residency = self
+                .tab_residency
+                .lock()
                 .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
             residency.set_memory_pressure(is_under_pressure);
-            
+
             // Run eviction pass
             let evicted = residency.run_eviction_pass();
             if evicted > 0 {
                 info!("Eviction pass completed: {} tabs evicted", evicted);
             }
-            
+
             // Update memory monitor with current usage
             let usage = residency.get_memory_usage();
-            let monitor = self.memory_monitor.lock()
+            let monitor = self
+                .memory_monitor
+                .lock()
                 .map_err(|e| format!("Failed to lock memory monitor: {}", e))?;
             monitor.update_usage(usage);
         }
-        
+
         // Check if GC should run
         {
-            let mut gc = self.gc_scheduler.lock()
+            let mut gc = self
+                .gc_scheduler
+                .lock()
                 .map_err(|e| format!("Failed to lock GC scheduler: {}", e))?;
-            
+
             if let Some(gc_type) = gc.should_run_gc() {
                 debug!("Scheduling GC: {:?}", gc_type);
                 // TODO: Trigger actual V8 GC
@@ -597,21 +619,25 @@ impl ServoEmbedder {
                 gc.record_gc(gc_type, std::time::Duration::from_millis(10));
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Get memory optimization statistics.
     ///
     /// Returns information about tab states and memory usage.
     pub fn get_memory_stats(&self) -> Result<String, String> {
-        let residency = self.tab_residency.lock()
+        let residency = self
+            .tab_residency
+            .lock()
             .map_err(|e| format!("Failed to lock residency manager: {}", e))?;
-        
+
         let stats = residency.get_stats();
-        let monitor = self.memory_monitor.lock()
+        let monitor = self
+            .memory_monitor
+            .lock()
             .map_err(|e| format!("Failed to lock memory monitor: {}", e))?;
-        
+
         Ok(format!(
             "Tabs: {} active, {} warm, {} cold, {} frozen | Memory: {:.2} MB ({:.1}% of limit)",
             stats.active_count,
@@ -630,11 +656,11 @@ fn validate_url(url: &str) -> Result<(), String> {
     if url.is_empty() {
         return Err("URL cannot be empty".to_string());
     }
-    
+
     if url.trim().is_empty() {
         return Err("URL cannot be only whitespace".to_string());
     }
-    
+
     let url_lower = url.to_lowercase();
     if !url_lower.starts_with("http://")
         && !url_lower.starts_with("https://")
@@ -642,11 +668,11 @@ fn validate_url(url: &str) -> Result<(), String> {
     {
         return Err("URL must start with http://, https://, or os://".to_string());
     }
-    
+
     if url.len() < 10 {
         return Err("URL is too short to be valid".to_string());
     }
-    
+
     Ok(())
 }
 
@@ -671,7 +697,10 @@ mod tests {
     #[test]
     fn test_url_validation_whitespace() {
         assert!(validate_url("   ").is_err());
-        assert_eq!(validate_url("  ").unwrap_err(), "URL cannot be only whitespace");
+        assert_eq!(
+            validate_url("  ").unwrap_err(),
+            "URL cannot be only whitespace"
+        );
     }
 
     #[test]
@@ -694,7 +723,10 @@ mod tests {
     #[test]
     fn test_url_validation_too_short() {
         assert!(validate_url("http://a").is_err());
-        assert_eq!(validate_url("http://a").unwrap_err(), "URL is too short to be valid");
+        assert_eq!(
+            validate_url("http://a").unwrap_err(),
+            "URL is too short to be valid"
+        );
     }
 
     #[test]
@@ -714,10 +746,10 @@ mod tests {
             state: EmbedderState::Uninitialized,
             tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
             gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
             tab_id_map: HashMap::new(),
         };
-        
+
         let result = embedder.load_url("https://example.com");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not ready"));
@@ -734,10 +766,10 @@ mod tests {
             state: EmbedderState::Initializing,
             tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
             gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
             tab_id_map: HashMap::new(),
         };
-        
+
         let result = embedder.load_url("https://example.com");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not ready"));
@@ -746,20 +778,26 @@ mod tests {
     #[test]
     fn test_embedder_repeated_loads() {
         let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        
+
         assert!(embedder.load_url("https://first.com").is_ok());
         assert_eq!(embedder.get_state(), &EmbedderState::Running);
-        assert_eq!(embedder.get_current_url(), Some(&"https://first.com".to_string()));
-        
+        assert_eq!(
+            embedder.get_current_url(),
+            Some(&"https://first.com".to_string())
+        );
+
         assert!(embedder.load_url("https://second.com").is_ok());
         assert_eq!(embedder.get_state(), &EmbedderState::Running);
-        assert_eq!(embedder.get_current_url(), Some(&"https://second.com".to_string()));
+        assert_eq!(
+            embedder.get_current_url(),
+            Some(&"https://second.com".to_string())
+        );
     }
 
     #[test]
     fn test_embedder_load_invalid_url() {
         let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        
+
         assert!(embedder.load_url("").is_err());
         assert_eq!(embedder.get_state(), &EmbedderState::Ready);
         assert_eq!(embedder.get_current_url(), None);
@@ -768,7 +806,7 @@ mod tests {
     #[test]
     fn test_embedder_load_url_no_scheme() {
         let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        
+
         let result = embedder.load_url("example.com");
         assert!(result.is_err());
         assert_eq!(embedder.get_state(), &EmbedderState::Ready);
@@ -777,7 +815,7 @@ mod tests {
     #[test]
     fn test_embedder_state_remains_running_after_multiple_loads() {
         let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        
+
         for i in 0..5 {
             let url = format!("https://example{}.com", i);
             assert!(embedder.load_url(&url).is_ok());
@@ -796,11 +834,14 @@ mod tests {
             state: EmbedderState::Error("Test error".to_string()),
             tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
             gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor::default())),
+            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
             tab_id_map: HashMap::new(),
         };
-        
-        assert_eq!(embedder.get_state(), &EmbedderState::Error("Test error".to_string()));
+
+        assert_eq!(
+            embedder.get_state(),
+            &EmbedderState::Error("Test error".to_string())
+        );
     }
 
     #[test]

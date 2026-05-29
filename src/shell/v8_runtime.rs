@@ -20,7 +20,7 @@ const SOLILOQUY_JS_ENGINE_ENV: &str = "SOLILOQUY_JS_ENGINE";
 
 static V8_INIT: Once = Once::new();
 thread_local! {
-    static V8_ISOLATE: RefCell<Option<v8::OwnedIsolate>> = RefCell::new(None);
+    static V8_ISOLATE: RefCell<Option<v8::OwnedIsolate>> = const { RefCell::new(None) };
 }
 
 // ── shell-side DOM snapshot ───────────────────────────────────────────────────
@@ -203,8 +203,7 @@ impl V8Runtime {
 
     fn eval_v8(&self, script: &str) -> Result<String, String> {
         V8_ISOLATE.with(|cell| {
-            let mut guard = cell
-                .borrow_mut();
+            let mut guard = cell.borrow_mut();
             let isolate = guard
                 .as_mut()
                 .ok_or_else(|| "V8 isolate not initialized".to_string())?;
@@ -386,8 +385,8 @@ impl V8Runtime {
                 let base_url = self.dom_snapshot.url.as_deref().ok_or_else(|| {
                     "invalid location.href: relative URL without a base".to_string()
                 })?;
-                let base = Url::parse(base_url)
-                    .map_err(|e| format!("invalid base location.href: {e}"))?;
+                let base =
+                    Url::parse(base_url).map_err(|e| format!("invalid base location.href: {e}"))?;
                 base.join(href)
                     .map(|url| url.to_string())
                     .map_err(|e| format!("invalid location.href: {e}"))
@@ -490,12 +489,16 @@ fn parse_bridge_command(name: &str, args: &[String]) -> ShellBridgeCommand {
 }
 
 fn parse_dom_inspect(args: &[String]) -> Option<ShellBridgeTarget> {
-    let [target] = args else { return None; };
+    let [target] = args else {
+        return None;
+    };
     ShellBridgeTarget::parse(target)
 }
 
 fn parse_dom_set(args: &[String]) -> Option<ShellBridgeWrite> {
-    let [target, value] = args else { return None; };
+    let [target, value] = args else {
+        return None;
+    };
     ShellBridgeWrite::parse(target, value)
 }
 
@@ -524,7 +527,11 @@ fn parse_quoted_arguments(payload: &str) -> Option<Vec<String>> {
         cursor = cursor[1..].trim_start();
     }
 
-    if values.is_empty() { None } else { Some(values) }
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
 }
 
 fn split_assignment(script: &str) -> Option<(&str, &str)> {

@@ -28,8 +28,10 @@ impl Window for MacOSWindow {
         info!("Creating macOS window ({}x{})", width, height);
 
         // Configure for Metal backend by default on macOS
-        let mut config = GraphicsConfig::default();
-        config.preferred_backend = Some(super::GraphicsBackend::Metal);
+        let config = GraphicsConfig {
+            preferred_backend: Some(super::GraphicsBackend::Metal),
+            ..Default::default()
+        };
 
         Ok(MacOSWindow {
             width,
