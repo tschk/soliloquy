@@ -3,7 +3,7 @@
 //! Schedules GC to run during browser idle periods to minimize
 //! impact on user interactions.
 
-use log::{debug, info, warn};
+use log::{debug, info};
 use std::time::{Duration, Instant};
 
 /// GC scheduling strategy
@@ -94,7 +94,10 @@ impl GcScheduler {
     /// Enable/disable automatic scheduling
     pub fn set_auto_schedule(&mut self, enabled: bool) {
         self.auto_schedule = enabled;
-        info!("GC auto-scheduling: {}", if enabled { "enabled" } else { "disabled" });
+        info!(
+            "GC auto-scheduling: {}",
+            if enabled { "enabled" } else { "disabled" }
+        );
     }
 
     /// Record user interaction (resets idle timer)
@@ -138,17 +141,17 @@ impl GcScheduler {
         // Auto-schedule based on idle time
         if self.is_idle() {
             let idle = self.idle_duration();
-            
+
             // Long idle period - do major GC
             if idle >= Duration::from_secs(5) {
                 return Some(GcType::Major);
             }
-            
+
             // Medium idle - do minor GC
             if idle >= Duration::from_secs(2) {
                 return Some(GcType::Minor);
             }
-            
+
             // Short idle - incremental marking
             if idle >= Duration::from_millis(100) {
                 return Some(GcType::IncrementalMarking);
@@ -163,7 +166,7 @@ impl GcScheduler {
         match gc_type {
             GcType::Minor => self.stats.minor_gc_count += 1,
             GcType::Major => self.stats.major_gc_count += 1,
-            GcType::IncrementalMarking => {},
+            GcType::IncrementalMarking => {}
         }
 
         self.stats.total_gc_time_ms += duration.as_millis() as u64;
@@ -216,19 +219,21 @@ mod tests {
     #[test]
     fn test_gc_type_duration() {
         assert!(GcType::Minor.estimated_duration() < GcType::Major.estimated_duration());
-        assert!(GcType::IncrementalMarking.estimated_duration() < GcType::Minor.estimated_duration());
+        assert!(
+            GcType::IncrementalMarking.estimated_duration() < GcType::Minor.estimated_duration()
+        );
     }
 
     #[test]
     fn test_idle_detection() {
         let mut scheduler = GcScheduler::new();
         scheduler.set_idle_threshold(Duration::from_millis(50));
-        
+
         assert!(!scheduler.is_idle());
-        
+
         sleep(Duration::from_millis(100));
         assert!(scheduler.is_idle());
-        
+
         scheduler.record_interaction();
         assert!(!scheduler.is_idle());
     }
@@ -237,7 +242,7 @@ mod tests {
     fn test_gc_request() {
         let mut scheduler = GcScheduler::new();
         scheduler.request_gc(GcType::Minor);
-        
+
         assert_eq!(scheduler.pending_gc, Some(GcType::Minor));
     }
 
@@ -246,10 +251,10 @@ mod tests {
         let mut scheduler = GcScheduler::new();
         scheduler.set_idle_threshold(Duration::from_millis(50));
         scheduler.request_gc(GcType::Minor);
-        
+
         // Not idle yet
         assert!(scheduler.should_run_gc().is_none());
-        
+
         // Wait for idle
         sleep(Duration::from_millis(100));
         assert_eq!(scheduler.should_run_gc(), Some(GcType::Minor));
@@ -258,11 +263,11 @@ mod tests {
     #[test]
     fn test_record_gc() {
         let mut scheduler = GcScheduler::new();
-        
+
         scheduler.record_gc(GcType::Minor, Duration::from_millis(10));
         assert_eq!(scheduler.stats().minor_gc_count, 1);
         assert_eq!(scheduler.stats().total_gc_time_ms, 10);
-        
+
         scheduler.record_gc(GcType::Major, Duration::from_millis(50));
         assert_eq!(scheduler.stats().major_gc_count, 1);
         assert_eq!(scheduler.stats().total_gc_time_ms, 60);
@@ -271,10 +276,10 @@ mod tests {
     #[test]
     fn test_average_gc_time() {
         let mut scheduler = GcScheduler::new();
-        
+
         scheduler.record_gc(GcType::Minor, Duration::from_millis(10));
         scheduler.record_gc(GcType::Major, Duration::from_millis(50));
-        
+
         let avg = scheduler.average_gc_time();
         assert_eq!(avg, 30.0); // (10 + 50) / 2
     }
@@ -284,9 +289,9 @@ mod tests {
         let mut scheduler = GcScheduler::new();
         scheduler.set_auto_schedule(false);
         scheduler.set_idle_threshold(Duration::from_millis(10));
-        
+
         sleep(Duration::from_millis(50));
-        
+
         // Should not auto-schedule
         assert!(scheduler.should_run_gc().is_none());
     }

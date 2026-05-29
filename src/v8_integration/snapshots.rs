@@ -3,7 +3,7 @@
 //! Implements snapshot serialization and bytecode caching to reduce
 //! cold start time and improve performance for revisited pages.
 
-use log::{debug, info, warn};
+use log::{debug, info};
 use std::collections::HashMap;
 
 /// V8 snapshot for fast isolate creation
@@ -22,7 +22,7 @@ impl V8Snapshot {
     pub fn new(data: Vec<u8>) -> Self {
         let size = data.len();
         info!("Created V8 snapshot ({} bytes)", size);
-        
+
         V8Snapshot {
             data,
             size,
@@ -104,8 +104,11 @@ pub struct V8BytecodeCache {
 impl V8BytecodeCache {
     /// Create a new bytecode cache
     pub fn new(max_size: usize) -> Self {
-        info!("Creating V8 bytecode cache (max: {} MB)", max_size / 1024 / 1024);
-        
+        info!(
+            "Creating V8 bytecode cache (max: {} MB)",
+            max_size / 1024 / 1024
+        );
+
         V8BytecodeCache {
             cache: HashMap::new(),
             max_size,
@@ -118,7 +121,7 @@ impl V8BytecodeCache {
     /// Store bytecode for a script
     pub fn store(&mut self, url: String, bytecode: Vec<u8>, source_hash: u64) {
         let size = bytecode.len();
-        
+
         // Evict if necessary
         while self.current_size + size > self.max_size && !self.cache.is_empty() {
             self.evict_lru();
@@ -165,7 +168,8 @@ impl V8BytecodeCache {
     /// For production with many entries, consider using a more efficient data structure
     /// like a combination of HashMap + doubly-linked list, or maintaining sorted order.
     fn evict_lru(&mut self) {
-        if let Some((url, _)) = self.cache
+        if let Some((url, _)) = self
+            .cache
             .iter()
             .min_by_key(|(_, entry)| entry.last_access)
             .map(|(k, v)| (k.clone(), v.bytecode.len()))
@@ -278,7 +282,7 @@ fn current_timestamp() -> u64 {
 pub fn hash_source(source: &str) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let mut hasher = DefaultHasher::new();
     source.hash(&mut hasher);
     hasher.finish()
@@ -292,7 +296,7 @@ mod tests {
     fn test_v8_snapshot_creation() {
         let data = vec![1, 2, 3, 4, 5];
         let snapshot = V8Snapshot::new(data.clone());
-        
+
         assert_eq!(snapshot.size(), 5);
         assert_eq!(snapshot.data(), &data[..]);
     }
@@ -301,7 +305,7 @@ mod tests {
     fn test_bytecode_cache_creation() {
         let bytecode = vec![1, 2, 3];
         let cache = BytecodeCache::new(bytecode.clone(), 12345);
-        
+
         assert_eq!(cache.bytecode(), &bytecode[..]);
         assert!(cache.is_valid(12345));
         assert!(!cache.is_valid(54321));
@@ -310,12 +314,12 @@ mod tests {
     #[test]
     fn test_bytecode_cache_manager() {
         let mut manager = V8BytecodeCache::new(1024);
-        
+
         let bytecode = vec![1, 2, 3, 4];
         let hash = hash_source("console.log('test')");
-        
+
         manager.store("test.js".to_string(), bytecode.clone(), hash);
-        
+
         let cached = manager.get("test.js", hash);
         assert_eq!(cached, Some(&bytecode[..]));
     }
@@ -323,13 +327,13 @@ mod tests {
     #[test]
     fn test_bytecode_cache_invalidation() {
         let mut manager = V8BytecodeCache::new(1024);
-        
+
         let bytecode = vec![1, 2, 3];
         let hash1 = hash_source("code version 1");
         let hash2 = hash_source("code version 2");
-        
+
         manager.store("test.js".to_string(), bytecode, hash1);
-        
+
         // Different hash should return None
         let cached = manager.get("test.js", hash2);
         assert_eq!(cached, None);
@@ -338,11 +342,11 @@ mod tests {
     #[test]
     fn test_bytecode_cache_stats() {
         let mut manager = V8BytecodeCache::new(1024);
-        
+
         manager.store("test.js".to_string(), vec![1, 2, 3], 123);
         manager.get("test.js", 123); // Hit
         manager.get("missing.js", 456); // Miss
-        
+
         let stats = manager.stats();
         assert_eq!(stats.entries, 1);
         assert_eq!(stats.hits, 1);
@@ -352,10 +356,10 @@ mod tests {
     #[test]
     fn test_snapshot_manager() {
         let mut manager = SnapshotManager::new();
-        
+
         let snapshot = V8Snapshot::new(vec![1, 2, 3, 4, 5]);
         manager.store_snapshot("default".to_string(), snapshot);
-        
+
         assert_eq!(manager.snapshot_count(), 1);
         assert!(manager.get_snapshot("default").is_some());
     }
@@ -363,10 +367,10 @@ mod tests {
     #[test]
     fn test_snapshot_manager_remove() {
         let mut manager = SnapshotManager::new();
-        
+
         let snapshot = V8Snapshot::new(vec![1, 2, 3]);
         manager.store_snapshot("test".to_string(), snapshot);
-        
+
         assert!(manager.remove_snapshot("test"));
         assert_eq!(manager.snapshot_count(), 0);
     }
@@ -376,7 +380,7 @@ mod tests {
         let hash1 = hash_source("console.log('hello')");
         let hash2 = hash_source("console.log('hello')");
         let hash3 = hash_source("console.log('world')");
-        
+
         assert_eq!(hash1, hash2);
         assert_ne!(hash1, hash3);
     }
