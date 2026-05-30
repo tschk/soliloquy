@@ -15,8 +15,7 @@
 		Search,
 		Settings,
 		Square,
-		Terminal,
-		X
+		Terminal
 	} from '@lucide/svelte';
 	import { clockDisplay, systemClock } from '$lib/stores/system';
 	import { batteryStore, weatherStore } from '$lib/stores/device';
@@ -85,6 +84,12 @@
 	}
 	$: if (currentTab && isInlineTerminal(currentTab.url) && frameLoading) {
 		frameLoading = false;
+	}
+
+	function iconForUrl(url: string) {
+		if (url === 'os://files') return Folder;
+		if (url === 'os://settings') return Settings;
+		return Terminal;
 	}
 
 	function titleFor(url: string) {
@@ -206,24 +211,13 @@
 	transition:fade={{ duration: 160 }}
 >
 	<header class="browser-chrome">
-		<div class="window-strip">
+		<div class="nav-strip">
 			<div class="traffic" aria-hidden="true">
 				<span></span>
 				<span></span>
 				<span></span>
 			</div>
-			<div class="workspace-pill">
-				<PanelLeft size={15} strokeWidth={1.8} />
-				<span>{workspace?.name ?? 'Workspace'}</span>
-			</div>
-			<div class="system-readout">
-				<span>{heroStatus}</span>
-				<span>{$weatherStore.emoji} {$weatherStore.temp}°</span>
-				<span>{$batteryStore.level}%</span>
-			</div>
-		</div>
 
-		<div class="nav-strip">
 			<div class="nav-buttons">
 				<button type="button" aria-label="Back" disabled={navIndex <= 0} on:click={goBack}>
 					<ArrowLeft size={17} strokeWidth={2} />
@@ -236,6 +230,11 @@
 				</button>
 			</div>
 
+			<div class="active-tab-summary" title={currentTab ? titleFor(currentTab.url) : 'No active tab'}>
+				<svelte:component this={iconForUrl(currentTab?.url ?? 'os://terminal')} size={15} strokeWidth={2} />
+				<span>{currentTab ? titleFor(currentTab.url) : 'No tab'}</span>
+			</div>
+
 			<form class="address-shell" on:submit|preventDefault={submitAddress}>
 				<Search size={16} strokeWidth={2} />
 				<input
@@ -246,60 +245,15 @@
 				/>
 			</form>
 
-			<nav class="route-buttons" aria-label="System routes">
-				{#each crepuscularityChromeRoutes as route}
-					<button
-						type="button"
-						class:active={currentTab?.url === route.url}
-						aria-label={route.label}
-						title={route.label}
-						on:click={() => navigate(route.url)}
-					>
-						<svelte:component this={routeIcons[route.key]} size={16} strokeWidth={2} />
-					</button>
-				{/each}
-			</nav>
-
-			<nav class="mode-buttons" aria-label="Browser modes">
-				{#each crepuscularityChromeModes as mode}
-					<button
-						type="button"
-						class:active={browserMode === mode.id}
-						aria-label={mode.label}
-						title={mode.label}
-						on:click={() => (browserMode = mode.id)}
-					>
-						<svelte:component this={modeIcons[mode.id]} size={16} strokeWidth={2} />
-					</button>
-				{/each}
-			</nav>
-
-			<button type="button" class="new-tab-button" aria-label="New tab" on:click={() => navigate('os://terminal', { newTab: true })}>
-				<Plus size={17} strokeWidth={2} />
-			</button>
-		</div>
-
-		<div class="tab-strip" aria-label="Open tabs">
-			{#each tabs as tab (tab.id)}
-				<button
-					type="button"
-					class="tab-chip"
-					class:active={tab.id === currentTab?.id}
-					on:click={() => browserStore.activateTab(tab.id)}
-				>
-					<span class="tab-title">{tab.title || titleFor(tab.url)}</span>
-					<span
-						role="button"
-						tabindex="0"
-						aria-label="Close tab"
-						class="tab-close"
-						on:click={(event) => closeTab(tab.id, event)}
-						on:keydown={(event) => event.key === 'Enter' && closeTab(tab.id, event)}
-					>
-						<X size={13} strokeWidth={2.2} />
-					</span>
-				</button>
-			{/each}
+			<div class="workspace-pill">
+				<PanelLeft size={15} strokeWidth={1.8} />
+				<span>{workspace?.name ?? 'Workspace'}</span>
+			</div>
+			<div class="system-readout">
+				<span>{heroStatus}</span>
+				<span>{$weatherStore.emoji} {$weatherStore.temp}°</span>
+				<span>{$batteryStore.level}%</span>
+			</div>
 		</div>
 	</header>
 
@@ -328,7 +282,7 @@
 						title={tab.title || titleFor(tab.url)}
 						on:click={() => browserStore.activateTab(tab.id)}
 					>
-						<span>{titleFor(tab.url).slice(0, 1).toUpperCase()}</span>
+						<svelte:component this={iconForUrl(tab.url)} size={15} strokeWidth={2} />
 					</button>
 				{/each}
 			</div>
@@ -378,6 +332,20 @@
 		{/if}
 	</section>
 
+	<nav class="mode-buttons" aria-label="Browser modes">
+		{#each crepuscularityChromeModes as mode}
+			<button
+				type="button"
+				class:active={browserMode === mode.id}
+				aria-label={mode.label}
+				title={mode.label}
+				on:click={() => (browserMode = mode.id)}
+			>
+				<svelte:component this={modeIcons[mode.id]} size={16} strokeWidth={2} />
+			</button>
+		{/each}
+	</nav>
+
 	<TerminalPane open={terminalOpen} />
 </main>
 
@@ -396,22 +364,15 @@
 		grid-column: 1 / -1;
 		background: var(--crepus-chrome);
 		border-bottom: 1px solid var(--crepus-line);
-		box-shadow: 0 18px 48px rgb(0 0 0 / 0.28);
+		box-shadow: 0 12px 32px rgb(0 0 0 / 0.22);
 	}
 
-	.window-strip,
-	.nav-strip,
-	.tab-strip {
+	.nav-strip {
 		display: flex;
 		align-items: center;
 		gap: 10px;
+		min-height: 58px;
 		padding: 8px 14px;
-	}
-
-	.window-strip {
-		min-height: 38px;
-		justify-content: space-between;
-		border-bottom: 1px solid var(--crepus-line);
 	}
 
 	.traffic {
@@ -427,6 +388,7 @@
 		border: 1px solid rgb(248 247 242 / 0.16);
 	}
 
+	.active-tab-summary,
 	.workspace-pill,
 	.system-readout {
 		display: flex;
@@ -437,16 +399,30 @@
 		font-weight: 600;
 	}
 
+	.active-tab-summary {
+		min-width: 96px;
+		max-width: 150px;
+		color: var(--crepus-text);
+	}
+
+	.active-tab-summary span,
+	.workspace-pill span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.workspace-pill {
+		max-width: 130px;
+		margin-left: auto;
+	}
+
 	.system-readout {
 		gap: 14px;
 	}
 
-	.nav-strip {
-		min-height: 54px;
-	}
-
 	.nav-buttons,
-	.route-buttons,
 	.mode-buttons {
 		display: flex;
 		align-items: center;
@@ -473,9 +449,7 @@
 	}
 
 	.nav-buttons button,
-	.route-buttons button,
-	.mode-buttons button,
-	.new-tab-button {
+	.mode-buttons button {
 		width: 32px;
 		height: 32px;
 		display: inline-flex;
@@ -492,11 +466,8 @@
 	}
 
 	.nav-buttons button:hover:not(:disabled),
-	.route-buttons button:hover,
-	.route-buttons button.active,
 	.mode-buttons button:hover,
-	.mode-buttons button.active,
-	.new-tab-button:hover {
+	.mode-buttons button.active {
 		background: rgb(248 247 242 / 0.08);
 		border-color: var(--crepus-line);
 		color: var(--crepus-text);
@@ -536,62 +507,6 @@
 		letter-spacing: 0;
 	}
 
-	.tab-strip {
-		min-height: 43px;
-		overflow-x: auto;
-		border-top: 1px solid var(--crepus-line);
-		scrollbar-width: none;
-	}
-
-	.tab-strip::-webkit-scrollbar {
-		display: none;
-	}
-
-	.tab-chip {
-		height: 30px;
-		min-width: 116px;
-		max-width: 220px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
-		padding: 0 8px 0 11px;
-		border: 1px solid var(--crepus-line);
-		border-radius: var(--crepus-button-radius) var(--crepus-button-radius) 0 0;
-		background: #171814;
-		color: var(--crepus-muted-text);
-	}
-
-	.tab-chip.active {
-		background: #23241f;
-		border-color: rgb(128 185 164 / 0.34);
-		color: var(--crepus-text);
-	}
-
-	.tab-title {
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: 12px;
-		font-weight: 600;
-	}
-
-	.tab-close {
-		width: 18px;
-		height: 18px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 5px;
-		color: rgb(248 247 242 / 0.45);
-	}
-
-	.tab-close:hover {
-		background: rgb(248 247 242 / 0.1);
-		color: #f8f7f2;
-	}
-
 	.zen-sidebar {
 		grid-column: 1;
 		grid-row: 2;
@@ -602,7 +517,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 8px 254px;
+		padding: 12px 8px 238px;
 		background: var(--crepus-sidebar);
 		border-right: 1px solid rgb(248 247 242 / 0.1);
 	}
@@ -659,6 +574,10 @@
 	.sidebar-tab span {
 		font-size: 12px;
 		font-weight: 700;
+	}
+
+	.sidebar-add {
+		margin-top: auto;
 	}
 
 	.page-frame {
@@ -737,15 +656,14 @@
 	}
 
 	@media (max-width: 760px) {
-		.window-strip {
-			display: none;
-		}
-
 		.nav-strip {
 			flex-wrap: wrap;
 		}
 
-		.route-buttons {
+		.traffic,
+		.active-tab-summary,
+		.workspace-pill,
+		.system-readout {
 			display: none;
 		}
 
@@ -754,13 +672,10 @@
 			flex-basis: 100%;
 		}
 
-		.tab-chip {
-			min-width: 104px;
-		}
-
 		.zen-sidebar {
 			width: 48px;
 			padding-inline: 6px;
+			padding-bottom: 238px;
 		}
 	}
 </style>
