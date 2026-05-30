@@ -453,6 +453,20 @@
 		gap: 6px;
 	}
 
+	.mode-buttons {
+		position: fixed;
+		z-index: 20;
+		left: 10px;
+		bottom: 10px;
+		flex-direction: column;
+		padding: 6px;
+		border: 1px solid var(--crepus-line);
+		border-radius: 10px;
+		background: rgb(17 18 15 / 0.88);
+		box-shadow: 0 18px 40px rgb(0 0 0 / 0.28);
+		backdrop-filter: blur(16px);
+	}
+
 	button {
 		color: inherit;
 		font: inherit;
@@ -529,13 +543,6 @@
 		scrollbar-width: none;
 	}
 
-	.mode-zen .tab-strip,
-	.mode-split-horizontal .tab-strip,
-	.mode-split-vertical .tab-strip,
-	.mode-grid .tab-strip {
-		display: none;
-	}
-
 	.tab-strip::-webkit-scrollbar {
 		display: none;
 	}
@@ -595,7 +602,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 8px;
+		padding: 12px 8px 254px;
 		background: var(--crepus-sidebar);
 		border-right: 1px solid rgb(248 247 242 / 0.1);
 	}
@@ -738,8 +745,7 @@
 			flex-wrap: wrap;
 		}
 
-		.route-buttons,
-		.mode-buttons {
+		.route-buttons {
 			display: none;
 		}
 

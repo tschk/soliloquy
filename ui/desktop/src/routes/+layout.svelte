@@ -59,7 +59,7 @@ window.removeEventListener('soliloquy:command:toggle', externalToggle as EventLi
 
 {#if showCommandButton}
 <button
-class="command-button fixed bottom-6 right-6 z-40"
+class="command-button fixed bottom-6 left-6 z-40"
 aria-label="Open command palette"
 on:click={() => toggleCommandPalette()}
 >

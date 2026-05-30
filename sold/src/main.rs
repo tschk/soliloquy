@@ -10,7 +10,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::{Html, Json};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
@@ -23,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::fs;
 use tokio::sync::RwLock;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::services::ServeDir;
 
 // ── TIOCSWINSZ ioctl (module-level, required by nix macro) ───────────────────
@@ -749,6 +751,12 @@ async fn main() {
         update_policy,
         update_state_path,
     };
+    let cors = CorsLayer::new()
+        .allow_origin(AllowOrigin::predicate(|origin, _| {
+            is_allowed_cors_origin(origin)
+        }))
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
 
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
@@ -791,6 +799,7 @@ async fn main() {
         .route("/v1/notify", post(notify))
         // Static bundle (index.html, terminal/*, wasm, etc.)
         .fallback_service(ServeDir::new(bundle_dir))
+        .layer(cors)
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -2287,6 +2296,34 @@ fn origin_allowed(headers: &HeaderMap) -> bool {
     true
 }
 
+fn is_allowed_cors_origin(origin: &HeaderValue) -> bool {
+    let Some(origin) = origin.to_str().ok().map(str::trim) else {
+        return false;
+    };
+    let origin = origin.trim_end_matches('/');
+    if matches!(
+        origin,
+        "http://127.0.0.1:5173"
+            | "http://localhost:5173"
+            | "http://[::1]:5173"
+            | "http://127.0.0.1:8080"
+            | "http://localhost:8080"
+            | "http://[::1]:8080"
+    ) {
+        return true;
+    }
+    std::env::var("SOL_CORS_ORIGINS")
+        .ok()
+        .map(|origins| {
+            origins
+                .split(',')
+                .map(str::trim)
+                .map(|origin| origin.trim_end_matches('/'))
+                .any(|allowed| !allowed.is_empty() && allowed == origin)
+        })
+        .unwrap_or(false)
+}
+
 fn header_token(headers: &HeaderMap) -> Option<String> {
     if let Some(value) = headers
         .get("x-sol-token")
@@ -2803,6 +2840,19 @@ mod tests {
         assert!(origin_allowed(&headers));
         headers.insert("origin", "https://example.com".parse().unwrap());
         assert!(!origin_allowed(&headers));
+    }
+
+    #[test]
+    fn cors_origin_allows_dev_shell_only() {
+        assert!(is_allowed_cors_origin(
+            &"http://127.0.0.1:5173".parse().unwrap()
+        ));
+        assert!(is_allowed_cors_origin(
+            &"http://localhost:5173".parse().unwrap()
+        ));
+        assert!(!is_allowed_cors_origin(
+            &"https://example.com".parse().unwrap()
+        ));
     }
 
     #[test]

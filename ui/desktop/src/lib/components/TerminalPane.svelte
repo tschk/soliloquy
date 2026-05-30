@@ -195,8 +195,30 @@
 				on:click={focusTerminal}
 				on:keydown={handleKeydown}
 			>
-				<pre class="whitespace-pre-wrap break-words">{output || 'booting terminal...\n'}</pre>
+				<pre class="whitespace-pre-wrap break-words">{output || 'booting terminal...\n'}<span class="terminal-cursor" class:ready></span></pre>
 			</div>
 		</div>
 	</div>
 {/if}
+
+<style>
+	.terminal-cursor {
+		display: inline-block;
+		width: 0.65ch;
+		height: 1.15em;
+		margin-left: 1px;
+		vertical-align: -0.18em;
+		background: rgb(52 211 153 / 0.55);
+		animation: terminal-cursor-blink 1s steps(2, start) infinite;
+	}
+
+	.terminal-cursor.ready {
+		background: rgb(52 211 153);
+	}
+
+	@keyframes terminal-cursor-blink {
+		50% {
+			opacity: 0;
+		}
+	}
+</style>
