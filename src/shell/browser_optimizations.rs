@@ -1,84 +1,35 @@
-//! Stub implementation of browser optimizations
-//! TODO: Implement full optimization system
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-#[derive(Default)]
-pub struct TabResidencyManager;
-#[derive(Default)]
-pub struct GcScheduler;
+pub use soliloquy_browser_optimizations::memory::{TabResidencyManager, TabStats};
+pub use soliloquy_browser_optimizations::v8_integration::{GcScheduler, GcType};
+
+const WARNING_THRESHOLD: usize = 2 * 1024 * 1024 * 1024;
+const CRITICAL_THRESHOLD: usize = 3 * 1024 * 1024 * 1024;
+
+static CURRENT_USAGE: AtomicUsize = AtomicUsize::new(0);
+static MONITORING_ACTIVE: AtomicBool = AtomicBool::new(false);
+
 #[derive(Default)]
 pub struct MemoryPressureMonitor;
 
-#[derive(Default)]
-pub struct TabStats {
-    pub active_count: usize,
-    pub warm_count: usize,
-    pub cold_count: usize,
-    pub frozen_count: usize,
-    pub total_memory: usize,
-}
-
-impl TabResidencyManager {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn register_tab(&mut self, _url: String) -> u64 {
-        0
-    }
-
-    pub fn touch_tab(&mut self, _id: u64) -> Result<(), String> {
-        Ok(())
-    }
-
-    pub fn unregister_tab(&mut self, _id: u64) -> Result<(), String> {
-        Ok(())
-    }
-
-    pub fn set_memory_pressure(&mut self, _pressure: bool) {}
-
-    pub fn run_eviction_pass(&mut self) -> usize {
-        0
-    }
-
-    pub fn get_memory_usage(&self) -> usize {
-        0
-    }
-
-    pub fn get_stats(&self) -> TabStats {
-        TabStats::default()
-    }
-}
-
-impl GcScheduler {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn record_interaction(&mut self) {}
-
-    pub fn should_run_gc(&mut self) -> Option<GcType> {
-        None
-    }
-
-    pub fn record_gc(&mut self, _gc_type: GcType, _duration: std::time::Duration) {}
-}
-
-#[derive(Debug)]
-pub enum GcType {
-    Minor,
-    Major,
-}
-
 impl MemoryPressureMonitor {
-    pub fn start_monitoring(&self) {}
+    pub fn start_monitoring(&self) {
+        MONITORING_ACTIVE.store(true, Ordering::SeqCst);
+    }
 
     pub fn is_under_pressure(&self) -> bool {
-        false
+        CURRENT_USAGE.load(Ordering::SeqCst) >= WARNING_THRESHOLD
     }
 
-    pub fn update_usage(&self, _usage: usize) {}
+    pub fn update_usage(&self, usage: usize) {
+        CURRENT_USAGE.store(usage, Ordering::SeqCst);
+    }
 
     pub fn get_usage_percentage(&self) -> f64 {
-        0.0
+        (CURRENT_USAGE.load(Ordering::SeqCst) as f64 / CRITICAL_THRESHOLD as f64) * 100.0
+    }
+
+    pub fn is_monitoring_active(&self) -> bool {
+        MONITORING_ACTIVE.load(Ordering::SeqCst)
     }
 }

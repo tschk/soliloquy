@@ -290,8 +290,37 @@ fn main() {
                     return;
                 }
 
-                info!("macOS event loop not yet implemented");
-                // TODO: Implement macOS event loop similar to Linux
+                let runtime_bridge = Arc::new(engine_bridge);
+                let mut frame_pacer = FramePacer::new(settings.render.target_fps);
+                let frame_limit = std::env::var("SOLILOQUY_DESKTOP_FRAME_LIMIT")
+                    .ok()
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .filter(|value| *value > 0)
+                    .unwrap_or(1);
+
+                info!(
+                    "Starting macOS frame pump at {} FPS target for {} frame(s)",
+                    settings.render.target_fps, frame_limit
+                );
+
+                for _ in 0..frame_limit {
+                    let _delta = frame_pacer.begin_frame();
+
+                    if let Err(e) = runtime_bridge
+                        .present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1))
+                    {
+                        warn!(
+                            "Failed to present macOS frame through runtime contract: {}",
+                            e
+                        );
+                    }
+
+                    window.request_redraw();
+                    frame_pacer.wait_for_frame();
+                }
+
+                info!("Total frames rendered: {}", frame_pacer.frame_count());
+                info!("Average FPS: {:.1}", frame_pacer.current_fps());
             }
         }
 
