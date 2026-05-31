@@ -109,7 +109,7 @@ pub struct EngineBridge {
     pending_mutations: Arc<Mutex<Vec<DOMMutation>>>,
 
     /// Event listeners registered from JavaScript
-    event_listeners: Arc<RwLock<HashMap<(u64, String), Vec<u32>>>>,
+    event_listeners: EventListeners,
 
     /// Registered native functions callable from V8
     native_functions: Arc<RwLock<HashMap<String, NativeFunction>>>,
@@ -135,6 +135,7 @@ pub struct EngineBridge {
 
 /// Native function type for V8 callbacks
 pub type NativeFunction = Box<dyn Fn(Vec<String>) -> Result<String, String> + Send + Sync>;
+type EventListeners = Arc<RwLock<HashMap<(u64, String), Vec<u32>>>>;
 
 /// Bridge state
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -677,6 +678,14 @@ impl EngineBridge {
         Ok(())
     }
 
+    pub fn listener_count(&self) -> Result<usize, String> {
+        let listeners = self
+            .event_listeners
+            .read()
+            .map_err(|e| format!("Failed to lock event listeners: {}", e))?;
+        Ok(listeners.values().map(Vec::len).sum())
+    }
+
     /// Get the current bridge state
     pub fn state(&self) -> Result<BridgeState, String> {
         let state = self
@@ -744,19 +753,17 @@ impl EngineRuntime for EngineBridge {
             ));
         }
 
-        let mut surfaces = self
-            .surfaces
-            .write()
-            .map_err(|e| RuntimeError::Unsupported(format!("surface registry lock failed: {}", e)))?;
+        let mut surfaces = self.surfaces.write().map_err(|e| {
+            RuntimeError::Unsupported(format!("surface registry lock failed: {}", e))
+        })?;
         surfaces.insert(surface.id, surface);
         Ok(())
     }
 
     fn present_frame(&self, surface_id: SurfaceId) -> Result<(), RuntimeError> {
-        let surfaces = self
-            .surfaces
-            .read()
-            .map_err(|e| RuntimeError::Unsupported(format!("surface registry lock failed: {}", e)))?;
+        let surfaces = self.surfaces.read().map_err(|e| {
+            RuntimeError::Unsupported(format!("surface registry lock failed: {}", e))
+        })?;
         let surface = surfaces
             .get(&surface_id)
             .ok_or(RuntimeError::SurfaceNotFound(surface_id.0))?
@@ -874,9 +881,7 @@ mod tests {
             Some(InputEvent::PointerMove { x: 11.0, y: 22.0 })
         );
 
-        bridge
-            .handle_lifecycle(LifecycleEvent::Suspended)
-            .unwrap();
+        bridge.handle_lifecycle(LifecycleEvent::Suspended).unwrap();
         assert_eq!(
             bridge.last_lifecycle_event().unwrap(),
             Some(LifecycleEvent::Suspended)

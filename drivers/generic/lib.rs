@@ -13,24 +13,24 @@
 
 extern crate alloc;
 
-pub mod traits;
-pub mod gpio;
 pub mod clock;
+pub mod gpio;
 pub mod mmc;
+pub mod traits;
 pub mod uart;
 
 // Re-export commonly used types
+pub use clock::{AllwinnerCcu, ClockDesc, ClockSource, GenericClockController};
+pub use gpio::{AllwinnerGpio, GpioBank, GpioController};
+pub use mmc::{BlockDevice, GenericMmcDriver, MmcHostOps};
 pub use traits::*;
-pub use gpio::{GpioBank, GpioController, AllwinnerGpio};
-pub use clock::{GenericClockController, AllwinnerCcu, ClockSource, ClockDesc};
-pub use mmc::{GenericMmcDriver, MmcHostOps, BlockDevice};
-pub use uart::{GenericUart, EarlyConsole};
+pub use uart::{EarlyConsole, GenericUart};
 
 /// Driver version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Initialize early console for boot debugging
-/// 
+///
 /// # Safety
 /// Must be called with correct UART base address for the platform
 #[cfg(feature = "allwinner")]

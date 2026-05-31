@@ -45,8 +45,7 @@ pub struct SettingsManager {
 
 impl SettingsManager {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, DriverCatalogError> {
-        let driver_manager =
-            PersistentDriverManager::open(path, Arc::new(RequireSignedPackages))?;
+        let driver_manager = PersistentDriverManager::open(path, Arc::new(RequireSignedPackages))?;
         Ok(Self {
             driver_manager,
             toggles: HashMap::new(),
@@ -58,10 +57,11 @@ impl SettingsManager {
     }
 
     pub fn toggle(&mut self, key: &str, enabled: bool) -> Result<(), DriverCatalogError> {
-        let toggle = self
-            .toggles
-            .get_mut(key)
-            .ok_or_else(|| DriverCatalogError::Driver(crate::driver_manager::DriverError::UnknownDriver(key.to_string())))?;
+        let toggle = self.toggles.get_mut(key).ok_or_else(|| {
+            DriverCatalogError::Driver(crate::driver_manager::DriverError::UnknownDriver(
+                key.to_string(),
+            ))
+        })?;
 
         self.driver_manager
             .set_capability_enabled(toggle.capability.clone(), enabled)?;
@@ -136,18 +136,14 @@ mod tests {
         settings.toggle("bluetooth", true).unwrap();
         assert_eq!(settings.is_enabled("bluetooth"), Some(true));
         assert_eq!(
-            settings
-                .driver_manager()
-                .state("bluetooth"),
+            settings.driver_manager().state("bluetooth"),
             Some(crate::driver_manager::DriverState::Enabled)
         );
 
         settings.toggle("bluetooth", false).unwrap();
         assert_eq!(settings.is_enabled("bluetooth"), Some(false));
         assert_eq!(
-            settings
-                .driver_manager()
-                .state("bluetooth"),
+            settings.driver_manager().state("bluetooth"),
             Some(crate::driver_manager::DriverState::Disabled)
         );
     }

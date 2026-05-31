@@ -6,8 +6,6 @@ pub mod prefetch;
 pub mod priority;
 
 pub use prefetch::{
-    PrefetchManager, PrefetchRequest, PrefetchPriority, ResourceType, DnsPrefetchCache,
+    DnsPrefetchCache, PrefetchManager, PrefetchPriority, PrefetchRequest, ResourceType,
 };
-pub use priority::{
-    PriorityQueue, ResourceRequest, ResourcePriority, ResourceKind,
-};
+pub use priority::{PriorityQueue, ResourceKind, ResourcePriority, ResourceRequest};

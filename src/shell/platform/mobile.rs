@@ -22,7 +22,10 @@ impl Window for MobileWindow {
     }
 
     fn new_with_size(width: u32, height: u32) -> Result<Self, String> {
-        info!("Creating Linux mobile surface placeholder ({}x{})", width, height);
+        info!(
+            "Creating Linux mobile surface placeholder ({}x{})",
+            width, height
+        );
 
         Ok(Self {
             width,

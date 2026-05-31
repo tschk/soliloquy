@@ -162,8 +162,7 @@ if [ ! -d "${UI_BUILD_DIR}" ]; then
   echo "run tools/soliloquy/build_ui.sh before staging artifacts" >&2
   exit 1
 fi
-rm -rf "${ROOTFS}/usr/local/share/soliloquy/ui" "${ROOTFS}/usr/local/share/soliloquy/bundle"
-cp -R "${UI_BUILD_DIR}" "${ROOTFS}/usr/local/share/soliloquy/ui"
+rm -rf "${ROOTFS}/usr/local/share/soliloquy/bundle"
 cp -R "${UI_BUILD_DIR}" "${ROOTFS}/usr/local/share/soliloquy/bundle"
 
 # Stage sold bundle (includes os://terminal HTML + ghostty WASM)

@@ -247,12 +247,12 @@ impl TabResidencyManager {
 
         for tab_id in tab_ids {
             if let Some(tab) = self.tabs.get(&tab_id) {
-if tab.should_evict() {
-                debug!("Evicting idle tab {}", tab_id);
-                if self.evict_tab(tab_id).is_ok() {
-                    evicted_count += 1;
+                if tab.should_evict() {
+                    debug!("Evicting idle tab {}", tab_id);
+                    if self.evict_tab(tab_id).is_ok() {
+                        evicted_count += 1;
+                    }
                 }
-            }
             }
         }
 
@@ -265,7 +265,9 @@ if tab.should_evict() {
 
     /// Enable aggressive eviction mode when memory pressure detected
     pub fn set_memory_pressure(&mut self, pressure: bool) {
-        if pressure && !self.aggressive_mode {
+        if (pressure || self.current_memory_usage >= self.memory_pressure_threshold)
+            && !self.aggressive_mode
+        {
             warn!("Memory pressure detected - enabling aggressive eviction");
             self.aggressive_mode = true;
             // Immediately evict all non-active tabs
@@ -331,13 +333,13 @@ if tab.should_evict() {
             viewport_size: (1920, 1080),
         });
 
-// Estimate memory savings
-         let old_usage = tab.memory_usage;
-         tab.memory_usage /= 4; // ~75% compression typical
-         self.current_memory_usage = self
-             .current_memory_usage
-             .saturating_sub(old_usage)
-             .saturating_add(tab.memory_usage);
+        // Estimate memory savings
+        let old_usage = tab.memory_usage;
+        tab.memory_usage /= 4; // ~75% compression typical
+        self.current_memory_usage = self
+            .current_memory_usage
+            .saturating_sub(old_usage)
+            .saturating_add(tab.memory_usage);
 
         debug!("Created snapshot for tab {}", tab_id);
         Ok(())
@@ -349,13 +351,13 @@ if tab.should_evict() {
             .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
-// Further compress snapshot
-         let old_usage = tab.memory_usage;
-         tab.memory_usage /= 2; // Additional compression
-         self.current_memory_usage = self
-             .current_memory_usage
-             .saturating_sub(old_usage)
-             .saturating_add(tab.memory_usage);
+        // Further compress snapshot
+        let old_usage = tab.memory_usage;
+        tab.memory_usage /= 2; // Additional compression
+        self.current_memory_usage = self
+            .current_memory_usage
+            .saturating_sub(old_usage)
+            .saturating_add(tab.memory_usage);
 
         debug!("Compressed snapshot for tab {}", tab_id);
         Ok(())

@@ -388,9 +388,9 @@ mod tests {
         let mut cache = CodeCache::new(test_cache_dir(), Some(100)).unwrap();
 
         // Add entries that exceed cache size
-        cache.put("url1", "code1", &vec![0; 40]).unwrap();
-        cache.put("url2", "code2", &vec![0; 40]).unwrap();
-        cache.put("url3", "code3", &vec![0; 40]).unwrap();
+        cache.put("url1", "code1", &[0; 40]).unwrap();
+        cache.put("url2", "code2", &[0; 40]).unwrap();
+        cache.put("url3", "code3", &[0; 40]).unwrap();
 
         // First entry should be evicted
         assert!(cache.entries.len() <= 2);
@@ -410,8 +410,8 @@ mod tests {
     #[test]
     fn test_cache_stats() {
         let mut cache = setup_test_cache();
-        cache.put("url1", "code1", &vec![0; 100]).unwrap();
-        cache.put("url2", "code2", &vec![0; 200]).unwrap();
+        cache.put("url1", "code1", &[0; 100]).unwrap();
+        cache.put("url2", "code2", &[0; 200]).unwrap();
 
         let stats = cache.stats();
         assert_eq!(stats.entry_count, 2);
@@ -421,8 +421,8 @@ mod tests {
     #[test]
     fn test_cache_clear() {
         let mut cache = setup_test_cache();
-        cache.put("url1", "code1", &vec![0; 100]).unwrap();
-        cache.put("url2", "code2", &vec![0; 200]).unwrap();
+        cache.put("url1", "code1", &[0; 100]).unwrap();
+        cache.put("url2", "code2", &[0; 200]).unwrap();
 
         cache.clear().unwrap();
 
@@ -446,7 +446,7 @@ mod tests {
 
         {
             let mut cache = CodeCache::new(temp_dir.clone(), Some(1024 * 1024)).unwrap();
-            cache.put("url1", "code1", &vec![0; 100]).unwrap();
+            cache.put("url1", "code1", &[0; 100]).unwrap();
         }
 
         // Reload cache

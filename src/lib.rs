@@ -11,53 +11,41 @@
 //! - `v8_integration`: V8 snapshot/bytecode caching and GC scheduling
 //! - `network`: DNS prefetch and resource prioritization
 
-pub mod memory;
-pub mod gpu;
 pub mod cache;
-pub mod v8_integration;
+pub mod driver_catalog;
+pub mod driver_manager;
+pub mod gpu;
+pub mod memory;
 pub mod network;
 pub mod runtime;
-pub mod driver_manager;
-pub mod driver_catalog;
 pub mod settings;
+pub mod v8_integration;
 
 // Re-export commonly used types
 pub use memory::{
-    TabResidencyManager, ResidencyState, TabResidency, TabSnapshot,
-    MemoryPressureMonitor, MemoryPressureLevel,
+    MemoryPressureLevel, MemoryPressureMonitor, ResidencyState, TabResidency, TabResidencyManager,
+    TabSnapshot,
 };
 
-pub use gpu::{
-    GpuLayoutCompute, LayoutNode, DamageTracker, CompositorLayer,
-};
+pub use gpu::{CompositorLayer, DamageTracker, GpuLayoutCompute, LayoutNode};
 
-pub use cache::{
-    LruCache, TextureAtlasManager,
-};
+pub use cache::{LruCache, TextureAtlasManager};
 
-pub use v8_integration::{
-    V8BytecodeCache, GcScheduler, SnapshotManager,
-};
+pub use v8_integration::{GcScheduler, SnapshotManager, V8BytecodeCache};
 
-pub use network::{
-    PrefetchManager, PriorityQueue,
-};
+pub use network::{PrefetchManager, PriorityQueue};
 
 pub use runtime::{
-    EngineRuntime, InputEvent, LifecycleEvent, PlatformTier, RuntimeError,
-    SafeAreaInsets, SurfaceDescriptor, SurfaceId, SurfaceRotation, SurfaceSize,
+    EngineRuntime, InputEvent, LifecycleEvent, PlatformTier, RuntimeError, SafeAreaInsets,
+    SurfaceDescriptor, SurfaceId, SurfaceRotation, SurfaceSize,
 };
 
 pub use driver_manager::{
-    AllowUnsignedPackages, Capability, CapabilityBroker, DriverError, DriverLease,
-    DriverManifest, DriverManager, DriverRecord, DriverRegistry, DriverState,
-    PackageSignature, RequireSignedPackages, TrustPolicy,
+    AllowUnsignedPackages, Capability, CapabilityBroker, DriverError, DriverLease, DriverManager,
+    DriverManifest, DriverRecord, DriverRegistry, DriverState, PackageSignature,
+    RequireSignedPackages, TrustPolicy,
 };
 
-pub use driver_catalog::{
-    DriverCatalog, DriverCatalogError, PersistentDriverManager,
-};
+pub use driver_catalog::{DriverCatalog, DriverCatalogError, PersistentDriverManager};
 
-pub use settings::{
-    SettingToggle, SettingsManager,
-};
+pub use settings::{SettingToggle, SettingsManager};

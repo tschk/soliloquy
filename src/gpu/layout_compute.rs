@@ -198,13 +198,13 @@ impl GpuLayoutCompute {
             });
             cpass.set_pipeline(pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-// Dispatch: workgroup size is 64
-         let workgroup_count = node_count.div_ceil(64);
+            // Dispatch: workgroup size is 64
+            let workgroup_count = node_count.div_ceil(64);
             cpass.dispatch_workgroups(workgroup_count, 1, 1);
         }
 
-// Read back
-         let buffer_size = std::mem::size_of_val(nodes) as u64;
+        // Read back
+        let buffer_size = std::mem::size_of_val(nodes) as u64;
         let staging_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Staging Buffer"),
             size: buffer_size,

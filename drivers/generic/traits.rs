@@ -96,7 +96,7 @@ impl Default for GpioConfig {
 }
 
 /// Generic GPIO driver trait
-/// 
+///
 /// Note: Low-level drivers typically don't implement Send+Sync as they
 /// use raw pointers for MMIO access. Higher-level wrappers can add
 /// thread safety if needed.
@@ -263,10 +263,10 @@ pub trait MmcDriver {
 /// I2C speed mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum I2cSpeed {
-    Standard,   // 100 kHz
-    Fast,       // 400 kHz
-    FastPlus,   // 1 MHz
-    High,       // 3.4 MHz
+    Standard, // 100 kHz
+    Fast,     // 400 kHz
+    FastPlus, // 1 MHz
+    High,     // 3.4 MHz
 }
 
 /// Generic I2C driver trait
@@ -281,7 +281,12 @@ pub trait I2cDriver {
     fn read(&mut self, addr: u8, buffer: &mut [u8]) -> DriverResult<()>;
 
     /// Write then read (combined transaction)
-    fn write_read(&mut self, addr: u8, write_data: &[u8], read_buffer: &mut [u8]) -> DriverResult<()>;
+    fn write_read(
+        &mut self,
+        addr: u8,
+        write_data: &[u8],
+        read_buffer: &mut [u8],
+    ) -> DriverResult<()>;
 
     /// Scan for devices on the bus
     fn scan(&mut self) -> DriverResult<Vec<u8>>;
@@ -294,10 +299,10 @@ pub trait I2cDriver {
 /// SPI mode (CPOL, CPHA)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpiMode {
-    Mode0,  // CPOL=0, CPHA=0
-    Mode1,  // CPOL=0, CPHA=1
-    Mode2,  // CPOL=1, CPHA=0
-    Mode3,  // CPOL=1, CPHA=1
+    Mode0, // CPOL=0, CPHA=0
+    Mode1, // CPOL=0, CPHA=1
+    Mode2, // CPOL=1, CPHA=0
+    Mode3, // CPOL=1, CPHA=1
 }
 
 /// SPI configuration
@@ -395,7 +400,7 @@ pub trait UartDriver {
 #[derive(Debug, Clone)]
 pub struct PwmConfig {
     pub frequency: u32,
-    pub duty_cycle: f32,  // 0.0 - 1.0
+    pub duty_cycle: f32, // 0.0 - 1.0
     pub polarity_inverted: bool,
 }
 

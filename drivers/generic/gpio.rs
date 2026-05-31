@@ -160,10 +160,12 @@ impl GpioDriver for GpioBank {
 
         // Most ARM SoCs use 4 bits per pin for alternate function
         // Stored in CFG registers (typically at offset 0x00, 0x04, 0x08, 0x0C for 8 pins each)
-        let cfg_reg = (pin / 8) * 4;
-        let cfg_offset = (pin % 8) * 4;
-        let cfg_mask = 0xF << cfg_offset;
-        let cfg_val = (function & 0xF) << cfg_offset;
+        let pins_per_reg = 32 / self.bits_per_pin;
+        let cfg_reg = (pin / pins_per_reg) * 4;
+        let cfg_offset = (pin % pins_per_reg) * self.bits_per_pin;
+        let field_mask = (1u32 << self.bits_per_pin) - 1;
+        let cfg_mask = field_mask << cfg_offset;
+        let cfg_val = (function & field_mask) << cfg_offset;
 
         self.modify_reg(cfg_reg, cfg_mask, cfg_val);
 
@@ -264,6 +266,7 @@ impl AllwinnerGpio {
     /// # Safety
     /// The caller must ensure `base` is the valid PIO base address
     pub unsafe fn new(base: usize, bank_count: u32) -> Self {
+        let _ = (aw_regs::DRV0, aw_regs::DRV1);
         Self {
             base: base as *mut u32,
             bank_count,

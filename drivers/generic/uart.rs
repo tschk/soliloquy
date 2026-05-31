@@ -260,7 +260,11 @@ impl UartDriver for GenericUart {
     }
 
     fn available(&self) -> usize {
-        if self.rx_ready() { 1 } else { 0 }
+        if self.rx_ready() {
+            1
+        } else {
+            0
+        }
     }
 
     fn flush(&mut self) -> DriverResult<()> {

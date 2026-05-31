@@ -1,5 +1,5 @@
 //! Networking module for Soliloquy browser
-//! 
+//!
 //! This module provides high-performance networking capabilities including:
 //! - HTTP/3 with QUIC transport
 //! - Connection pooling and DNS caching
@@ -9,13 +9,13 @@
 
 pub mod connection_manager;
 // pub mod quic;
+pub mod code_cache;
 pub mod resource_loader;
 pub mod speculation;
-pub mod code_cache;
 
 // Re-export main types for convenience
 pub use connection_manager::ConnectionManager;
 // pub use quic::{QuicTransport, QuicConfig};
+pub use code_cache::CodeCache;
 pub use resource_loader::{ResourceLoader, ResourceResponse};
 pub use speculation::{SpeculationEngine, SpeculationRules};
-pub use code_cache::CodeCache;

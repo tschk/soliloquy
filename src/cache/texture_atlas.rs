@@ -86,7 +86,7 @@ impl RectPacker {
     /// - Shelf packing (rows with increasing heights)
     /// - Guillotine (recursive space subdivision)
     /// - MaxRects (best area fit)
-    /// These provide better space utilization and O(n) or O(n log n) performance.
+    ///   These provide better space utilization and O(n) or O(n log n) performance.
     fn pack(&mut self, width: u32, height: u32) -> Option<AtlasRect> {
         // Try to find a spot using simple shelf algorithm
         for y in (0..self.height).step_by(32) {

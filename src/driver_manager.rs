@@ -63,8 +63,8 @@ impl DriverManifest {
     pub fn signed_digest(&self) -> Result<String, DriverError> {
         let mut copy = self.clone();
         copy.signature = None;
-        let bytes = serde_json::to_vec(&copy)
-            .map_err(|e| DriverError::Serialization(e.to_string()))?;
+        let bytes =
+            serde_json::to_vec(&copy).map_err(|e| DriverError::Serialization(e.to_string()))?;
         let mut hasher = Sha256::new();
         hasher.update(bytes);
         Ok(format!("{:x}", hasher.finalize()))
@@ -104,14 +104,23 @@ impl DriverRecord {
 pub enum DriverError {
     DuplicateDriver(String),
     UnknownDriver(String),
-    MissingDependency { driver_id: String, dependency_id: String },
-    DependencyInUse { driver_id: String, dependent_id: String },
+    MissingDependency {
+        driver_id: String,
+        dependency_id: String,
+    },
+    DependencyInUse {
+        driver_id: String,
+        dependent_id: String,
+    },
     CapabilityUnavailable(Capability),
     SignatureMissing(String),
     SignatureMismatch(String),
     NotInstalled(String),
     NotEnabled(String),
-    ActiveConsumers { driver_id: String, active_leases: usize },
+    ActiveConsumers {
+        driver_id: String,
+        active_leases: usize,
+    },
     Serialization(String),
 }
 
@@ -123,11 +132,19 @@ impl fmt::Display for DriverError {
             Self::MissingDependency {
                 driver_id,
                 dependency_id,
-            } => write!(f, "driver {} requires dependency {}", driver_id, dependency_id),
+            } => write!(
+                f,
+                "driver {} requires dependency {}",
+                driver_id, dependency_id
+            ),
             Self::DependencyInUse {
                 driver_id,
                 dependent_id,
-            } => write!(f, "driver {} is still required by {}", driver_id, dependent_id),
+            } => write!(
+                f,
+                "driver {} is still required by {}",
+                driver_id, dependent_id
+            ),
             Self::CapabilityUnavailable(capability) => {
                 write!(f, "no driver registered for capability {:?}", capability)
             }
@@ -239,7 +256,11 @@ impl DriverRegistry {
         self.records
             .values()
             .filter(|record| {
-                record.manifest.dependencies.iter().any(|dependency| dependency == id)
+                record
+                    .manifest
+                    .dependencies
+                    .iter()
+                    .any(|dependency| dependency == id)
                     && record.state != DriverState::Removed
             })
             .map(|record| record.manifest.id.clone())
@@ -511,7 +532,11 @@ impl CapabilityBroker {
             .lock()
             .map_err(|_| DriverError::Serialization("driver manager lock poisoned".into()))?;
         let driver_id = manager.acquire_capability(capability.clone())?;
-        Ok(DriverLease::new(Arc::clone(&self.manager), driver_id, capability))
+        Ok(DriverLease::new(
+            Arc::clone(&self.manager),
+            driver_id,
+            capability,
+        ))
     }
 }
 
@@ -536,7 +561,9 @@ mod tests {
 
         let mut bluetooth = DriverManifest::new("bluetooth", "bluetooth", "1.0.0");
         bluetooth.capabilities.push(Capability::Bluetooth);
-        bluetooth.dependencies.push("bluetooth-firmware".to_string());
+        bluetooth
+            .dependencies
+            .push("bluetooth-firmware".to_string());
         let digest = bluetooth.signed_digest().expect("digest");
         bluetooth.signature = Some(PackageSignature {
             key_id: "test-key".to_string(),
@@ -549,7 +576,10 @@ mod tests {
 
         manager.install_driver("bluetooth").unwrap();
         assert_eq!(manager.state("bluetooth"), Some(DriverState::Installed));
-        assert_eq!(manager.state("bluetooth-firmware"), Some(DriverState::Installed));
+        assert_eq!(
+            manager.state("bluetooth-firmware"),
+            Some(DriverState::Installed)
+        );
     }
 
     #[test]

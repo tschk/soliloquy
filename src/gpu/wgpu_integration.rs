@@ -146,7 +146,11 @@ impl WgpuContext {
     }
 
     /// Create a GPU buffer
-    pub fn create_buffer(&self, size: u64, usage: wgpu::BufferUsages) -> Result<wgpu::Buffer, String> {
+    pub fn create_buffer(
+        &self,
+        size: u64,
+        usage: wgpu::BufferUsages,
+    ) -> Result<wgpu::Buffer, String> {
         let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("GPU Buffer"),
             size,

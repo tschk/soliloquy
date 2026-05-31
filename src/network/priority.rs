@@ -163,8 +163,11 @@ pub struct PriorityQueue {
 impl PriorityQueue {
     /// Create a new priority queue
     pub fn new(max_concurrent: usize) -> Self {
-        info!("Creating resource priority queue (max concurrent: {})", max_concurrent);
-        
+        info!(
+            "Creating resource priority queue (max concurrent: {})",
+            max_concurrent
+        );
+
         PriorityQueue {
             requests: Vec::new(),
             next_id: 1,
@@ -207,7 +210,11 @@ impl PriorityQueue {
 
         if let Some(request) = self.requests.pop() {
             self.active_count += 1;
-            debug!("Dequeued resource: {} (priority: {:?})", request.url, request.effective_priority());
+            debug!(
+                "Dequeued resource: {} (priority: {:?})",
+                request.url,
+                request.effective_priority()
+            );
             Some(request)
         } else {
             None
@@ -250,7 +257,9 @@ mod tests {
     #[test]
     fn test_resource_kind_priorities() {
         assert!(ResourceKind::Document.default_priority() > ResourceKind::Image.default_priority());
-        assert!(ResourceKind::Stylesheet.default_priority() > ResourceKind::Media.default_priority());
+        assert!(
+            ResourceKind::Stylesheet.default_priority() > ResourceKind::Media.default_priority()
+        );
     }
 
     #[test]
@@ -264,15 +273,15 @@ mod tests {
     fn test_priority_override() {
         let req = ResourceRequest::new(1, "image.jpg".to_string(), ResourceKind::Image)
             .with_priority(ResourcePriority::High);
-        
+
         assert_eq!(req.priority, ResourcePriority::High);
     }
 
     #[test]
     fn test_viewport_boost() {
-        let req = ResourceRequest::new(1, "image.jpg".to_string(), ResourceKind::Image)
-            .in_viewport(true);
-        
+        let req =
+            ResourceRequest::new(1, "image.jpg".to_string(), ResourceKind::Image).in_viewport(true);
+
         // Should boost to High
         assert_eq!(req.effective_priority(), ResourcePriority::High);
     }
@@ -282,18 +291,30 @@ mod tests {
         let req = ResourceRequest::new(1, "font.woff2".to_string(), ResourceKind::Font)
             .with_priority(ResourcePriority::Medium)
             .preload();
-        
+
         assert_eq!(req.effective_priority(), ResourcePriority::High);
     }
 
     #[test]
     fn test_priority_queue() {
         let mut queue = PriorityQueue::new(6);
-        
-        queue.enqueue(ResourceRequest::new(0, "image.jpg".to_string(), ResourceKind::Image));
-        queue.enqueue(ResourceRequest::new(0, "style.css".to_string(), ResourceKind::Stylesheet));
-        queue.enqueue(ResourceRequest::new(0, "script.js".to_string(), ResourceKind::Script));
-        
+
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "image.jpg".to_string(),
+            ResourceKind::Image,
+        ));
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "style.css".to_string(),
+            ResourceKind::Stylesheet,
+        ));
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "script.js".to_string(),
+            ResourceKind::Script,
+        ));
+
         // Should dequeue stylesheet first (Critical priority)
         let first = queue.dequeue().unwrap();
         assert_eq!(first.kind, ResourceKind::Stylesheet);
@@ -302,21 +323,33 @@ mod tests {
     #[test]
     fn test_max_concurrent() {
         let mut queue = PriorityQueue::new(2);
-        
-        queue.enqueue(ResourceRequest::new(0, "1.jpg".to_string(), ResourceKind::Image));
-        queue.enqueue(ResourceRequest::new(0, "2.jpg".to_string(), ResourceKind::Image));
-        queue.enqueue(ResourceRequest::new(0, "3.jpg".to_string(), ResourceKind::Image));
-        
+
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "1.jpg".to_string(),
+            ResourceKind::Image,
+        ));
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "2.jpg".to_string(),
+            ResourceKind::Image,
+        ));
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "3.jpg".to_string(),
+            ResourceKind::Image,
+        ));
+
         // Should get 2 requests
         assert!(queue.dequeue().is_some());
         assert!(queue.dequeue().is_some());
-        
+
         // Third should be blocked
         assert!(queue.dequeue().is_none());
-        
+
         // Complete one
         queue.complete(1);
-        
+
         // Now can dequeue third
         assert!(queue.dequeue().is_some());
     }
@@ -324,15 +357,23 @@ mod tests {
     #[test]
     fn test_queue_stats() {
         let mut queue = PriorityQueue::new(6);
-        
-        queue.enqueue(ResourceRequest::new(0, "1.jpg".to_string(), ResourceKind::Image));
-        queue.enqueue(ResourceRequest::new(0, "2.jpg".to_string(), ResourceKind::Image));
-        
+
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "1.jpg".to_string(),
+            ResourceKind::Image,
+        ));
+        queue.enqueue(ResourceRequest::new(
+            0,
+            "2.jpg".to_string(),
+            ResourceKind::Image,
+        ));
+
         assert_eq!(queue.pending_count(), 2);
         assert_eq!(queue.active_count(), 0);
-        
+
         queue.dequeue();
-        
+
         assert_eq!(queue.pending_count(), 1);
         assert_eq!(queue.active_count(), 1);
     }
@@ -341,7 +382,7 @@ mod tests {
     fn test_request_ordering() {
         let low = ResourceRequest::new(1, "low".to_string(), ResourceKind::Image);
         let high = ResourceRequest::new(2, "high".to_string(), ResourceKind::Stylesheet);
-        
+
         assert!(low < high); // Lower priority sorts first (higher at end for pop)
     }
 }

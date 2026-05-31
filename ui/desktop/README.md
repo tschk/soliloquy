@@ -63,7 +63,7 @@ Set `VITE_TABLEWARE_BASE_URL` if your optional search service is not running on 
 
 ### Build Output
 
-`bun run build` emits a static bundle in `build/`. `sold` serves that directory from `/usr/local/share/soliloquy/ui` at runtime.
+`bun run build` emits a static bundle in `build/`. `sold` serves that directory from `/usr/local/share/soliloquy/bundle` at runtime.
 
 ## Architecture
 

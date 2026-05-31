@@ -119,10 +119,7 @@ impl PrefetchManager {
             return;
         }
 
-        let history = self
-            .hover_history
-            .entry(url.clone())
-            .or_default();
+        let history = self.hover_history.entry(url.clone()).or_default();
         history.push(Instant::now());
 
         // If hovered multiple times or for extended period, prefetch

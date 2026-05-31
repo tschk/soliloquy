@@ -122,7 +122,7 @@ impl GenericClockController {
 impl ClockDriver for GenericClockController {
     fn enable(&mut self, clock: ClockId) -> DriverResult<()> {
         let idx = self.find_clock_idx(clock)?;
-        
+
         // Enable parent first if needed
         if let Some(parent_id) = self.states[idx].parent {
             self.enable(parent_id)?;
@@ -192,10 +192,10 @@ impl ClockDriver for GenericClockController {
 
     fn set_parent(&mut self, clock: ClockId, parent: ClockId) -> DriverResult<()> {
         let idx = self.find_clock_idx(clock)?;
-        
+
         // Verify parent exists
         self.find_clock_idx(parent)?;
-        
+
         self.states[idx].parent = Some(parent);
         Ok(())
     }
@@ -219,8 +219,8 @@ pub enum AllwinnerPllType {
 /// Allwinner CCU (Clock Control Unit)
 pub struct AllwinnerCcu {
     base: *mut u32,
-    hosc_rate: ClockRate,  // 24 MHz crystal
-    losc_rate: ClockRate,  // 32.768 kHz RTC crystal
+    hosc_rate: ClockRate, // 24 MHz crystal
+    losc_rate: ClockRate, // 32.768 kHz RTC crystal
 }
 
 /// Allwinner A527 CCU register offsets
@@ -235,20 +235,20 @@ pub mod aw_ccu_regs {
     pub const PLL_VIDEO1: u32 = 0x048;
     pub const PLL_VE: u32 = 0x058;
     pub const PLL_AUDIO: u32 = 0x078;
-    
+
     // Bus gates
     pub const BUS_CLK_GATE0: u32 = 0x800;
     pub const BUS_CLK_GATE1: u32 = 0x804;
     pub const BUS_CLK_GATE2: u32 = 0x808;
     pub const BUS_CLK_GATE3: u32 = 0x80C;
-    
+
     // Module clocks
     pub const MMC0_CLK: u32 = 0x830;
     pub const MMC1_CLK: u32 = 0x834;
     pub const MMC2_CLK: u32 = 0x838;
     pub const UART_CLK: u32 = 0x90C;
     pub const SPI_CLK: u32 = 0x940;
-    
+
     // Reset registers
     pub const BUS_RST0: u32 = 0x1000;
     pub const BUS_RST1: u32 = 0x1004;
@@ -288,7 +288,7 @@ impl AllwinnerCcu {
         let n = ((reg_val >> 8) & 0xFF) + 1;
         let m = (reg_val & 0x1) + 1;
         let p = ((reg_val >> 16) & 0x3) + 1;
-        
+
         let rate = self.hosc_rate.0 * n as u64 / (m as u64 * p as u64);
         ClockRate(rate)
     }
@@ -305,6 +305,10 @@ impl AllwinnerCcu {
         // PERIPH0 is typically 2x the basic rate
         let base_rate = self.calc_pll_rate(reg);
         ClockRate(base_rate.0 * 2)
+    }
+
+    pub fn get_losc_rate(&self) -> ClockRate {
+        self.losc_rate
     }
 
     /// Enable a bus clock gate
@@ -332,7 +336,11 @@ impl AllwinnerCcu {
     }
 
     /// Configure MMC clock
-    pub fn configure_mmc_clock(&mut self, mmc_idx: u32, rate: ClockRate) -> DriverResult<ClockRate> {
+    pub fn configure_mmc_clock(
+        &mut self,
+        mmc_idx: u32,
+        rate: ClockRate,
+    ) -> DriverResult<ClockRate> {
         if mmc_idx > 2 {
             return Err(DriverError::InvalidParam);
         }
@@ -346,7 +354,7 @@ impl AllwinnerCcu {
 
         // Use PERIPH0(2x) as source
         let src_rate = self.get_periph0_pll_rate();
-        
+
         // Calculate dividers (N and M)
         let target = rate.0;
         let mut best_n = 0u32;
@@ -368,7 +376,7 @@ impl AllwinnerCcu {
         let reg_val = (1 << 31)       // Enable
                     | (1 << 24)       // Source: PLL_PERIPH0(2x)
                     | (best_n << 8)   // N divider
-                    | best_m;         // M divider
+                    | best_m; // M divider
 
         self.write_reg(clk_reg, reg_val);
 
@@ -440,7 +448,7 @@ impl ClockDriver for AllwinnerCcu {
 
     fn get_parent(&self, _clock: ClockId) -> DriverResult<Option<ClockId>> {
         // Simplified: most clocks derive from PERIPH0 or CPU PLL
-        Ok(Some(ClockId(4)))  // PLL_PERIPH0
+        Ok(Some(ClockId(4))) // PLL_PERIPH0
     }
 
     fn set_parent(&mut self, _clock: ClockId, _parent: ClockId) -> DriverResult<()> {

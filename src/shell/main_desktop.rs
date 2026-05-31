@@ -10,6 +10,8 @@
 //! cargo run --bin soliloquy_desktop --features desktop
 //! ```
 
+#![allow(dead_code, unused_imports)]
+
 #[cfg(not(feature = "gpui"))]
 mod browser_optimizations;
 #[cfg(not(feature = "gpui"))]

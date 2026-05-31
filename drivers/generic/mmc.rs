@@ -41,12 +41,12 @@ pub mod cmd {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MmcResponse {
     None,
-    R1,    // Normal response
-    R1b,   // Normal response with busy
-    R2,    // CID/CSD register
-    R3,    // OCR register
-    R6,    // Published RCA
-    R7,    // Card interface condition
+    R1,  // Normal response
+    R1b, // Normal response with busy
+    R2,  // CID/CSD register
+    R3,  // OCR register
+    R6,  // Published RCA
+    R7,  // Card interface condition
 }
 
 /// MMC command flags
@@ -82,22 +82,22 @@ pub struct MmcData<'a> {
 pub trait MmcHostOps {
     /// Send a command
     fn send_cmd(&mut self, cmd: u32, arg: u32, flags: MmcCmdFlags) -> DriverResult<u32>;
-    
+
     /// Read data after command
     fn read_data(&mut self, buffer: &mut [u8], block_size: u32) -> DriverResult<()>;
-    
+
     /// Write data with command
     fn write_data(&mut self, data: &[u8], block_size: u32) -> DriverResult<()>;
-    
+
     /// Set bus width
     fn set_bus_width(&mut self, width: MmcBusWidth) -> DriverResult<()>;
-    
+
     /// Set clock frequency
     fn set_clock(&mut self, freq_hz: u32) -> DriverResult<()>;
-    
+
     /// Wait for card to be ready
     fn wait_ready(&mut self, timeout_ms: u32) -> DriverResult<()>;
-    
+
     /// Check if card is present
     fn card_detect(&self) -> bool;
 }
@@ -199,7 +199,7 @@ impl<H: MmcHostOps> GenericMmcDriver<H> {
         for _ in 0..100 {
             let ocr = self.host.send_cmd(
                 cmd::SEND_OP_COND,
-                0x40FF8080,  // High capacity, sector mode
+                0x40FF8080, // High capacity, sector mode
                 MmcCmdFlags {
                     response: MmcResponse::R3,
                     ..Default::default()
@@ -288,7 +288,7 @@ impl<H: MmcHostOps> GenericMmcDriver<H> {
         // ACMD6: set bus width to 4-bit
         self.host.send_cmd(
             cmd::SD_SET_BUS_WIDTH,
-            2,  // 4-bit mode
+            2, // 4-bit mode
             MmcCmdFlags {
                 response: MmcResponse::R1,
                 ..Default::default()
@@ -317,11 +317,11 @@ impl<H: MmcHostOps> GenericMmcDriver<H> {
         // Would parse CSD register for actual capacity
         // For now, return common sizes
         match card_type {
-            MmcCardType::Sd => 2 * 1024 * 1024 * 1024,      // 2GB
-            MmcCardType::SdHc => 32 * 1024 * 1024 * 1024,   // 32GB
-            MmcCardType::SdXc => 64 * 1024 * 1024 * 1024,   // 64GB
-            MmcCardType::Emmc => 16 * 1024 * 1024 * 1024,   // 16GB
-            MmcCardType::Mmc => 512 * 1024 * 1024,          // 512MB
+            MmcCardType::Sd => 2 * 1024 * 1024 * 1024,    // 2GB
+            MmcCardType::SdHc => 32 * 1024 * 1024 * 1024, // 32GB
+            MmcCardType::SdXc => 64 * 1024 * 1024 * 1024, // 64GB
+            MmcCardType::Emmc => 16 * 1024 * 1024 * 1024, // 16GB
+            MmcCardType::Mmc => 512 * 1024 * 1024,        // 512MB
         }
     }
 }
@@ -341,7 +341,7 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
 
         // Try to identify card type
         let is_sd_v2 = self.check_sd_card()?;
-        
+
         let card_type = if is_sd_v2 {
             self.init_sd_card(true)?
         } else {
@@ -356,7 +356,10 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
         self.get_cid()?;
 
         // Get RCA
-        let is_sd = matches!(card_type, MmcCardType::Sd | MmcCardType::SdHc | MmcCardType::SdXc);
+        let is_sd = matches!(
+            card_type,
+            MmcCardType::Sd | MmcCardType::SdHc | MmcCardType::SdXc
+        );
         self.rca = self.get_rca(is_sd)?;
 
         // Select card
@@ -377,9 +380,9 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
 
         // Increase clock for normal operation
         let max_freq = match card_type {
-            MmcCardType::SdHc | MmcCardType::SdXc => 50_000_000,  // 50 MHz
-            MmcCardType::Emmc => 52_000_000,  // 52 MHz (HS mode)
-            _ => 25_000_000,  // 25 MHz
+            MmcCardType::SdHc | MmcCardType::SdXc => 50_000_000, // 50 MHz
+            MmcCardType::Emmc => 52_000_000,                     // 52 MHz (HS mode)
+            _ => 25_000_000,                                     // 25 MHz
         };
         self.host.set_clock(max_freq)?;
 
@@ -406,13 +409,13 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
     fn read_blocks(&mut self, start_block: u64, buffer: &mut [u8]) -> DriverResult<usize> {
         let info = self.card_info.as_ref().ok_or(DriverError::NotFound)?;
         let block_size = info.block_size as usize;
-        
+
         if buffer.len() < block_size {
             return Err(DriverError::InvalidParam);
         }
 
         let block_count = buffer.len() / block_size;
-        
+
         // For SDHC/SDXC, block address is used directly
         // For SD, byte address is used
         let addr = match info.card_type {
@@ -442,7 +445,8 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
         // Read data
         for i in 0..block_count {
             let offset = i * block_size;
-            self.host.read_data(&mut buffer[offset..offset + block_size], block_size as u32)?;
+            self.host
+                .read_data(&mut buffer[offset..offset + block_size], block_size as u32)?;
         }
 
         // Stop transmission for multi-block
@@ -463,13 +467,13 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
     fn write_blocks(&mut self, start_block: u64, data: &[u8]) -> DriverResult<usize> {
         let info = self.card_info.as_ref().ok_or(DriverError::NotFound)?;
         let block_size = info.block_size as usize;
-        
+
         if data.len() < block_size {
             return Err(DriverError::InvalidParam);
         }
 
         let block_count = data.len() / block_size;
-        
+
         let addr = match info.card_type {
             MmcCardType::SdHc | MmcCardType::SdXc | MmcCardType::Emmc => start_block as u32,
             _ => (start_block * block_size as u64) as u32,
@@ -496,7 +500,8 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
         // Write data
         for i in 0..block_count {
             let offset = i * block_size;
-            self.host.write_data(&data[offset..offset + block_size], block_size as u32)?;
+            self.host
+                .write_data(&data[offset..offset + block_size], block_size as u32)?;
         }
 
         // Stop transmission for multi-block
@@ -519,7 +524,7 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
 
     fn erase_blocks(&mut self, start_block: u64, block_count: u64) -> DriverResult<()> {
         let info = self.card_info.as_ref().ok_or(DriverError::NotFound)?;
-        
+
         let start_addr = match info.card_type {
             MmcCardType::SdHc | MmcCardType::SdXc | MmcCardType::Emmc => start_block as u32,
             _ => (start_block * info.block_size as u64) as u32,
@@ -581,16 +586,16 @@ impl<H: MmcHostOps> MmcDriver for GenericMmcDriver<H> {
 pub trait BlockDevice {
     /// Read sectors
     fn read(&mut self, sector: u64, buffer: &mut [u8]) -> DriverResult<()>;
-    
+
     /// Write sectors
     fn write(&mut self, sector: u64, data: &[u8]) -> DriverResult<()>;
-    
+
     /// Get sector size in bytes
     fn sector_size(&self) -> u32;
-    
+
     /// Get total sector count
     fn sector_count(&self) -> u64;
-    
+
     /// Sync/flush
     fn sync(&mut self) -> DriverResult<()>;
 }

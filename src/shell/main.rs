@@ -2,6 +2,8 @@
 //!
 //! This is the main entry point for desktop and Alpine/Linux builds.
 
+#![allow(dead_code, unused_imports)]
+
 mod browser_optimizations;
 mod engine_bridge;
 mod js_engine;
@@ -70,9 +72,9 @@ fn main() {
     // Create native window
     #[cfg(target_os = "linux")]
     {
-        use servo_embedder::InputEvent;
         use platform::linux::LinuxWindow;
         use platform::{Window, WindowEvent};
+        use servo_embedder::InputEvent;
 
         info!("Creating Linux window...");
 

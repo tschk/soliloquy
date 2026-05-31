@@ -4,8 +4,8 @@
 //!
 //! Run with: cargo run --example browser_simulation --target x86_64-unknown-linux-gnu
 
+use soliloquy_browser_optimizations::network::{PrefetchPriority, ResourceType};
 use soliloquy_browser_optimizations::*;
-use soliloquy_browser_optimizations::network::{ResourceType, PrefetchPriority};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -23,8 +23,12 @@ fn main() {
 
     println!("   ✓ Tab residency manager");
     println!("   ✓ GC scheduler");
-    println!("   ✓ Damage tracker ({}x{}, {} tiles)",
-        1920, 1080, damage_tracker.get_damaged_tiles().len());
+    println!(
+        "   ✓ Damage tracker ({}x{}, {} tiles)",
+        1920,
+        1080,
+        damage_tracker.get_damaged_tiles().len()
+    );
     println!("   ✓ Prefetch manager\n");
 
     // Simulate opening 150 tabs
@@ -51,7 +55,10 @@ fn main() {
 
     let stats = residency.get_stats();
     println!("   ✓ Created {} tabs (all Active)", stats.active_count);
-    println!("   Memory usage: {:.2} MB\n", stats.total_memory as f64 / 1024.0 / 1024.0);
+    println!(
+        "   Memory usage: {:.2} MB\n",
+        stats.total_memory as f64 / 1024.0 / 1024.0
+    );
 
     // Simulate user viewing first 5 tabs for a bit
     println!("3. User actively browsing first 5 tabs...");
@@ -74,7 +81,10 @@ fn main() {
     println!("   - Warm: {} tabs", stats.warm_count);
     println!("   - Cold: {} tabs", stats.cold_count);
     println!("   - Frozen: {} tabs", stats.frozen_count);
-    println!("   Memory usage: {:.2} MB\n", stats.total_memory as f64 / 1024.0 / 1024.0);
+    println!(
+        "   Memory usage: {:.2} MB\n",
+        stats.total_memory as f64 / 1024.0 / 1024.0
+    );
 
     // Further evictions
     println!("5. Aggressive eviction (simulating longer idle)...");
@@ -95,9 +105,11 @@ fn main() {
     println!("   - Warm: {} tabs", stats.warm_count);
     println!("   - Cold: {} tabs", stats.cold_count);
     println!("   - Frozen: {} tabs", stats.frozen_count);
-    println!("   Memory usage: {:.2} MB ({}% reduction)\n",
+    println!(
+        "   Memory usage: {:.2} MB ({}% reduction)\n",
         stats.total_memory as f64 / 1024.0 / 1024.0,
-        ((1.0 - stats.total_memory as f64 / (150.0 * 20.0 * 1024.0 * 1024.0)) * 100.0) as i32);
+        ((1.0 - stats.total_memory as f64 / (150.0 * 20.0 * 1024.0 * 1024.0)) * 100.0) as i32
+    );
 
     // Simulate prefetching
     println!("6. Network optimizations...");
@@ -108,13 +120,16 @@ fn main() {
     );
     prefetch.record_hover("https://rust-lang.org".to_string());
     prefetch.record_hover("https://rust-lang.org".to_string());
-    println!("   ✓ DNS prefetch queued: {} requests", prefetch.pending_count());
+    println!(
+        "   ✓ DNS prefetch queued: {} requests",
+        prefetch.pending_count()
+    );
 
     // Check GC scheduling
     println!("\n7. V8 GC scheduling...");
     gc_scheduler.set_idle_threshold(Duration::from_millis(50));
     sleep(Duration::from_millis(100));
-    
+
     if let Some(gc_type) = gc_scheduler.should_run_gc() {
         println!("   ✓ GC scheduled: {:?}", gc_type);
         gc_scheduler.record_gc(gc_type, Duration::from_millis(10));
@@ -132,7 +147,10 @@ fn main() {
     println!("\n9. Final statistics:");
     let stats = residency.get_stats();
     println!("   Total tabs: {}", tab_ids.len());
-    println!("   Memory usage: {:.2} MB", stats.total_memory as f64 / 1024.0 / 1024.0);
+    println!(
+        "   Memory usage: {:.2} MB",
+        stats.total_memory as f64 / 1024.0 / 1024.0
+    );
     println!("   Target achieved: {} tabs with <3GB RAM ✓", tab_ids.len());
 
     println!("\n=== Demo Complete ===");

@@ -2,10 +2,8 @@
 //!
 //! Provides snapshot caching, bytecode caching, and idle-time GC scheduling.
 
-pub mod snapshots;
 pub mod gc_scheduler;
+pub mod snapshots;
 
-pub use snapshots::{
-    V8Snapshot, V8BytecodeCache, SnapshotManager, BytecodeCache, hash_source,
-};
-pub use gc_scheduler::{GcScheduler, GcType, GcStrategy, GcStats};
+pub use gc_scheduler::{GcScheduler, GcStats, GcStrategy, GcType};
+pub use snapshots::{hash_source, BytecodeCache, SnapshotManager, V8BytecodeCache, V8Snapshot};
