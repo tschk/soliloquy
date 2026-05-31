@@ -6,18 +6,21 @@ This project is early-stage and not production-ready.
 
 ## What Is In This Repo
 
-The root workspace currently contains four Rust packages:
+The root workspace currently contains these Rust packages:
 
 - `src/` - `soliloquy_browser_optimizations`
 - `src/shell/` - `soliloquy-shell`
-- `src/rv8/` - `rv8`
 - `sold/` - `sold`
+- `drivers/generic/` - `soliloquy-drivers`
+- `system/kernelctl/` - `sol-kernelctl`
+- `system/netd/` - `sol-netd`
+- `system/solfsctl/` - `solfsctl`
 
 Other important top-level areas:
 
 - `system/alpine/` - appliance rootfs assembly, staging, and QEMU scripts
 - `ui/desktop/` - Svelte appliance UI used by the dev flow and Alpine staging
-- `bundle/` - static UI assets served by `sold`
+- `bundle/` - supplemental static assets served by `sold`, including the terminal page and Ghostty VT bundle
 - `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
 - `docs/` - project docs for the current Cargo, Bun, Alpine, Servo/RV8, and `sold` paths
 
@@ -25,7 +28,7 @@ Other important top-level areas:
 
 - `soliloquy-shell` handles shell/runtime concerns, networking, platform integration, and the Servo/V8 bridge
 - `soliloquy_browser_optimizations` provides cache, memory residency, GPU, network, and V8 support modules
-- `rv8` is the experimental browser/runtime engine crate with IPC, rendering, parsing, and JS execution paths
+- `../rv8` is the sibling experimental browser/runtime engine checkout with IPC, rendering, parsing, and JS execution paths
 - `sold` is a local Axum service that serves bundled UI assets and simple file/settings APIs
 - `system/alpine` packages the runtime into an appliance-style Alpine image and boots it under QEMU
 - `third_party/servo` is an in-tree Servo checkout with local `rv8` bridge patches and a typed snapshot bridge module
@@ -43,8 +46,9 @@ Targeted packages:
 
 ```sh
 cargo test -p soliloquy-shell
-cargo test -p rv8
 cargo test -p sold
+cargo test -p sol-netd
+cargo test -p sol-kernelctl
 ```
 
 ### Local dev flow
@@ -64,6 +68,8 @@ cargo test -p sold
 ./system/alpine/scripts/setup-host.sh
 ./system/alpine/scripts/qemu-v0.sh
 ```
+
+`qemu-v0.sh` is the canonical appliance entry point. It builds the Svelte bundle with Bun, prepares Linux runtime binaries for the selected `QEMU_ARCH`, stages the current `ui/desktop/build` output at `/usr/local/share/soliloquy/bundle`, adds the supplemental `bundle/terminal` assets, builds the rootfs image, and launches QEMU unless `QEMU_RUN=0` is set.
 
 More detail lives in [system/alpine/README.md](system/alpine/README.md).
 

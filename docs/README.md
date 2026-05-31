@@ -6,7 +6,7 @@ Browser-engine work lives in `atechnology-company/rv8` (`../rv8` locally). Solil
 
 The Alpine appliance owns the Svelte browser chrome and `sold` bridge. Servo is launched with its browser chrome disabled there so `os://terminal`, tabs, modes, and navigation controls do not double up.
 
-The macOS desktop path is browser-only Servo with its built-in chrome disabled. It must not start `sold` or load the Svelte appliance chrome; see [Browser Chrome](./browser_chrome.md).
+The macOS desktop path uses Crepuscularity GPUI chrome with Servo's built-in chrome disabled. Its smoke check is dry-run only; the real launcher can start or reuse `sold` for local runtime APIs, but it must not load the Svelte appliance chrome. See [Browser Chrome](./browser_chrome.md).
 
 ## Core
 

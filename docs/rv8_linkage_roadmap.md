@@ -30,7 +30,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - A standalone local `../rv8` repository is the canonical browser-engine checkout; Soliloquy no longer builds an in-repo RV8 crate as an active workspace member.
 - The appliance session launches Servo with its built-in browser chrome disabled so the Svelte appliance shell provides the only browser UI surface.
 - The Svelte appliance shell now has Zen-style vertical tabs, compact mode, split columns, split rows, and grid modes.
-- The macOS desktop path launches Crepuscularity GPUI chrome from `../crepuscularity` and starts Servo with `--no-browser-chrome`; it does not start `sold` or the Svelte appliance shell.
+- The macOS desktop path launches Crepuscularity GPUI chrome from `../crepuscularity` and starts Servo with `--no-browser-chrome`; it can start or reuse `sold` for local runtime APIs but does not serve the Svelte appliance shell.
 - Browser-global evaluation paths still fall back to Servo's existing `mozjs` path until DOM/Web IDL ownership moves to V8.
 
 ## What Has Been Done

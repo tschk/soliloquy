@@ -82,6 +82,7 @@ The staging script now fails fast when binary formats do not match.
 `qemu-v0.sh` now prepares Linux binaries automatically before staging:
 
 - `sold` is built in a Linux container and stored under `build/alpine/artifacts/linux-<arch>/sold`
+- `sol-netd` and `sol-kernelctl` are built for the same Linux target
 - `servo` prefers an in-tree Linux ELF build; if unavailable on `x86_64`, it fetches the Servo Linux release binary into `build/alpine/artifacts/linux-<arch>/servo`
 
 Override servo source explicitly:
@@ -99,13 +100,42 @@ SERVO_FORCE_REBUILD=1 QEMU_ARCH=x86_64 ./system/alpine/scripts/qemu-v0.sh
 Manual steps:
 
 ```sh
+QEMU_ARCH="${QEMU_ARCH:-x86_64}"
+export QEMU_ARCH
+SERVO_BUILD=0 ./system/alpine/scripts/ensure-servo-fork.sh
+./tools/soliloquy/build_ui.sh
+LINUX_BIN_DIR="$(./system/alpine/scripts/ensure-linux-runtime-binaries.sh)"
 ./system/alpine/scripts/build-rootfs.sh
-./system/alpine/scripts/ensure-servo-fork.sh
-./system/alpine/scripts/stage-soliloquy-artifacts.sh build/alpine/rootfs
 ./system/alpine/scripts/fetch-qemu-kernel.sh build/alpine/qemu
+SOLILOQUY_ROOTFS_FORMAT="${SOLILOQUY_ROOTFS_FORMAT:-solfs}"
+if [ "${SOLILOQUY_ROOTFS_FORMAT}" = "solfs" ]; then
+  SOLFS_MODULE="${SOLFS_MODULE:-build/alpine/qemu/solfs.ko}"
+  ./system/alpine/scripts/build-solfs-module.sh "${SOLFS_MODULE}"
+  export SOLFS_MODULE
+fi
+export SERVO_BIN="${LINUX_BIN_DIR}/servo"
+export SOLD_BIN="${LINUX_BIN_DIR}/sold"
+export SOL_NETD_BIN="${LINUX_BIN_DIR}/sol-netd"
+export SOL_KERNELCTL_BIN="${LINUX_BIN_DIR}/sol-kernelctl"
+if [ -d "${LINUX_BIN_DIR}/servo-runtime-root" ]; then
+  export SERVO_RUNTIME_DIR="${LINUX_BIN_DIR}/servo-runtime-root"
+else
+  unset SERVO_RUNTIME_DIR
+fi
+./system/alpine/scripts/stage-soliloquy-artifacts.sh build/alpine/rootfs
+SOLILOQUY_ROOTFS_FORMAT="${SOLILOQUY_ROOTFS_FORMAT}" ./system/alpine/scripts/build-rootfs-image.sh build/alpine/rootfs build/alpine/qemu
 ./system/alpine/scripts/build-qemu-initramfs.sh build/alpine/rootfs build/alpine/qemu/rootfs.cpio.gz
+SOLILOQUY_RAM_ROOT="${SOLILOQUY_RAM_ROOT:-auto}" \
+SOLILOQUY_RAM_ROOT_MIN_MB="${SOLILOQUY_RAM_ROOT_MIN_MB:-3072}" \
+SOLILOQUY_ROOTFS_IMAGE="${SOLILOQUY_ROOTFS_IMAGE:-build/alpine/qemu/soliloquy-rootfs.${SOLILOQUY_ROOTFS_FORMAT}}" \
+SOLILOQUY_ROOTFS_IMAGE_REQUIRED="${SOLILOQUY_ROOTFS_IMAGE_REQUIRED:-1}" \
+SOLILOQUY_ROOT_FALLBACK_FSTYPE="${SOLILOQUY_ROOT_FALLBACK_FSTYPE:-${SOLILOQUY_ROOTFS_FORMAT}}" \
 ./system/alpine/scripts/run-qemu.sh build/alpine/qemu
 ```
+
+The manual sequence mirrors `scripts/qemu-v0.sh`. In normal use prefer `./system/alpine/scripts/qemu-v0.sh`; keep manual runs aligned with that script when debugging one stage at a time.
+
+The staged UI path is `/usr/local/share/soliloquy/bundle`. `stage-soliloquy-artifacts.sh` copies `ui/desktop/build` there, then overlays `bundle/terminal`, optional `files` and `settings` pages, and any shared static assets from `bundle/assets`.
 
 `run-qemu.sh` defaults to `console=tty0 console=ttyS0 rdinit=/init`, so boot logs appear in both the QEMU window and terminal.
 You can override kernel args with:
