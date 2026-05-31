@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::net::lookup_host;
 use tokio::time;
 
 /// Default DNS cache TTL (5 minutes)
@@ -111,29 +112,35 @@ impl ConnectionManager {
     /// # Returns
     /// Vector of resolved IP addresses
     pub async fn resolve_dns(&self, hostname: &str) -> Result<Vec<IpAddr>, String> {
-        // Check cache first
+        let hostname = hostname.trim().trim_end_matches('.');
+        if hostname.is_empty() {
+            return Err("DNS lookup failed: hostname is empty".to_string());
+        }
+
         {
-            let cache = self.dns_cache.lock().unwrap();
+            let mut cache = self.dns_cache.lock().unwrap();
             if let Some(entry) = cache.get(hostname) {
                 if !entry.is_expired() {
                     debug!("DNS cache hit for {}", hostname);
                     return Ok(entry.addresses.clone());
                 }
+                cache.remove(hostname);
             }
         }
 
         debug!("DNS cache miss for {}, performing lookup", hostname);
 
-        // TODO: Implement actual DNS lookup with tokio
-        // Placeholder implementation - in production would use tokio::net::lookup_host
-        let addresses = match hostname {
-            "localhost" => vec![IpAddr::from([127, 0, 0, 1])],
-            "example.com" => vec![IpAddr::from([93, 184, 216, 34])],
-            _ => {
-                // Simulate DNS lookup
-                vec![IpAddr::from([93, 184, 216, 34])]
-            }
-        };
+        let mut addresses = lookup_host((hostname, 0))
+            .await
+            .map_err(|e| format!("DNS lookup failed for {}: {}", hostname, e))?
+            .map(|socket_addr| socket_addr.ip())
+            .collect::<Vec<_>>();
+        addresses.sort_unstable();
+        addresses.dedup();
+
+        if addresses.is_empty() {
+            return Err(format!("DNS lookup failed for {}: no addresses", hostname));
+        }
 
         // Cache result
         let entry = DnsEntry {
@@ -257,7 +264,9 @@ impl ConnectionManager {
         let _ = self.resolve_dns(hostname).await?;
 
         // Reserve connection slot
-        let _ = self.get_connection(hostname);
+        if let Some(connection_id) = self.get_connection(hostname) {
+            self.release_connection(connection_id);
+        }
 
         Ok(())
     }
@@ -335,10 +344,21 @@ mod tests {
     async fn test_dns_caching() {
         let manager = ConnectionManager::new();
 
-        let result1 = manager.resolve_dns("example.com").await.unwrap();
-        let result2 = manager.resolve_dns("example.com").await.unwrap();
+        let result1 = manager.resolve_dns("localhost").await.unwrap();
+        let result2 = manager.resolve_dns("localhost").await.unwrap();
 
         assert_eq!(result1, result2);
+    }
+
+    #[tokio::test]
+    async fn test_dns_lookup_reports_unresolvable_host() {
+        let manager = ConnectionManager::new();
+        let err = manager
+            .resolve_dns("soliloquy.invalid")
+            .await
+            .expect_err("invalid test TLD should not resolve");
+
+        assert!(err.contains("DNS lookup failed"));
     }
 
     #[test]

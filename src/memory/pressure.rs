@@ -96,6 +96,9 @@ impl MemoryPressureMonitor {
     /// Get memory usage as percentage of critical threshold
     pub fn get_usage_percentage(&self) -> f32 {
         let usage = self.current_usage.load(Ordering::SeqCst);
+        if self.critical_threshold == 0 {
+            return 0.0;
+        }
         (usage as f32 / self.critical_threshold as f32) * 100.0
     }
 }
@@ -110,7 +113,6 @@ impl Default for MemoryPressureMonitor {
     }
 }
 
-/// System memory information (placeholder for actual system calls)
 pub struct SystemMemoryInfo {
     /// Total system memory in bytes
     pub total_memory: usize,
@@ -158,15 +160,39 @@ impl SystemMemoryInfo {
         })
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     pub fn get() -> Result<Self, String> {
-        // Placeholder for other platforms
-        // TODO: Add native per-platform memory probes when we support more hosts.
+        let total_memory = sysctl_usize("hw.memsize")?;
+        let page_size = sysctl_usize("hw.pagesize")?;
+        let vm_stat = std::process::Command::new("vm_stat")
+            .output()
+            .map_err(|e| format!("Failed to run vm_stat: {}", e))?;
+        if !vm_stat.status.success() {
+            return Err(format!("vm_stat exited with status {}", vm_stat.status));
+        }
+        let stdout = String::from_utf8(vm_stat.stdout)
+            .map_err(|e| format!("Failed to decode vm_stat output: {}", e))?;
+
+        let free_pages = parse_vm_stat_pages(&stdout, "Pages free:").unwrap_or(0);
+        let inactive_pages = parse_vm_stat_pages(&stdout, "Pages inactive:").unwrap_or(0);
+        let speculative_pages = parse_vm_stat_pages(&stdout, "Pages speculative:").unwrap_or(0);
+        let available_memory = free_pages
+            .saturating_add(inactive_pages)
+            .saturating_add(speculative_pages)
+            .saturating_mul(page_size)
+            .min(total_memory);
+        let used_memory = total_memory.saturating_sub(available_memory);
+
         Ok(SystemMemoryInfo {
-            total_memory: 8 * 1024 * 1024 * 1024,
-            available_memory: 4 * 1024 * 1024 * 1024,
-            used_memory: 4 * 1024 * 1024 * 1024,
+            total_memory,
+            available_memory,
+            used_memory,
         })
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    pub fn get() -> Result<Self, String> {
+        Err("System memory probing is not implemented for this platform".to_string())
     }
 }
 
@@ -179,6 +205,41 @@ fn parse_meminfo_value(line: &str) -> Option<usize> {
     } else {
         None
     }
+}
+
+#[cfg(target_os = "macos")]
+fn sysctl_usize(name: &str) -> Result<usize, String> {
+    let output = std::process::Command::new("sysctl")
+        .args(["-n", name])
+        .output()
+        .map_err(|e| format!("Failed to run sysctl {}: {}", name, e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "sysctl {} exited with status {}",
+            name, output.status
+        ));
+    }
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| format!("Failed to decode sysctl {} output: {}", name, e))?;
+    stdout
+        .trim()
+        .parse::<usize>()
+        .map_err(|e| format!("Failed to parse sysctl {} output: {}", name, e))
+}
+
+#[cfg(target_os = "macos")]
+fn parse_vm_stat_pages(output: &str, key: &str) -> Option<usize> {
+    output
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(key))
+        .and_then(|value| {
+            value
+                .trim()
+                .trim_end_matches('.')
+                .replace(',', "")
+                .parse::<usize>()
+                .ok()
+        })
 }
 
 #[cfg(test)]
@@ -212,6 +273,14 @@ mod tests {
     }
 
     #[test]
+    fn test_zero_critical_threshold_usage_percentage() {
+        let monitor = MemoryPressureMonitor::new(0, 0);
+        monitor.update_usage(1024);
+
+        assert_eq!(monitor.get_usage_percentage(), 0.0);
+    }
+
+    #[test]
     fn test_monitoring_lifecycle() {
         let monitor = MemoryPressureMonitor::default();
 
@@ -229,5 +298,7 @@ mod tests {
 
         let info = info.unwrap();
         assert!(info.total_memory > 0);
+        assert!(info.used_memory <= info.total_memory);
+        assert!(info.available_memory <= info.total_memory);
     }
 }

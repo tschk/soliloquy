@@ -9,27 +9,7 @@ use log::debug;
 /// Level 3 provides good balance of speed and compression ratio
 const ZSTD_COMPRESSION_LEVEL: i32 = 3;
 
-/// Compress data using zstd
-///
-/// TODO: Enable the `real_compression` feature and add zstd dependency before production use.
-#[cfg(not(feature = "real_compression"))]
-pub fn compress(data: &[u8]) -> Result<Vec<u8>, String> {
-    warn!(
-        "Using placeholder compression (no-op). Enable the `real_compression` feature \
-         to use real zstd compression."
-    );
-    debug!(
-        "Compressing {} bytes with zstd level {} (placeholder, no compression performed)",
-        data.len(),
-        ZSTD_COMPRESSION_LEVEL
-    );
-
-    // For now, just return a copy to establish the interface
-    Ok(data.to_vec())
-}
-
 /// Compress data using real zstd compression
-#[cfg(feature = "real_compression")]
 pub fn compress(data: &[u8]) -> Result<Vec<u8>, String> {
     debug!(
         "Compressing {} bytes with zstd level {}",
@@ -41,26 +21,7 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("zstd compression failed: {}", e))
 }
 
-/// Decompress zstd-compressed data
-///
-/// TODO: Enable the `real_compression` feature and add zstd dependency before production use.
-#[cfg(not(feature = "real_compression"))]
-pub fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
-    warn!(
-        "Using placeholder decompression (no-op). Enable the `real_compression` feature \
-         to use real zstd decompression."
-    );
-    debug!(
-        "Decompressing {} bytes (placeholder, no decompression performed)",
-        compressed.len()
-    );
-
-    // Placeholder for actual zstd decompression
-    Ok(compressed.to_vec())
-}
-
 /// Decompress data using real zstd decompression
-#[cfg(feature = "real_compression")]
 pub fn decompress(compressed: &[u8]) -> Result<Vec<u8>, String> {
     debug!("Decompressing {} bytes", compressed.len());
 
@@ -98,8 +59,15 @@ mod tests {
     fn test_compress_decompress() {
         let original = b"Hello, world!";
         let compressed = compress(original).unwrap();
+        assert_ne!(original.as_slice(), compressed.as_slice());
         let decompressed = decompress(&compressed).unwrap();
         assert_eq!(original, decompressed.as_slice());
+    }
+
+    #[test]
+    fn test_decompress_rejects_uncompressed_input() {
+        let err = decompress(b"not a zstd frame").expect_err("plain bytes should not decompress");
+        assert!(err.contains("decompression failed"));
     }
 
     #[test]
@@ -108,7 +76,6 @@ mod tests {
         assert!(estimate_compression_ratio(DataType::ImageData) > 0.5);
     }
 
-    #[cfg(feature = "real_compression")]
     #[test]
     fn test_real_compression_reduces_size() {
         // Highly repetitive data should compress well with real compression

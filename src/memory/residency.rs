@@ -10,7 +10,10 @@
 //! - Frozen (>15min): Serialized to disk, near-zero memory
 
 use log::{debug, info, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 /// Residency state for a browser tab
@@ -30,7 +33,7 @@ pub enum ResidencyState {
 }
 
 /// Memory snapshot of tab state for quick restoration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TabSnapshot {
     /// Compressed DOM state (zstd level 3 for speed/compression balance)
     pub dom_snapshot: Option<Vec<u8>>,
@@ -62,6 +65,14 @@ pub struct TabResidency {
     pub memory_usage: usize,
     /// Disk storage path for Frozen state
     pub frozen_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct FrozenTabState {
+    tab_id: u64,
+    url: String,
+    snapshot: Option<TabSnapshot>,
+    memory_usage: usize,
 }
 
 impl TabResidency {
@@ -318,24 +329,32 @@ impl TabResidencyManager {
     // Private helper methods for state transitions
 
     fn create_snapshot(&mut self, tab_id: u64) -> Result<(), String> {
-        // TODO: Integrate with actual compression
-        // For now, just mark as having a snapshot
         let tab = self
             .tabs
             .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
+        let dom_state = format!(
+            "tab:{}\nurl:{}\nscroll:{},{}\nviewport:{},{}\n",
+            tab.tab_id, tab.url, 0.0, 0.0, 1920, 1080
+        );
+        let render_state = encode_u32s(&tab.gpu_buffer_handles);
+        let v8_state = format!("tab:{}\norigin:{}\n", tab.tab_id, origin_key(&tab.url));
+
         tab.snapshot = Some(TabSnapshot {
-            dom_snapshot: Some(Vec::new()),
-            render_snapshot: Some(Vec::new()),
-            v8_heap_snapshot: Some(Vec::new()),
+            dom_snapshot: Some(super::compression::compress(dom_state.as_bytes())?),
+            render_snapshot: Some(super::compression::compress(&render_state)?),
+            v8_heap_snapshot: Some(super::compression::compress(v8_state.as_bytes())?),
             scroll_position: (0.0, 0.0),
             viewport_size: (1920, 1080),
         });
 
-        // Estimate memory savings
         let old_usage = tab.memory_usage;
-        tab.memory_usage /= 4; // ~75% compression typical
+        tab.memory_usage = tab
+            .snapshot
+            .as_ref()
+            .map(snapshot_memory_usage)
+            .unwrap_or_default();
         self.current_memory_usage = self
             .current_memory_usage
             .saturating_sub(old_usage)
@@ -351,9 +370,13 @@ impl TabResidencyManager {
             .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
-        // Further compress snapshot
         let old_usage = tab.memory_usage;
-        tab.memory_usage /= 2; // Additional compression
+        tab.memory_usage = tab
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot_memory_usage(snapshot) / 2)
+            .unwrap_or(1024)
+            .max(1024);
         self.current_memory_usage = self
             .current_memory_usage
             .saturating_sub(old_usage)
@@ -369,11 +392,26 @@ impl TabResidencyManager {
             .get_mut(&tab_id)
             .ok_or_else(|| format!("Tab {} not found", tab_id))?;
 
-        // Serialize to disk (placeholder)
-        tab.frozen_path = Some(format!("/tmp/soliloquy/frozen_tab_{}.bin", tab_id));
+        let path = frozen_tab_path(tab_id);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create frozen tab directory: {}", e))?;
+        }
+
+        let frozen = FrozenTabState {
+            tab_id,
+            url: tab.url.clone(),
+            snapshot: tab.snapshot.clone(),
+            memory_usage: tab.memory_usage,
+        };
+        let bytes = bincode::serialize(&frozen)
+            .map_err(|e| format!("Failed to encode tab state: {}", e))?;
+        fs::write(&path, bytes).map_err(|e| format!("Failed to write frozen tab state: {}", e))?;
+        tab.frozen_path = Some(path.to_string_lossy().into_owned());
 
         let old_usage = tab.memory_usage;
-        tab.memory_usage = 1024; // Keep minimal metadata in memory
+        tab.snapshot = None;
+        tab.memory_usage = 1024;
         self.current_memory_usage = self
             .current_memory_usage
             .saturating_sub(old_usage)
@@ -384,22 +422,115 @@ impl TabResidencyManager {
     }
 
     fn restore_from_warm(&mut self, tab_id: u64) -> Result<(), String> {
-        // Decompress snapshot - target <100ms
+        let tab = self
+            .tabs
+            .get(&tab_id)
+            .ok_or_else(|| format!("Tab {} not found", tab_id))?;
+        validate_snapshot(tab.snapshot.as_ref())?;
         debug!("Restoring tab {} from Warm state", tab_id);
         Ok(())
     }
 
     fn restore_from_cold(&mut self, tab_id: u64) -> Result<(), String> {
-        // Restore from minimal state - target 200-500ms
+        let tab = self
+            .tabs
+            .get(&tab_id)
+            .ok_or_else(|| format!("Tab {} not found", tab_id))?;
+        validate_snapshot(tab.snapshot.as_ref())?;
         debug!("Restoring tab {} from Cold state", tab_id);
         Ok(())
     }
 
     fn restore_from_frozen(&mut self, tab_id: u64) -> Result<(), String> {
-        // Load from disk - target 500ms-2s
+        let frozen_path = self
+            .tabs
+            .get(&tab_id)
+            .and_then(|tab| tab.frozen_path.clone())
+            .ok_or_else(|| format!("Tab {} has no frozen state path", tab_id))?;
+        let bytes = fs::read(&frozen_path)
+            .map_err(|e| format!("Failed to read frozen tab state: {}", e))?;
+        let frozen: FrozenTabState = bincode::deserialize(&bytes)
+            .map_err(|e| format!("Failed to decode frozen tab state: {}", e))?;
+        validate_snapshot(frozen.snapshot.as_ref())?;
+
+        let tab = self
+            .tabs
+            .get_mut(&tab_id)
+            .ok_or_else(|| format!("Tab {} not found", tab_id))?;
+        let old_usage = tab.memory_usage;
+        tab.snapshot = frozen.snapshot;
+        tab.url = frozen.url;
+        tab.frozen_path = None;
+        tab.memory_usage = estimate_active_memory_usage(&tab.snapshot);
+        self.current_memory_usage = self
+            .current_memory_usage
+            .saturating_sub(old_usage)
+            .saturating_add(tab.memory_usage);
+        let _ = fs::remove_file(&frozen_path);
         debug!("Restoring tab {} from Frozen state", tab_id);
         Ok(())
     }
+}
+
+fn snapshot_memory_usage(snapshot: &TabSnapshot) -> usize {
+    snapshot
+        .dom_snapshot
+        .as_ref()
+        .map(Vec::len)
+        .unwrap_or_default()
+        + snapshot
+            .render_snapshot
+            .as_ref()
+            .map(Vec::len)
+            .unwrap_or_default()
+        + snapshot
+            .v8_heap_snapshot
+            .as_ref()
+            .map(Vec::len)
+            .unwrap_or_default()
+}
+
+fn estimate_active_memory_usage(snapshot: &Option<TabSnapshot>) -> usize {
+    snapshot
+        .as_ref()
+        .map(|snapshot| {
+            snapshot_memory_usage(snapshot)
+                .saturating_mul(4)
+                .max(1024 * 1024)
+        })
+        .unwrap_or(1024 * 1024)
+}
+
+fn validate_snapshot(snapshot: Option<&TabSnapshot>) -> Result<(), String> {
+    let snapshot = snapshot.ok_or_else(|| "Tab snapshot is missing".to_string())?;
+    for compressed in [
+        snapshot.dom_snapshot.as_deref(),
+        snapshot.render_snapshot.as_deref(),
+        snapshot.v8_heap_snapshot.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let _ = super::compression::decompress(compressed)?;
+    }
+    Ok(())
+}
+
+fn encode_u32s(values: &[u32]) -> Vec<u8> {
+    values
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect()
+}
+
+fn origin_key(url: &str) -> &str {
+    url.split('/').nth(2).unwrap_or(url)
+}
+
+fn frozen_tab_path(tab_id: u64) -> PathBuf {
+    std::env::temp_dir()
+        .join("soliloquy")
+        .join(format!("frozen_tab_{}.bin", tab_id))
 }
 
 /// Statistics about tab memory states
@@ -490,6 +621,35 @@ mod tests {
 
         let tab = manager.tabs.get(&tab_id).unwrap();
         assert_eq!(tab.state, ResidencyState::Active);
+    }
+
+    #[test]
+    fn test_frozen_tab_persists_snapshot_and_restores_it() {
+        let mut manager = TabResidencyManager::new();
+        let tab_id = manager.register_tab("https://example.com/stateful".to_string());
+        manager.tabs.get_mut(&tab_id).unwrap().memory_usage = 4 * 1024 * 1024;
+
+        manager.evict_tab(tab_id).unwrap();
+        manager.evict_tab(tab_id).unwrap();
+        manager.evict_tab(tab_id).unwrap();
+
+        let frozen_path = manager
+            .tabs
+            .get(&tab_id)
+            .unwrap()
+            .frozen_path
+            .clone()
+            .unwrap();
+        assert!(std::path::Path::new(&frozen_path).exists());
+        manager.tabs.get_mut(&tab_id).unwrap().snapshot = None;
+
+        manager.restore_tab(tab_id).unwrap();
+
+        let tab = manager.tabs.get(&tab_id).unwrap();
+        assert_eq!(tab.state, ResidencyState::Active);
+        assert!(tab.snapshot.is_some());
+        assert!(tab.frozen_path.is_none());
+        assert!(!std::path::Path::new(&frozen_path).exists());
     }
 
     #[test]

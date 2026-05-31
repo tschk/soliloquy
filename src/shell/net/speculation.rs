@@ -19,6 +19,15 @@ pub enum SpeculationAction {
     Prerender,
 }
 
+/// Work item emitted by the speculation engine for the resource layer
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpeculationRequest {
+    /// Action to perform
+    pub action: SpeculationAction,
+    /// Target URL
+    pub url: String,
+}
+
 /// URL pattern matching
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -249,8 +258,14 @@ pub struct SpeculationEngine {
     omnibox_predictor: OmniboxPredictor,
     /// Currently prefetched URLs
     prefetched: HashSet<String>,
+    /// Prefetch insertion order
+    prefetched_order: VecDeque<String>,
     /// Currently prerendered URLs
     prerendered: HashSet<String>,
+    /// Prerender insertion order
+    prerendered_order: VecDeque<String>,
+    /// Pending speculation work
+    pending_requests: VecDeque<SpeculationRequest>,
     /// Maximum prefetch queue size
     max_prefetch: usize,
     /// Maximum prerender queue size
@@ -265,7 +280,10 @@ impl SpeculationEngine {
             hover_tracker: HoverTracker::new(),
             omnibox_predictor: OmniboxPredictor::new(1000),
             prefetched: HashSet::new(),
+            prefetched_order: VecDeque::new(),
             prerendered: HashSet::new(),
+            prerendered_order: VecDeque::new(),
+            pending_requests: VecDeque::new(),
             max_prefetch: 10,
             max_prerender: 1,
         }
@@ -336,17 +354,19 @@ impl SpeculationEngine {
         }
 
         if self.prefetched.len() >= self.max_prefetch {
-            // Remove oldest entry (simple FIFO)
-            if let Some(oldest) = self.prefetched.iter().next().cloned() {
+            if let Some(oldest) = self.prefetched_order.pop_front() {
                 self.prefetched.remove(&oldest);
                 debug!("Evicted prefetch: {}", oldest);
             }
         }
 
         self.prefetched.insert(url.to_string());
+        self.prefetched_order.push_back(url.to_string());
+        self.pending_requests.push_back(SpeculationRequest {
+            action: SpeculationAction::Prefetch,
+            url: url.to_string(),
+        });
         info!("Triggering prefetch: {}", url);
-
-        // TODO: Actually trigger prefetch via ResourceLoader
     }
 
     /// Trigger prerender for a URL
@@ -356,14 +376,23 @@ impl SpeculationEngine {
         }
 
         if self.prerendered.len() >= self.max_prerender {
-            // Remove all prerendered (only keep one)
-            self.prerendered.clear();
+            while self.prerendered.len() >= self.max_prerender {
+                if let Some(oldest) = self.prerendered_order.pop_front() {
+                    self.prerendered.remove(&oldest);
+                } else {
+                    self.prerendered.clear();
+                    break;
+                }
+            }
         }
 
         self.prerendered.insert(url.to_string());
+        self.prerendered_order.push_back(url.to_string());
+        self.pending_requests.push_back(SpeculationRequest {
+            action: SpeculationAction::Prerender,
+            url: url.to_string(),
+        });
         info!("Triggering prerender: {}", url);
-
-        // TODO: Actually trigger prerender
     }
 
     /// Check if URL is already prefetched
@@ -381,10 +410,18 @@ impl SpeculationEngine {
         self.omnibox_predictor.top_predictions(prefix, n)
     }
 
+    /// Drain pending speculation requests
+    pub fn drain_pending_requests(&mut self) -> Vec<SpeculationRequest> {
+        self.pending_requests.drain(..).collect()
+    }
+
     /// Clear all speculation state
     pub fn clear(&mut self) {
         self.prefetched.clear();
+        self.prefetched_order.clear();
         self.prerendered.clear();
+        self.prerendered_order.clear();
+        self.pending_requests.clear();
         info!("Cleared speculation state");
     }
 
@@ -534,6 +571,22 @@ mod tests {
         engine.on_hover_end();
 
         assert!(engine.is_prefetched("https://example.com/page"));
+    }
+
+    #[test]
+    fn test_speculation_engine_exposes_pending_work() {
+        let mut engine = SpeculationEngine::new();
+
+        engine.trigger_prefetch("https://example.com/prefetch");
+        engine.trigger_prerender("https://example.com/prerender");
+
+        let pending = engine.drain_pending_requests();
+        assert_eq!(pending.len(), 2);
+        assert_eq!(pending[0].action, SpeculationAction::Prefetch);
+        assert_eq!(pending[0].url, "https://example.com/prefetch");
+        assert_eq!(pending[1].action, SpeculationAction::Prerender);
+        assert_eq!(pending[1].url, "https://example.com/prerender");
+        assert!(engine.drain_pending_requests().is_empty());
     }
 
     #[test]
