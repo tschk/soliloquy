@@ -19,6 +19,10 @@ soliloquy_browser_optimizations = { path = ".." }
 # Networking dependencies
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 webpki-roots = "0.26"
+h3 = "0.0.8"
+h3-quinn = "0.0.10"
+bytes = "1"
+quinn = { version = "0.11.7", default-features = false, features = ["log", "runtime-tokio", "rustls-ring"] }
 hyper = { version = "1.4", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["client", "http1", "http2"] }
 http-body-util = "0.1"

@@ -9,7 +9,7 @@ use wgpu::util::DeviceExt;
 
 /// Layout node for GPU computation
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, PartialEq, Pod, Zeroable)]
 pub struct LayoutNode {
     pub parent_idx: u32,
     pub child_count: u32,
@@ -74,13 +74,7 @@ pub struct LayoutParams {
     pub pass_index: u32,
 }
 
-/// GPU layout compute pipeline (placeholder)
-///
-/// In production, this would:
-/// 1. Create WGPU compute pipeline from layout.wgsl
-/// 2. Upload layout nodes to GPU buffer
-/// 3. Execute compute shader
-/// 4. Read back computed layout
+/// GPU layout compute pipeline
 pub struct GpuLayoutCompute {
     /// Viewport dimensions
     viewport_width: f32,
@@ -247,41 +241,8 @@ impl GpuLayoutCompute {
             nodes.len()
         );
 
-        // Simple top-down layout pass
         for i in 0..nodes.len() {
-            // Get parent info before borrowing current node
-            let (parent_x, parent_y, parent_width) = {
-                let node = &nodes[i];
-                if node.parent_idx != u32::MAX {
-                    let parent_idx = node.parent_idx as usize;
-                    if parent_idx < i {
-                        let parent = &nodes[parent_idx];
-                        (parent.computed_x, parent.computed_y, parent.computed_width)
-                    } else {
-                        (0.0, 0.0, self.viewport_width)
-                    }
-                } else {
-                    (0.0, 0.0, self.viewport_width)
-                }
-            };
-
-            // Now mutably borrow current node
-            let node = &mut nodes[i];
-
-            // Block layout
-            if (node.style_flags & style_flags::DISPLAY_BLOCK) != 0 {
-                node.computed_x = parent_x + node.margin_left + node.padding_left;
-                node.computed_y = parent_y + node.margin_top + node.padding_top;
-                node.computed_width = parent_width
-                    - node.margin_left
-                    - node.margin_right
-                    - node.padding_left
-                    - node.padding_right;
-
-                if node.computed_height == 0.0 {
-                    node.computed_height = 100.0; // Default
-                }
-            }
+            layout_node(i, nodes, self.viewport_width, self.viewport_height);
         }
 
         Ok(())
@@ -295,9 +256,129 @@ impl GpuLayoutCompute {
     }
 }
 
+fn layout_node(
+    node_idx: usize,
+    nodes: &mut [LayoutNode],
+    viewport_width: f32,
+    viewport_height: f32,
+) {
+    let node = nodes[node_idx];
+    let (parent_x, parent_y, parent_width, parent_height) =
+        parent_box(&node, nodes, viewport_width, viewport_height);
+    let containing_x = if is_fixed(node) { 0.0 } else { parent_x };
+    let containing_y = if is_fixed(node) { 0.0 } else { parent_y };
+    let containing_width = if is_fixed(node) {
+        viewport_width
+    } else {
+        parent_width
+    };
+    let containing_height = if is_fixed(node) {
+        viewport_height
+    } else {
+        parent_height
+    };
+    let available_width = available_inline_size(node, containing_width);
+    let available_height = available_block_size(node, containing_height);
+    let mut laid_out = node;
+
+    laid_out.computed_x = containing_x + node.margin_left + node.padding_left;
+    laid_out.computed_y = containing_y + node.margin_top + node.padding_top;
+
+    if is_inline(node) {
+        laid_out.computed_width =
+            explicit_or(node.computed_width, node.padding_left + node.padding_right);
+        laid_out.computed_height =
+            explicit_or(node.computed_height, node.padding_top + node.padding_bottom);
+    } else if is_positioned(node) || is_block(node) {
+        laid_out.computed_width = explicit_or(node.computed_width, available_width);
+        laid_out.computed_height = explicit_or(node.computed_height, available_height);
+    } else {
+        laid_out.computed_width = explicit_or(node.computed_width, available_width);
+        laid_out.computed_height =
+            explicit_or(node.computed_height, node.padding_top + node.padding_bottom);
+    }
+
+    nodes[node_idx] = laid_out;
+}
+
+fn parent_box(
+    node: &LayoutNode,
+    nodes: &[LayoutNode],
+    viewport_width: f32,
+    viewport_height: f32,
+) -> (f32, f32, f32, f32) {
+    if node.parent_idx == u32::MAX {
+        return (0.0, 0.0, viewport_width, viewport_height);
+    }
+
+    nodes
+        .get(node.parent_idx as usize)
+        .map(|parent| {
+            (
+                parent.computed_x,
+                parent.computed_y,
+                parent.computed_width,
+                parent.computed_height,
+            )
+        })
+        .unwrap_or((0.0, 0.0, viewport_width, viewport_height))
+}
+
+fn available_inline_size(node: LayoutNode, containing_width: f32) -> f32 {
+    (containing_width
+        - node.margin_left
+        - node.margin_right
+        - node.padding_left
+        - node.padding_right)
+        .max(0.0)
+}
+
+fn available_block_size(node: LayoutNode, containing_height: f32) -> f32 {
+    (containing_height
+        - node.margin_top
+        - node.margin_bottom
+        - node.padding_top
+        - node.padding_bottom)
+        .max(0.0)
+}
+
+fn explicit_or(value: f32, fallback: f32) -> f32 {
+    if value > 0.0 {
+        value
+    } else {
+        fallback
+    }
+}
+
+fn is_block(node: LayoutNode) -> bool {
+    (node.style_flags & style_flags::DISPLAY_BLOCK) != 0
+}
+
+fn is_inline(node: LayoutNode) -> bool {
+    (node.style_flags & style_flags::DISPLAY_INLINE) != 0
+}
+
+fn is_positioned(node: LayoutNode) -> bool {
+    (node.style_flags & (style_flags::POSITION_ABSOLUTE | style_flags::POSITION_FIXED)) != 0
+}
+
+fn is_fixed(node: LayoutNode) -> bool {
+    (node.style_flags & style_flags::POSITION_FIXED) != 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cpu_compute(width: f32, height: f32) -> GpuLayoutCompute {
+        GpuLayoutCompute {
+            viewport_width: width,
+            viewport_height: height,
+            gpu_available: false,
+            wgpu_ctx: None,
+            pipeline: None,
+        }
+    }
 
     #[test]
     fn test_layout_node_default() {
@@ -316,19 +397,21 @@ mod tests {
 
     #[test]
     fn test_simple_layout() {
-        let compute = GpuLayoutCompute::new(800.0, 600.0);
+        let compute = cpu_compute(800.0, 600.0);
 
         let mut nodes = vec![
             LayoutNode {
                 parent_idx: u32::MAX,
                 child_count: 1,
                 style_flags: style_flags::DISPLAY_BLOCK,
+                computed_height: 120.0,
                 ..Default::default()
             },
             LayoutNode {
                 parent_idx: 0,
                 child_count: 0,
                 style_flags: style_flags::DISPLAY_BLOCK,
+                computed_height: 60.0,
                 ..Default::default()
             },
         ];
@@ -339,6 +422,244 @@ mod tests {
         // Root should be at 0,0 with full width
         assert_eq!(nodes[0].computed_x, 0.0);
         assert_eq!(nodes[0].computed_y, 0.0);
+    }
+
+    #[test]
+    fn block_layout_uses_containing_width_and_style_height() {
+        let compute = cpu_compute(800.0, 600.0);
+        let mut nodes = vec![LayoutNode {
+            parent_idx: u32::MAX,
+            style_flags: style_flags::DISPLAY_BLOCK,
+            computed_height: 48.0,
+            margin_left: 10.0,
+            margin_right: 30.0,
+            padding_left: 5.0,
+            padding_right: 7.0,
+            ..Default::default()
+        }];
+
+        compute.compute_layout(&mut nodes).unwrap();
+
+        assert_eq!(nodes[0].computed_width, 748.0);
+        assert_eq!(nodes[0].computed_height, 48.0);
+        assert_eq!(nodes[0].computed_x, 15.0);
+    }
+
+    #[test]
+    fn inline_layout_uses_explicit_size_or_padding_size() {
+        let compute = cpu_compute(800.0, 600.0);
+        let mut nodes = vec![LayoutNode {
+            parent_idx: u32::MAX,
+            style_flags: style_flags::DISPLAY_INLINE,
+            padding_left: 6.0,
+            padding_top: 4.0,
+            padding_right: 8.0,
+            padding_bottom: 10.0,
+            ..Default::default()
+        }];
+
+        compute.compute_layout(&mut nodes).unwrap();
+
+        assert_eq!(nodes[0].computed_width, 14.0);
+        assert_eq!(nodes[0].computed_height, 14.0);
+    }
+
+    #[test]
+    fn fixed_layout_uses_viewport_as_containing_box() {
+        let compute = cpu_compute(800.0, 600.0);
+        let mut nodes = vec![
+            LayoutNode {
+                parent_idx: u32::MAX,
+                style_flags: style_flags::DISPLAY_BLOCK,
+                computed_x: 50.0,
+                computed_y: 40.0,
+                computed_width: 300.0,
+                computed_height: 200.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::POSITION_FIXED,
+                margin_left: 20.0,
+                margin_top: 10.0,
+                margin_right: 60.0,
+                margin_bottom: 90.0,
+                padding_left: 5.0,
+                padding_top: 7.0,
+                padding_right: 15.0,
+                padding_bottom: 3.0,
+                ..Default::default()
+            },
+        ];
+
+        compute.compute_layout(&mut nodes).unwrap();
+
+        assert_eq!(nodes[1].computed_x, 25.0);
+        assert_eq!(nodes[1].computed_y, 17.0);
+        assert_eq!(nodes[1].computed_width, 700.0);
+        assert_eq!(nodes[1].computed_height, 490.0);
+    }
+
+    #[test]
+    fn absolute_layout_uses_parent_as_containing_box() {
+        let compute = cpu_compute(800.0, 600.0);
+        let mut nodes = vec![
+            LayoutNode {
+                parent_idx: u32::MAX,
+                style_flags: style_flags::DISPLAY_BLOCK,
+                computed_width: 300.0,
+                computed_height: 200.0,
+                margin_left: 50.0,
+                margin_top: 40.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::POSITION_ABSOLUTE,
+                computed_width: 90.0,
+                margin_left: 20.0,
+                margin_top: 10.0,
+                padding_left: 5.0,
+                padding_top: 7.0,
+                padding_bottom: 3.0,
+                ..Default::default()
+            },
+        ];
+
+        compute.compute_layout(&mut nodes).unwrap();
+
+        assert_eq!(nodes[1].computed_x, 75.0);
+        assert_eq!(nodes[1].computed_y, 57.0);
+        assert_eq!(nodes[1].computed_width, 90.0);
+        assert_eq!(nodes[1].computed_height, 180.0);
+    }
+
+    #[test]
+    fn layout_node_matches_cpu_pass_for_representative_tree() {
+        let compute = cpu_compute(1024.0, 768.0);
+        let mut cpu_nodes = representative_nodes();
+        let mut direct_nodes = representative_nodes();
+
+        compute.compute_layout(&mut cpu_nodes).unwrap();
+        for i in 0..direct_nodes.len() {
+            layout_node(i, &mut direct_nodes, 1024.0, 768.0);
+        }
+
+        assert_eq!(cpu_nodes, direct_nodes);
+    }
+
+    #[test]
+    fn gpu_layout_matches_cpu_layout_when_gpu_is_available() {
+        let gpu_compute = GpuLayoutCompute::new(640.0, 480.0);
+        if !gpu_compute.gpu_available {
+            return;
+        }
+
+        let cpu_compute = cpu_compute(640.0, 480.0);
+        let mut gpu_nodes = gpu_parity_nodes();
+        let mut cpu_nodes = gpu_parity_nodes();
+
+        gpu_compute.compute_layout(&mut gpu_nodes).unwrap();
+        cpu_compute.compute_layout(&mut cpu_nodes).unwrap();
+
+        assert_eq!(gpu_nodes, cpu_nodes);
+    }
+
+    fn representative_nodes() -> Vec<LayoutNode> {
+        vec![
+            LayoutNode {
+                parent_idx: u32::MAX,
+                style_flags: style_flags::DISPLAY_BLOCK,
+                computed_height: 400.0,
+                padding_left: 8.0,
+                padding_top: 6.0,
+                padding_right: 8.0,
+                padding_bottom: 6.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::DISPLAY_INLINE,
+                padding_left: 2.0,
+                padding_top: 3.0,
+                padding_right: 4.0,
+                padding_bottom: 5.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::POSITION_ABSOLUTE,
+                computed_width: 128.0,
+                computed_height: 64.0,
+                margin_left: 20.0,
+                margin_top: 30.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::POSITION_FIXED,
+                margin_left: 12.0,
+                margin_top: 14.0,
+                margin_right: 16.0,
+                margin_bottom: 18.0,
+                ..Default::default()
+            },
+        ]
+    }
+
+    fn gpu_parity_nodes() -> Vec<LayoutNode> {
+        vec![
+            LayoutNode {
+                parent_idx: u32::MAX,
+                style_flags: style_flags::DISPLAY_BLOCK,
+                computed_width: 640.0,
+                computed_height: 480.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::DISPLAY_BLOCK,
+                computed_height: 40.0,
+                margin_left: 10.0,
+                margin_right: 20.0,
+                padding_left: 4.0,
+                padding_right: 6.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::DISPLAY_INLINE,
+                padding_left: 3.0,
+                padding_top: 5.0,
+                padding_right: 7.0,
+                padding_bottom: 11.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::POSITION_ABSOLUTE,
+                computed_width: 80.0,
+                computed_height: 30.0,
+                margin_left: 12.0,
+                margin_top: 14.0,
+                padding_left: 2.0,
+                padding_top: 4.0,
+                ..Default::default()
+            },
+            LayoutNode {
+                parent_idx: 0,
+                style_flags: style_flags::POSITION_FIXED,
+                margin_left: 8.0,
+                margin_top: 9.0,
+                margin_right: 10.0,
+                margin_bottom: 11.0,
+                padding_left: 1.0,
+                padding_top: 2.0,
+                padding_right: 3.0,
+                padding_bottom: 4.0,
+                ..Default::default()
+            },
+        ]
     }
 
     #[test]

@@ -43,6 +43,35 @@ struct LayoutParams {
 @group(0) @binding(0) var<storage, read_write> nodes: array<LayoutNode>;
 @group(0) @binding(1) var<uniform> params: LayoutParams;
 
+fn explicit_or(value: f32, fallback: f32) -> f32 {
+    if (value > 0.0) {
+        return value;
+    }
+    return fallback;
+}
+
+fn available_inline_size(node: LayoutNode, containing_width: f32) -> f32 {
+    return max(
+        containing_width
+            - node.margin_left
+            - node.margin_right
+            - node.padding_left
+            - node.padding_right,
+        0.0
+    );
+}
+
+fn available_block_size(node: LayoutNode, containing_height: f32) -> f32 {
+    return max(
+        containing_height
+            - node.margin_top
+            - node.margin_bottom
+            - node.padding_top
+            - node.padding_bottom,
+        0.0
+    );
+}
+
 @compute @workgroup_size(64)
 fn layout_pass(@builtin(global_invocation_id) id: vec3<u32>) {
     let node_idx = id.x;
@@ -54,59 +83,52 @@ fn layout_pass(@builtin(global_invocation_id) id: vec3<u32>) {
     
     var node = nodes[node_idx];
     
-    // Skip fixed position elements on first pass
-    if (params.pass_index == 0u && (node.style_flags & STYLE_POSITION_FIXED) != 0u) {
-        return;
-    }
-    
     // Get parent position if not root
     var parent_x = 0.0;
     var parent_y = 0.0;
     var parent_width = params.viewport_width;
+    var parent_height = params.viewport_height;
     
     if (node.parent_idx != 0xFFFFFFFFu) {
         let parent = nodes[node.parent_idx];
         parent_x = parent.computed_x;
         parent_y = parent.computed_y;
         parent_width = parent.computed_width;
+        parent_height = parent.computed_height;
+    }
+
+    let fixed = (node.style_flags & STYLE_POSITION_FIXED) != 0u;
+    let positioned = fixed || (node.style_flags & STYLE_POSITION_ABSOLUTE) != 0u;
+    let block = (node.style_flags & STYLE_DISPLAY_BLOCK) != 0u;
+    let inline_display = (node.style_flags & STYLE_DISPLAY_INLINE) != 0u;
+
+    var containing_x = parent_x;
+    var containing_y = parent_y;
+    var containing_width = parent_width;
+    var containing_height = parent_height;
+
+    if (fixed) {
+        containing_x = 0.0;
+        containing_y = 0.0;
+        containing_width = params.viewport_width;
+        containing_height = params.viewport_height;
     }
     
-    // Compute position based on display type
-    if ((node.style_flags & STYLE_DISPLAY_BLOCK) != 0u) {
-        // Block layout: full width, stack vertically
-        node.computed_x = parent_x + node.margin_left + node.padding_left;
-        node.computed_y = parent_y + node.margin_top + node.padding_top;
-        node.computed_width = parent_width - node.margin_left - node.margin_right 
-                             - node.padding_left - node.padding_right;
-        
-        // Height computed based on content (placeholder)
-        if (node.computed_height == 0.0) {
-            node.computed_height = 100.0; // Default height
-        }
-    }
-    else if ((node.style_flags & STYLE_DISPLAY_INLINE) != 0u) {
-        // Inline layout: flow horizontally
-        node.computed_x = parent_x + node.margin_left;
-        node.computed_y = parent_y + node.margin_top;
-        
-        // Width/height based on content (placeholder)
-        if (node.computed_width == 0.0) {
-            node.computed_width = 50.0;
-        }
-        if (node.computed_height == 0.0) {
-            node.computed_height = 20.0;
-        }
-    }
-    else if ((node.style_flags & STYLE_POSITION_ABSOLUTE) != 0u) {
-        // Absolute positioning: positioned relative to parent
-        // Position already set by style resolution
-    }
-    
-    // Apply fixed positioning
-    if ((node.style_flags & STYLE_POSITION_FIXED) != 0u) {
-        // Fixed to viewport, ignore parent
-        node.computed_x = node.margin_left;
-        node.computed_y = node.margin_top;
+    let available_width = available_inline_size(node, containing_width);
+    let available_height = available_block_size(node, containing_height);
+
+    node.computed_x = containing_x + node.margin_left + node.padding_left;
+    node.computed_y = containing_y + node.margin_top + node.padding_top;
+
+    if (inline_display) {
+        node.computed_width = explicit_or(node.computed_width, node.padding_left + node.padding_right);
+        node.computed_height = explicit_or(node.computed_height, node.padding_top + node.padding_bottom);
+    } else if (positioned || block) {
+        node.computed_width = explicit_or(node.computed_width, available_width);
+        node.computed_height = explicit_or(node.computed_height, available_height);
+    } else {
+        node.computed_width = explicit_or(node.computed_width, available_width);
+        node.computed_height = explicit_or(node.computed_height, node.padding_top + node.padding_bottom);
     }
     
     // Write back computed values

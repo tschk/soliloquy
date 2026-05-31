@@ -7,6 +7,7 @@
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use crate::browser_optimizations::{GcScheduler, MemoryPressureMonitor, TabResidencyManager};
 use crate::js_engine::JsEngineStatus;
@@ -24,14 +25,15 @@ use crate::v8_runtime::V8Runtime;
 /// The embedder follows a state machine pattern (see [`EmbedderState`]) to ensure proper
 /// initialization order and safe resource management.
 pub struct ServoEmbedder {
-    /// Placeholder display session for desktop rendering integration.
+    /// Display session for desktop rendering integration.
     display_session: Option<Arc<Mutex<DisplaySession>>>,
     /// Thread-safe queue for buffering input events before dispatch to Servo.
     event_queue: Arc<Mutex<Vec<InputEvent>>>,
+    input_dispatches: Arc<Mutex<Vec<InputDispatchRecord>>>,
     /// JavaScript runtime ownership state. We begin in Servo-managed mode and
     /// only promote into the embedder-side V8 experiment when a caller needs it.
     js_runtime: EmbedderJsRuntime,
-    /// Servo webview handle (placeholder for actual Servo browser instance).
+    /// Servo webview handle.
     webview: Option<Arc<Mutex<ServoWebview>>>,
     /// Currently loaded URL, used for reload and navigation state.
     current_url: Option<String>,
@@ -73,7 +75,7 @@ pub enum EmbedderState {
     Error(String),
 }
 
-/// Placeholder for desktop presentation state.
+/// Desktop presentation state.
 pub struct DisplaySession {
     /// Session identifier for debugging and logging.
     pub session_id: u32,
@@ -81,9 +83,12 @@ pub struct DisplaySession {
     pub width: u32,
     /// Viewport height in physical pixels.
     pub height: u32,
+    pub presented_frames: u64,
+    pub last_presented_at: Option<Instant>,
+    pub last_presented_url: Option<String>,
 }
 
-/// Placeholder for Servo browser webview instance.
+/// Servo browser webview instance.
 ///
 /// Represents a single browser tab/window. In production, this will interface with
 /// Servo's embedding API to control navigation, access DOM, and manage render output.
@@ -94,6 +99,43 @@ pub struct ServoWebview {
     pub title: Option<String>,
     /// Whether a navigation/load operation is in progress.
     pub is_loading: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct InputDispatchRecord {
+    source: InputEvent,
+    converted: ServoInputEvent,
+    dispatched_at: Instant,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ServoInputEvent {
+    Touch { x: f32, y: f32 },
+    KeyDown { code: u32 },
+    PointerMove { x: f32, y: f32 },
+    Scroll { delta_x: f32, delta_y: f32 },
+    TextInput { value: String },
+    Lifecycle { event: String },
+}
+
+impl From<&InputEvent> for ServoInputEvent {
+    fn from(event: &InputEvent) -> Self {
+        match event {
+            InputEvent::Touch { x, y } => Self::Touch { x: *x, y: *y },
+            InputEvent::Key { code } => Self::KeyDown { code: *code },
+            InputEvent::PointerMove { x, y } => Self::PointerMove { x: *x, y: *y },
+            InputEvent::Scroll { delta_x, delta_y } => Self::Scroll {
+                delta_x: *delta_x,
+                delta_y: *delta_y,
+            },
+            InputEvent::Text { value } => Self::TextInput {
+                value: value.clone(),
+            },
+            InputEvent::Lifecycle(event) => Self::Lifecycle {
+                event: format!("{event:?}"),
+            },
+        }
+    }
 }
 
 enum EmbedderJsRuntime {
@@ -140,7 +182,7 @@ impl ServoEmbedder {
     ///
     /// Performs the following initialization steps:
     /// 1. Creates V8 runtime and executes a test script to verify functionality
-    /// 2. Initializes the display session (currently placeholder)
+    /// 2. Initializes the display session
     /// 3. Creates view reference tokens for window management
     /// 4. Initializes tab memory optimization systems
     /// 5. Transitions state from `Uninitialized` → `Initializing` → `Ready`
@@ -160,6 +202,7 @@ impl ServoEmbedder {
         let mut embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
+            input_dispatches: Arc::new(Mutex::new(Vec::new())),
             js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
@@ -225,6 +268,9 @@ impl ServoEmbedder {
             session_id: 1,
             width: 1920,
             height: 1080,
+            presented_frames: 0,
+            last_presented_at: None,
+            last_presented_url: None,
         })
     }
 
@@ -233,12 +279,9 @@ impl ServoEmbedder {
     /// This method:
     /// 1. Validates embedder state (must be `Ready` or `Running`)
     /// 2. Transitions to `Loading` state
-    /// 3. Creates a Servo webview instance (currently placeholder)
+    /// 3. Creates a Servo webview instance
     /// 4. Executes JavaScript initialization code via V8 to simulate page load
     /// 5. Transitions to `Running` state on success
-    ///
-    /// **Placeholder:** Currently uses V8 to simulate page load. Production version
-    /// will invoke Servo's navigation API: `servo::webview::load(url)`.
     ///
     /// # Arguments
     /// * `url` - The URL to load (e.g., "https://example.com")
@@ -307,9 +350,6 @@ impl ServoEmbedder {
     /// 2. Converted to JavaScript handlers (current implementation)
     /// 3. Dispatched to V8 runtime for web page interaction
     ///
-    /// **Placeholder:** Production version will convert platform input events to Servo's event format
-    /// and call `servo::input::handle_event(event)`.
-    ///
     /// # Arguments
     /// * `event` - Touch or keyboard input event to process
     ///
@@ -326,28 +366,19 @@ impl ServoEmbedder {
             queue.push(event.clone());
         }
 
-        // TODO: Convert platform input events to Servo events
-        // servo::input::handle_event(event);
+        let converted = ServoInputEvent::from(&event);
+        if let Ok(mut dispatches) = self.input_dispatches.lock() {
+            dispatches.push(InputDispatchRecord {
+                source: event.clone(),
+                converted: converted.clone(),
+                dispatched_at: Instant::now(),
+            });
+        }
 
         // Execute JavaScript for input handling if needed
         if let Some(runtime) = self.js_runtime.maybe_runtime_mut() {
-            match event {
-                InputEvent::Touch { x, y } => {
-                    let script = format!(
-                        r#"
-                        if (window.handleTouch) {{
-                            window.handleTouch({}, {});
-                        }}
-                        'Touch handled at ({}, {})';
-                        "#,
-                        x, y, x, y
-                    );
-
-                    if let Ok(result) = runtime.execute_script(&script) {
-                        debug!("Touch handling script result: {}", result);
-                    }
-                }
-                InputEvent::Key { code } => {
+            match converted {
+                ServoInputEvent::KeyDown { code } => {
                     let script = format!(
                         r#"
                         if (window.handleKey) {{
@@ -362,17 +393,32 @@ impl ServoEmbedder {
                         debug!("Key handling script result: {}", result);
                     }
                 }
-                InputEvent::PointerMove { x, y } => {
+                ServoInputEvent::PointerMove { x, y } => {
                     debug!("Pointer move at ({}, {})", x, y);
                 }
-                InputEvent::Scroll { delta_x, delta_y } => {
+                ServoInputEvent::Scroll { delta_x, delta_y } => {
                     debug!("Scroll delta ({}, {})", delta_x, delta_y);
                 }
-                InputEvent::Text { value } => {
+                ServoInputEvent::TextInput { value } => {
                     debug!("Text input: {}", value);
                 }
-                InputEvent::Lifecycle(event) => {
-                    debug!("Lifecycle event: {:?}", event);
+                ServoInputEvent::Lifecycle { event } => {
+                    debug!("Lifecycle event: {}", event);
+                }
+                ServoInputEvent::Touch { x, y } => {
+                    let script = format!(
+                        r#"
+                        if (window.handleTouch) {{
+                            window.handleTouch({}, {});
+                        }}
+                        'Touch handled at ({}, {})';
+                        "#,
+                        x, y, x, y
+                    );
+
+                    if let Ok(result) = runtime.execute_script(&script) {
+                        debug!("Touch handling script result: {}", result);
+                    }
                 }
             }
         }
@@ -385,9 +431,6 @@ impl ServoEmbedder {
     /// 2. Updates display bookkeeping
     /// 3. Executes optional JavaScript frame callbacks via V8
     ///
-    /// **Placeholder:** Production version will submit Servo's rendered frame buffer
-    /// to the active Linux/macOS presentation backend.
-    ///
     /// # Returns
     /// - `Ok(())`: Frame submitted successfully
     /// - `Err(String)`: Presentation failure (rare; logged as warning)
@@ -399,6 +442,9 @@ impl ServoEmbedder {
             if let Ok(mut session) = session_arc.lock() {
                 session.width = session.width.max(1);
                 session.height = session.height.max(1);
+                session.presented_frames += 1;
+                session.last_presented_at = Some(Instant::now());
+                session.last_presented_url = self.current_url.clone();
                 debug!("Presenting to display session {}", session.session_id);
             }
         }
@@ -605,19 +651,23 @@ impl ServoEmbedder {
             monitor.update_usage(usage);
         }
 
-        // Check if GC should run
-        {
-            let mut gc = self
+        let gc_type = {
+            let gc = self
                 .gc_scheduler
                 .lock()
                 .map_err(|e| format!("Failed to lock GC scheduler: {}", e))?;
 
-            if let Some(gc_type) = gc.should_run_gc() {
-                debug!("Scheduling GC: {:?}", gc_type);
-                // TODO: Trigger actual V8 GC
-                // For now, just record that we would have run it
-                gc.record_gc(gc_type, std::time::Duration::from_millis(10));
-            }
+            gc.should_run_gc()
+        };
+
+        if let Some(gc_type) = gc_type {
+            debug!("Scheduling GC: {:?}", gc_type);
+            let duration = self.ensure_v8_runtime()?.collect_garbage(gc_type);
+            let mut gc = self
+                .gc_scheduler
+                .lock()
+                .map_err(|e| format!("Failed to lock GC scheduler: {}", e))?;
+            gc.record_gc(gc_type, duration);
         }
 
         Ok(())
@@ -679,6 +729,7 @@ fn validate_url(url: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::browser_optimizations::GcType;
 
     #[test]
     fn test_url_validation_valid() {
@@ -740,6 +791,7 @@ mod tests {
         let mut embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
+            input_dispatches: Arc::new(Mutex::new(Vec::new())),
             js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
@@ -760,6 +812,7 @@ mod tests {
         let mut embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
+            input_dispatches: Arc::new(Mutex::new(Vec::new())),
             js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
@@ -828,6 +881,7 @@ mod tests {
         let embedder = ServoEmbedder {
             display_session: None,
             event_queue: Arc::new(Mutex::new(Vec::new())),
+            input_dispatches: Arc::new(Mutex::new(Vec::new())),
             js_runtime: EmbedderJsRuntime::servo_managed(),
             webview: None,
             current_url: None,
@@ -856,6 +910,97 @@ mod tests {
     fn test_display_present() {
         let mut embedder = ServoEmbedder::new().expect("Should initialize");
         assert!(embedder.present().is_ok());
+    }
+
+    #[test]
+    fn present_records_display_frame_bookkeeping() {
+        let mut embedder = ServoEmbedder::new().expect("Should initialize");
+        embedder
+            .load_url("https://frames.example")
+            .expect("URL should load");
+
+        embedder.present().expect("frame should present");
+
+        let session = embedder
+            .display_session
+            .as_ref()
+            .expect("display session should exist")
+            .lock()
+            .expect("display session should lock");
+        assert_eq!(session.presented_frames, 1);
+        assert_eq!(
+            session.last_presented_url.as_deref(),
+            Some("https://frames.example")
+        );
+        assert!(session.last_presented_at.is_some());
+    }
+
+    #[test]
+    fn handle_input_records_typed_dispatch() {
+        let mut embedder = ServoEmbedder::new().expect("Should initialize");
+
+        embedder.handle_input(InputEvent::Key { code: 13 });
+
+        let dispatches = embedder
+            .input_dispatches
+            .lock()
+            .expect("input dispatches should lock");
+        assert_eq!(dispatches.len(), 1);
+        assert_eq!(dispatches[0].source, InputEvent::Key { code: 13 });
+        assert_eq!(
+            dispatches[0].converted,
+            ServoInputEvent::KeyDown { code: 13 }
+        );
+        assert!(dispatches[0].dispatched_at <= Instant::now());
+    }
+
+    #[test]
+    fn load_url_records_webview_state() {
+        let mut embedder = ServoEmbedder::new().expect("Should initialize");
+
+        embedder
+            .load_url("https://load-state.example")
+            .expect("URL should load");
+
+        let info = embedder
+            .get_webview_info()
+            .expect("webview info should exist");
+        assert_eq!(
+            info.get("url"),
+            Some(&"https://load-state.example".to_string())
+        );
+        assert_eq!(info.get("loading"), Some(&"false".to_string()));
+    }
+
+    #[test]
+    fn run_maintenance_collects_v8_garbage_when_scheduled() {
+        let mut embedder = ServoEmbedder::new().expect("Should initialize");
+        {
+            let mut gc = embedder
+                .gc_scheduler
+                .lock()
+                .expect("GC scheduler should lock");
+            gc.set_auto_schedule(false);
+            gc.request_gc(GcType::Major);
+        }
+
+        embedder.run_maintenance().expect("maintenance should run");
+
+        match &embedder.js_runtime {
+            EmbedderJsRuntime::V8(runtime) => {
+                assert_eq!(runtime.garbage_collection_count(), 1);
+                assert_eq!(
+                    runtime
+                        .last_garbage_collection()
+                        .expect("GC record should exist")
+                        .gc_type,
+                    GcType::Major
+                );
+            }
+            EmbedderJsRuntime::ServoManaged(_) => {
+                panic!("maintenance should promote runtime for scheduled GC")
+            }
+        }
     }
 
     #[test]

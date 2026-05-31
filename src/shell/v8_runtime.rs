@@ -2,12 +2,14 @@
 
 use std::cell::RefCell;
 use std::sync::Once;
+use std::time::{Duration, Instant};
 
 use log::{debug, info};
 use rusty_v8 as v8;
 use serde_json::{json, Value};
 use url::{ParseError, Url};
 
+use crate::browser_optimizations::GcType;
 use crate::js_engine::{JsEngineKind, JsEngineStatus, JsEngineSwapStage};
 
 const SOLILOQUY_BRIDGE_SCHEMA: &str =
@@ -100,6 +102,15 @@ impl ShellBridgeWrite {
 pub struct V8Runtime {
     engine_status: JsEngineStatus,
     dom_snapshot: ShellDomSnapshot,
+    garbage_collections: u64,
+    last_garbage_collection: Option<GcCollectionRecord>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GcCollectionRecord {
+    pub gc_type: GcType,
+    pub started_at: Instant,
+    pub duration: Duration,
 }
 
 impl V8Runtime {
@@ -135,6 +146,8 @@ impl V8Runtime {
         Ok(V8Runtime {
             engine_status,
             dom_snapshot: ShellDomSnapshot::default(),
+            garbage_collections: 0,
+            last_garbage_collection: None,
         })
     }
 
@@ -147,6 +160,31 @@ impl V8Runtime {
     /// Record load completion for the shell-side DOM snapshot.
     pub fn record_load_complete(&mut self) {
         self.dom_snapshot.ready_state = Some("complete".to_string());
+    }
+
+    pub fn collect_garbage(&mut self, gc_type: GcType) -> Duration {
+        let started_at = Instant::now();
+        V8_ISOLATE.with(|cell| {
+            if let Some(isolate) = cell.borrow_mut().as_mut() {
+                isolate.low_memory_notification();
+            }
+        });
+        let duration = started_at.elapsed();
+        self.garbage_collections += 1;
+        self.last_garbage_collection = Some(GcCollectionRecord {
+            gc_type,
+            started_at,
+            duration,
+        });
+        duration
+    }
+
+    pub fn garbage_collection_count(&self) -> u64 {
+        self.garbage_collections
+    }
+
+    pub fn last_garbage_collection(&self) -> Option<GcCollectionRecord> {
+        self.last_garbage_collection
     }
 
     /// Execute JavaScript and return its string result.
@@ -616,6 +654,29 @@ mod tests {
         let result = runtime.execute_script(script);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Hello from V8!");
+    }
+
+    #[test]
+    fn collect_garbage_records_bookkeeping() {
+        let mut runtime = V8Runtime::new().unwrap();
+
+        let duration = runtime.collect_garbage(GcType::Minor);
+
+        assert_eq!(runtime.garbage_collection_count(), 1);
+        assert_eq!(
+            runtime
+                .last_garbage_collection()
+                .expect("GC record should exist")
+                .gc_type,
+            GcType::Minor
+        );
+        assert_eq!(
+            duration,
+            runtime
+                .last_garbage_collection()
+                .expect("GC record should exist")
+                .duration
+        );
     }
 
     #[test]

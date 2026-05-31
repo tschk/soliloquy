@@ -3,14 +3,23 @@
 //! Provides HTTP/3 over QUIC with connection migration, 0-RTT resumption,
 //! Alt-Svc support, and session ticket caching.
 
+use bytes::{Buf, Bytes};
+use futures::future;
+use hyper::{
+    header::{HeaderName, HeaderValue},
+    Method, Request, Uri,
+};
+use log::{debug, warn};
+use quinn::{ClientConfig, Connection, Endpoint};
+use rustls::RootCertStore;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use log::{debug, warn};
-use serde::{Deserialize, Serialize};
-use quinn::{ClientConfig, Endpoint, Connection};
-use rustls::RootCertStore;
+
+type H3SendRequest = h3::client::SendRequest<h3_quinn::OpenStreams, Bytes>;
+type H3DriverHandle = tokio::task::JoinHandle<()>;
 
 /// QUIC configuration
 #[derive(Debug, Clone)]
@@ -39,9 +48,9 @@ impl Default for QuicConfig {
             max_idle_timeout: Duration::from_secs(30),
             enable_0rtt: true,
             initial_max_data: 10 * 1024 * 1024, // 10 MB
-            initial_max_stream_data_bidi_local: 1 * 1024 * 1024, // 1 MB
-            initial_max_stream_data_bidi_remote: 1 * 1024 * 1024, // 1 MB
-            initial_max_stream_data_uni: 1 * 1024 * 1024, // 1 MB
+            initial_max_stream_data_bidi_local: 1024 * 1024, // 1 MB
+            initial_max_stream_data_bidi_remote: 1024 * 1024, // 1 MB
+            initial_max_stream_data_uni: 1024 * 1024, // 1 MB
             max_concurrent_bidi_streams: 100,
             max_concurrent_uni_streams: 100,
         }
@@ -72,7 +81,6 @@ impl QuicSessionTicket {
 }
 
 /// QUIC connection state
-#[derive(Debug)]
 pub struct QuicConnection {
     /// Server hostname
     pub hostname: String,
@@ -82,10 +90,29 @@ pub struct QuicConnection {
     pub established_at: u64,
     /// Last activity timestamp
     pub last_activity: u64,
-    /// Connection ID (placeholder)
+    /// Connection ID
     pub connection_id: u64,
     /// Actual QUIC connection
     pub connection: Option<Connection>,
+    /// HTTP/3 request sender
+    h3_sender: Option<H3SendRequest>,
+    /// HTTP/3 connection driver task
+    h3_driver: Option<H3DriverHandle>,
+}
+
+impl std::fmt::Debug for QuicConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QuicConnection")
+            .field("hostname", &self.hostname)
+            .field("remote_addr", &self.remote_addr)
+            .field("established_at", &self.established_at)
+            .field("last_activity", &self.last_activity)
+            .field("connection_id", &self.connection_id)
+            .field("connection", &self.connection)
+            .field("has_h3_sender", &self.h3_sender.is_some())
+            .field("has_h3_driver", &self.h3_driver.is_some())
+            .finish()
+    }
 }
 
 impl QuicConnection {
@@ -147,22 +174,22 @@ impl QuicTransport {
     pub fn new(config: QuicConfig) -> Self {
         // Initialize QUIC endpoint
         // Bind to ephemeral port
-        let mut endpoint = Endpoint::client("[::]:0".parse().unwrap())
-            .expect("Failed to create QUIC endpoint");
+        let mut endpoint =
+            Endpoint::client("[::]:0".parse().unwrap()).expect("Failed to create QUIC endpoint");
 
         // Configure TLS
-        // Note: In a production environment, we would load system certificates here.
-        // Currently we use an empty root store, which will fail validation unless configured otherwise.
-        let roots = RootCertStore::empty();
-        let client_crypto = rustls::ClientConfig::builder()
+        let mut roots = RootCertStore::empty();
+        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let mut client_crypto = rustls::ClientConfig::builder()
             .with_root_certificates(roots)
             .with_no_client_auth();
+        client_crypto.alpn_protocols = vec![b"h3".to_vec()];
 
         // Wrap rustls config in quinn's QuicClientConfig
         let quic_client_config = quinn::crypto::rustls::QuicClientConfig::try_from(client_crypto)
             .expect("Failed to create QUIC client config");
 
-        let mut client_config = ClientConfig::new(Arc::new(quic_client_config));
+        let client_config = ClientConfig::new(Arc::new(quic_client_config));
 
         // Configure transport parameters from QuicConfig
         // let mut transport_config = quinn::TransportConfig::default();
@@ -267,18 +294,16 @@ impl QuicTransport {
 
         for addr in remote_addrs {
             match self.endpoint.connect(addr, hostname) {
-                Ok(connecting) => {
-                    match connecting.await {
-                        Ok(conn) => {
-                            connection_result = Some((conn, addr));
-                            break;
-                        }
-                        Err(e) => {
-                            last_error = format!("Connection failed: {}", e);
-                            warn!("Failed to connect to {}: {}", addr, e);
-                        }
+                Ok(connecting) => match connecting.await {
+                    Ok(conn) => {
+                        connection_result = Some((conn, addr));
+                        break;
                     }
-                }
+                    Err(e) => {
+                        last_error = format!("Connection failed: {}", e);
+                        warn!("Failed to connect to {}: {}", addr, e);
+                    }
+                },
                 Err(e) => {
                     last_error = format!("Failed to create connection: {}", e);
                     warn!("Failed to create connection to {}: {}", addr, e);
@@ -294,6 +319,15 @@ impl QuicTransport {
             }
         })?;
 
+        let h3_connection = h3_quinn::Connection::new(connection.clone());
+        let (mut h3_driver, h3_sender) = h3::client::new(h3_connection)
+            .await
+            .map_err(|e| format!("HTTP/3 connection setup failed: {}", e))?;
+        let h3_driver = tokio::spawn(async move {
+            let closed = future::poll_fn(|cx| h3_driver.poll_close(cx)).await;
+            debug!("HTTP/3 connection driver closed: {}", closed);
+        });
+
         let connection = QuicConnection {
             hostname: hostname.to_string(),
             remote_addr,
@@ -301,6 +335,8 @@ impl QuicTransport {
             last_activity: current_timestamp(),
             connection_id,
             connection: Some(connection),
+            h3_sender: Some(h3_sender),
+            h3_driver: Some(h3_driver),
         };
 
         {
@@ -308,7 +344,10 @@ impl QuicTransport {
             connections.insert(hostname.to_string(), connection);
         }
 
-        debug!("Established QUIC connection {} to {}", connection_id, hostname);
+        debug!(
+            "Established QUIC connection {} to {}",
+            connection_id, hostname
+        );
         Ok(connection_id)
     }
 
@@ -333,22 +372,80 @@ impl QuicTransport {
     ) -> Result<Vec<u8>, String> {
         debug!("Sending HTTP/3 {} request to {}", method, path);
 
-        // TODO: Implement HTTP/3 requests using h3 crate
-        // Placeholder implementation
-        
-        // Update connection activity
-        {
+        let (hostname, mut h3_sender) = {
             let mut connections = self.connections.lock().unwrap();
-            for conn in connections.values_mut() {
-                if conn.connection_id == connection_id {
-                    conn.touch();
-                    break;
-                }
+            let conn = connections
+                .values_mut()
+                .find(|conn| conn.connection_id == connection_id)
+                .ok_or_else(|| format!("No QUIC connection found for id {}", connection_id))?;
+            let quinn_conn = conn
+                .connection
+                .as_ref()
+                .ok_or_else(|| format!("QUIC connection {} is closed", connection_id))?;
+            if let Some(reason) = quinn_conn.close_reason() {
+                return Err(format!(
+                    "QUIC connection {} is closed: {}",
+                    connection_id, reason
+                ));
+            }
+            let h3_sender = conn
+                .h3_sender
+                .as_ref()
+                .ok_or_else(|| {
+                    format!(
+                        "HTTP/3 request sender unavailable for connection {}",
+                        connection_id
+                    )
+                })?
+                .clone();
+            conn.touch();
+            (conn.hostname.clone(), h3_sender)
+        };
+
+        let request = build_h3_request(&hostname, method, path, headers)?;
+        let mut request_stream = h3_sender
+            .send_request(request)
+            .await
+            .map_err(|e| format!("HTTP/3 stream open failed: {}", e))?;
+
+        if let Some(body) = body {
+            if !body.is_empty() {
+                request_stream
+                    .send_data(Bytes::from(body))
+                    .await
+                    .map_err(|e| format!("HTTP/3 request body send failed: {}", e))?;
             }
         }
 
-        // Simulate response
-        Ok(b"HTTP/3 response placeholder".to_vec())
+        request_stream
+            .finish()
+            .await
+            .map_err(|e| format!("HTTP/3 request finish failed: {}", e))?;
+        request_stream
+            .recv_response()
+            .await
+            .map_err(|e| format!("HTTP/3 response headers failed: {}", e))?;
+
+        let mut response = Vec::new();
+        while let Some(chunk) = request_stream
+            .recv_data()
+            .await
+            .map_err(|e| format!("HTTP/3 response body failed: {}", e))?
+        {
+            append_response_chunk(&mut response, chunk);
+        }
+
+        {
+            let mut connections = self.connections.lock().unwrap();
+            if let Some(conn) = connections
+                .values_mut()
+                .find(|conn| conn.connection_id == connection_id)
+            {
+                conn.touch();
+            }
+        }
+
+        Ok(response)
     }
 
     /// Parse and cache Alt-Svc header
@@ -358,7 +455,7 @@ impl QuicTransport {
     /// * `alt_svc_header` - Alt-Svc header value
     pub fn cache_alt_svc(&self, origin: &str, alt_svc_header: &str) {
         // Format: h3=":443"; ma=2592000
-        
+
         // Simple parser for common format
         if let Some(entry) = parse_alt_svc(origin, alt_svc_header) {
             let mut cache = self.alt_svc_cache.lock().unwrap();
@@ -373,12 +470,7 @@ impl QuicTransport {
     /// * `hostname` - Server hostname
     /// * `ticket` - Session ticket data
     /// * `transport_params` - QUIC transport parameters
-    pub fn cache_session_ticket(
-        &self,
-        hostname: &str,
-        ticket: Vec<u8>,
-        transport_params: Vec<u8>,
-    ) {
+    pub fn cache_session_ticket(&self, hostname: &str, ticket: Vec<u8>, transport_params: Vec<u8>) {
         let session_ticket = QuicSessionTicket {
             hostname: hostname.to_string(),
             ticket,
@@ -519,6 +611,45 @@ fn parse_alt_svc(origin: &str, header: &str) -> Option<AltSvcEntry> {
     })
 }
 
+fn build_h3_request(
+    hostname: &str,
+    method: &str,
+    path: &str,
+    headers: HashMap<String, String>,
+) -> Result<Request<()>, String> {
+    let method = Method::from_bytes(method.as_bytes())
+        .map_err(|e| format!("Invalid HTTP method `{}`: {}", method, e))?;
+    if !path.starts_with('/') {
+        return Err(format!(
+            "Invalid HTTP path `{}`: path must start with /",
+            path
+        ));
+    }
+    let uri = format!("https://{}{}", hostname, path)
+        .parse::<Uri>()
+        .map_err(|e| format!("Invalid HTTP path `{}`: {}", path, e))?;
+
+    let mut builder = Request::builder().method(method).uri(uri);
+    for (name, value) in headers {
+        let header_name = HeaderName::from_lowercase(name.as_bytes())
+            .map_err(|e| format!("Invalid HTTP header name `{}`: {}", name, e))?;
+        let header_value = HeaderValue::from_str(&value)
+            .map_err(|e| format!("Invalid HTTP header value for `{}`: {}", name, e))?;
+        builder = builder.header(header_name, header_value);
+    }
+
+    builder
+        .body(())
+        .map_err(|e| format!("Invalid HTTP/3 request: {}", e))
+}
+
+fn append_response_chunk<B: Buf>(response: &mut Vec<u8>, mut chunk: B) {
+    while chunk.has_remaining() {
+        let bytes = chunk.copy_to_bytes(chunk.remaining());
+        response.extend_from_slice(&bytes);
+    }
+}
+
 /// Get current Unix timestamp
 fn current_timestamp() -> u64 {
     SystemTime::now()
@@ -547,7 +678,7 @@ mod tests {
             created_at: 0,
             lifetime: 1,
         };
-        
+
         assert!(ticket.is_expired());
     }
 
@@ -561,7 +692,7 @@ mod tests {
             max_age: 1,
             cached_at: 0,
         };
-        
+
         assert!(entry.is_expired());
     }
 
@@ -595,32 +726,19 @@ mod tests {
         assert_eq!(stats.cached_tickets, 0);
     }
 
-    // test_quic_connect requires actual network or mock, skipping for now as we don't have network access in sandbox usually
-    // and DNS resolution for example.com might fail or timeout.
-    // #[tokio::test]
-    // async fn test_quic_connect() {
-    //     let transport = QuicTransport::default();
-    //     let result = transport.connect("example.com", 443).await;
-    //     assert!(result.is_ok()); // This would fail without network
-    // }
-
-    #[test]
-    fn test_cache_alt_svc() {
+    #[tokio::test]
+    async fn test_cache_alt_svc() {
         let transport = QuicTransport::default();
         transport.cache_alt_svc("example.com", "h3=\":443\"; ma=2592000");
-        
+
         assert!(transport.is_quic_available("example.com"));
     }
 
-    #[test]
-    fn test_cache_session_ticket() {
+    #[tokio::test]
+    async fn test_cache_session_ticket() {
         let transport = QuicTransport::default();
-        transport.cache_session_ticket(
-            "example.com",
-            vec![1, 2, 3],
-            vec![4, 5, 6],
-        );
-        
+        transport.cache_session_ticket("example.com", vec![1, 2, 3], vec![4, 5, 6]);
+
         let stats = transport.stats();
         assert_eq!(stats.cached_tickets, 1);
     }
@@ -634,18 +752,20 @@ mod tests {
             last_activity: 0,
             connection_id: 1,
             connection: None,
+            h3_sender: None,
+            h3_driver: None,
         };
-        
+
         assert!(conn.is_idle(1));
-        
+
         conn.touch();
         assert!(!conn.is_idle(3600));
     }
 
-    #[test]
-    fn test_cleanup_expired() {
+    #[tokio::test]
+    async fn test_cleanup_expired() {
         let transport = QuicTransport::default();
-        
+
         // Add expired ticket
         {
             let mut tickets = transport.session_tickets.lock().unwrap();
@@ -660,10 +780,82 @@ mod tests {
                 },
             );
         }
-        
+
         transport.cleanup_expired();
-        
+
         let stats = transport.stats();
         assert_eq!(stats.cached_tickets, 0);
+    }
+
+    #[tokio::test]
+    async fn test_send_h3_request_missing_connection_error() {
+        let transport = QuicTransport::default();
+        let error = transport
+            .send_h3_request(404, "GET", "/", HashMap::new(), None)
+            .await
+            .unwrap_err();
+
+        assert!(error.contains("No QUIC connection found for id 404"));
+    }
+
+    #[tokio::test]
+    async fn test_send_h3_request_closed_connection_error() {
+        let transport = QuicTransport::default();
+        {
+            let mut connections = transport.connections.lock().unwrap();
+            connections.insert(
+                "example.com".to_string(),
+                QuicConnection {
+                    hostname: "example.com".to_string(),
+                    remote_addr: "127.0.0.1:443".parse().unwrap(),
+                    established_at: current_timestamp(),
+                    last_activity: current_timestamp(),
+                    connection_id: 7,
+                    connection: None,
+                    h3_sender: None,
+                    h3_driver: None,
+                },
+            );
+        }
+
+        let error = transport
+            .send_h3_request(7, "GET", "/", HashMap::new(), None)
+            .await
+            .unwrap_err();
+
+        assert!(error.contains("QUIC connection 7 is closed"));
+    }
+
+    #[test]
+    fn test_build_h3_request_rejects_invalid_method() {
+        let error = build_h3_request("example.com", "BAD METHOD", "/", HashMap::new()).unwrap_err();
+
+        assert!(error.contains("Invalid HTTP method"));
+    }
+
+    #[test]
+    fn test_build_h3_request_rejects_invalid_path() {
+        let error = build_h3_request("example.com", "GET", "relative", HashMap::new()).unwrap_err();
+
+        assert!(error.contains("path must start with /"));
+    }
+
+    #[test]
+    fn test_build_h3_request_rejects_invalid_header() {
+        let mut headers = HashMap::new();
+        headers.insert("X-Test".to_string(), "value".to_string());
+        let error = build_h3_request("example.com", "GET", "/", headers).unwrap_err();
+
+        assert!(error.contains("Invalid HTTP header name"));
+    }
+
+    #[test]
+    fn test_append_response_chunk_collects_response_body() {
+        let mut response = Vec::new();
+
+        append_response_chunk(&mut response, Bytes::from_static(b"hello "));
+        append_response_chunk(&mut response, Bytes::from_static(b"h3"));
+
+        assert_eq!(response, b"hello h3");
     }
 }
