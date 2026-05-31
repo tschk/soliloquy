@@ -716,7 +716,7 @@
       canvas.addEventListener('keydown', (e) => {
         e.preventDefault();
         const seq = keyToBytes(e);
-        if (seq && ws.readyState === WebSocket.OPEN) ws.send(seq);
+        if (seq && ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(seq));
       });
 
       // Propagate renderer resize → PTY SIGWINCH

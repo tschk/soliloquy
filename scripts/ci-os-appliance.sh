@@ -150,6 +150,8 @@ assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'NATIVE_POLIC
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh '/usr/local/lib/soliloquy/native-policy'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'SOLFS_MODULE'
 assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh '/usr/local/lib/soliloquy/kernel/solfs.ko'
+assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'cp -R "\$\{UI_BUILD_DIR\}" "\$\{ROOTFS\}/usr/local/share/soliloquy/bundle"'
+assert_contains system/alpine/scripts/stage-soliloquy-artifacts.sh 'bundle/terminal'
 assert_contains system/alpine/scripts/ensure-linux-runtime-binaries.sh 'build_netd_linux'
 assert_contains system/alpine/scripts/qemu-v0.sh 'SOL_NETD_BIN'
 assert_contains system/native/kernel-policy-v/policy.v 'sol_renderer_cpu_weight'
@@ -172,6 +174,8 @@ assert_contains system/alpine/rootfs-overlay/etc/modprobe.d/soliloquy-browser-ap
 assert_contains system/alpine/rootfs-overlay/etc/modprobe.d/soliloquy-browser-appliance.conf '^blacklist usb_storage$'
 assert_contains system/alpine/rootfs-overlay/etc/modules-load.d/soliloquy-browser-appliance.conf '^zram$'
 assert_contains system/alpine/rootfs-overlay/init 'mount -t cgroup2 cgroup2 /sys/fs/cgroup'
+assert_contains system/alpine/rootfs-overlay/init 'mount -t devpts devpts /dev/pts'
+assert_contains system/alpine/rootfs-overlay/init 'ln -sf pts/ptmx /dev/ptmx'
 assert_contains system/alpine/rootfs-overlay/etc/inittab '^::wait:/sbin/openrc default$'
 assert_not_contains system/alpine/rootfs-overlay/etc/inittab 'sol-session-start'
 

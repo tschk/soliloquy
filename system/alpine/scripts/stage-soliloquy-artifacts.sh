@@ -162,8 +162,9 @@ if [ ! -d "${UI_BUILD_DIR}" ]; then
   echo "run tools/soliloquy/build_ui.sh before staging artifacts" >&2
   exit 1
 fi
-rm -rf "${ROOTFS}/usr/local/share/soliloquy/ui"
+rm -rf "${ROOTFS}/usr/local/share/soliloquy/ui" "${ROOTFS}/usr/local/share/soliloquy/bundle"
 cp -R "${UI_BUILD_DIR}" "${ROOTFS}/usr/local/share/soliloquy/ui"
+cp -R "${UI_BUILD_DIR}" "${ROOTFS}/usr/local/share/soliloquy/bundle"
 
 # Stage sold bundle (includes os://terminal HTML + ghostty WASM)
 BUNDLE_DIR="${REPO_ROOT}/bundle"
@@ -187,6 +188,16 @@ if [ ! -f "${WASM_OUT}" ]; then
     echo "WARNING: zig not found; os://terminal will use JS fallback" >&2
   fi
 fi
-cp -R "${BUNDLE_DIR}/." "${ROOTFS}/usr/local/share/soliloquy/bundle"
+mkdir -p "${ROOTFS}/usr/local/share/soliloquy/bundle/terminal"
+cp -R "${BUNDLE_DIR}/terminal/." "${ROOTFS}/usr/local/share/soliloquy/bundle/terminal/"
+for asset in files.html settings.html files.crepus settings.crepus; do
+  if [ -f "${BUNDLE_DIR}/${asset}" ]; then
+    cp "${BUNDLE_DIR}/${asset}" "${ROOTFS}/usr/local/share/soliloquy/bundle/${asset}"
+  fi
+done
+if [ -d "${BUNDLE_DIR}/assets" ]; then
+  mkdir -p "${ROOTFS}/usr/local/share/soliloquy/bundle/assets"
+  cp -R "${BUNDLE_DIR}/assets/." "${ROOTFS}/usr/local/share/soliloquy/bundle/assets/"
+fi
 
 echo "Staged servo into ${ROOTFS}"

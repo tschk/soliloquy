@@ -128,6 +128,9 @@ if ! mount -t devtmpfs devtmpfs /dev 2>/dev/null; then
   mknod -m 620 /dev/tty1 c 4 1 || true
   mknod -m 620 /dev/ttyS0 c 4 64 || true
 fi
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+ln -sf pts/ptmx /dev/ptmx 2>/dev/null || true
 
 # wlroots uses shm_open for several allocations (e.g. linux-dmabuf format tables). A missing
 # or undersized /dev/shm breaks the compositor and can surface as client-side Wayland I/O errors.

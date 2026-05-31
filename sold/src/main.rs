@@ -1163,6 +1163,11 @@ async fn handle_term_ws(mut socket: WebSocket, id: String, master_fd: i32, state
                             if let Some(s) = state.sessions.get(&id) {
                                 let _ = nix::sys::signal::kill(s.child_pid, Signal::SIGWINCH);
                             }
+                        } else {
+                            unsafe {
+                                let bfd = BorrowedFd::borrow_raw(master_fd);
+                                nix::unistd::write(bfd, text.as_bytes()).ok();
+                            }
                         }
                     }
                     Some(Ok(Message::Close(_))) => break,
