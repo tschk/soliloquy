@@ -2485,6 +2485,7 @@ async fn notify(
         return Err(StatusCode::BAD_REQUEST);
     }
     match std::process::Command::new("notify-send")
+        .arg("--")
         .arg(payload.title)
         .arg(payload.body)
         .spawn()
