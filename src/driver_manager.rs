@@ -544,6 +544,20 @@ impl CapabilityBroker {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_empty_manifest_creation() {
+        let manifest = DriverManifest::new("", "", "");
+        assert_eq!(manifest.id, "");
+        assert_eq!(manifest.name, "");
+        assert_eq!(manifest.version, "");
+        assert!(manifest.capabilities.is_empty());
+        assert!(manifest.dependencies.is_empty());
+        assert!(manifest.firmware.is_empty());
+        assert_eq!(manifest.package_uri, None);
+        assert_eq!(manifest.signature, None);
+        assert!(manifest.removable);
+    }
+
     fn signed_manifest(id: &str, capability: Capability) -> DriverManifest {
         let mut manifest = DriverManifest::new(id, id, "1.0.0");
         manifest.capabilities.push(capability);
