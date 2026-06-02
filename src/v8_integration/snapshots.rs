@@ -302,11 +302,30 @@ mod tests {
     }
 
     #[test]
+    fn test_v8_snapshot_creation_empty() {
+        let data: Vec<u8> = vec![];
+        let snapshot = V8Snapshot::new(data.clone());
+
+        assert_eq!(snapshot.size(), 0);
+        assert!(snapshot.data().is_empty());
+    }
+
+    #[test]
     fn test_bytecode_cache_creation() {
         let bytecode = vec![1, 2, 3];
         let cache = BytecodeCache::new(bytecode.clone(), 12345);
 
         assert_eq!(cache.bytecode(), &bytecode[..]);
+        assert!(cache.is_valid(12345));
+        assert!(!cache.is_valid(54321));
+    }
+
+    #[test]
+    fn test_bytecode_cache_creation_empty() {
+        let bytecode: Vec<u8> = vec![];
+        let cache = BytecodeCache::new(bytecode.clone(), 12345);
+
+        assert!(cache.bytecode().is_empty());
         assert!(cache.is_valid(12345));
         assert!(!cache.is_valid(54321));
     }
