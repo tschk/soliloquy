@@ -650,14 +650,21 @@ mod tests {
     #[test]
     fn test_signed_digest_empty_and_edge_cases() {
         let mut manifest = DriverManifest::new("", "", "");
-        let digest1 = manifest.signed_digest().expect("Should produce digest for empty fields");
+        let digest1 = manifest
+            .signed_digest()
+            .expect("Should produce digest for empty fields");
 
         manifest.signature = Some(PackageSignature {
             key_id: "test-key".to_string(),
             digest_sha256: "fake-digest".to_string(),
         });
 
-        let digest2 = manifest.signed_digest().expect("Should produce digest with signature present");
-        assert_eq!(digest1, digest2, "Signature field should be ignored in digest calculation");
+        let digest2 = manifest
+            .signed_digest()
+            .expect("Should produce digest with signature present");
+        assert_eq!(
+            digest1, digest2,
+            "Signature field should be ignored in digest calculation"
+        );
     }
 }

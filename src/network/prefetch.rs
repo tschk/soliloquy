@@ -251,11 +251,7 @@ mod tests {
 
     #[test]
     fn test_prefetch_request_empty_url() {
-        let req = PrefetchRequest::new(
-            "".to_string(),
-            ResourceType::Dns,
-            PrefetchPriority::Low,
-        );
+        let req = PrefetchRequest::new("".to_string(), ResourceType::Dns, PrefetchPriority::Low);
 
         assert_eq!(req.url, "");
         assert_eq!(req.resource_type, ResourceType::Dns);
