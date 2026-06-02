@@ -243,13 +243,18 @@ impl DisplayListCache {
         let mut changed_indices = Vec::new();
 
         // Simple diff: find entries that changed
-        for i in 0..self.current_list.len().max(self.cached_list.len()) {
-            let current = self.current_list.get(i);
-            let cached = self.cached_list.get(i);
+        let min_len = self.current_list.len().min(self.cached_list.len());
+        changed_indices.extend(
+            self.current_list
+                .iter()
+                .zip(self.cached_list.iter())
+                .enumerate()
+                .filter_map(|(i, (current, cached))| (current != cached).then_some(i)),
+        );
 
-            if current != cached {
-                changed_indices.push(i);
-            }
+        let max_len = self.current_list.len().max(self.cached_list.len());
+        if max_len > min_len {
+            changed_indices.extend(min_len..max_len);
         }
 
         // Update cache
