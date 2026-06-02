@@ -2284,10 +2284,12 @@ fn check_mutation_auth(headers: &HeaderMap, state: &AppState) -> Result<(), Stat
 }
 
 fn origin_allowed(headers: &HeaderMap) -> bool {
+    let mut has_header = false;
     for header in ["origin", "referer"] {
         let Some(value) = headers.get(header).and_then(|value| value.to_str().ok()) else {
             continue;
         };
+        has_header = true;
         let Ok(url) = reqwest::Url::parse(value) else {
             return false;
         };
@@ -2298,7 +2300,7 @@ fn origin_allowed(headers: &HeaderMap) -> bool {
             return false;
         }
     }
-    true
+    has_header
 }
 
 fn is_allowed_cors_origin(origin: &HeaderValue) -> bool {
@@ -2837,6 +2839,12 @@ mod tests {
         assert!(safe_file_path(root, "../etc/passwd").is_err());
         assert!(safe_file_path(root, "/etc/passwd").is_err());
         assert!(safe_file_path(root, "").is_err());
+    }
+
+    #[test]
+    fn mutation_origin_rejects_missing_headers() {
+        let headers = HeaderMap::new();
+        assert!(!origin_allowed(&headers));
     }
 
     #[test]
