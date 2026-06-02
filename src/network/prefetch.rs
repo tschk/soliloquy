@@ -332,6 +332,23 @@ mod tests {
     }
 
     #[test]
+    fn test_mark_completed_empty() {
+        let mut manager = PrefetchManager::new();
+
+        // Empty string edge case
+        manager.mark_completed("".to_string());
+
+        // Should not add duplicate since it's completed
+        manager.request_prefetch(
+            "".to_string(),
+            ResourceType::Dns,
+            PrefetchPriority::High,
+        );
+
+        assert_eq!(manager.pending_count(), 0);
+    }
+
+    #[test]
     fn test_completed_marking() {
         let mut manager = PrefetchManager::new();
 
