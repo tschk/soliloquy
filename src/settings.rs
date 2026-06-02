@@ -147,4 +147,14 @@ mod tests {
             Some(crate::driver_manager::DriverState::Disabled)
         );
     }
+
+    #[test]
+    fn test_is_enabled_edge_cases() {
+        let tempdir = tempdir().unwrap();
+        let catalog_path = tempdir.path().join("settings");
+        let settings = SettingsManager::open(&catalog_path).unwrap();
+
+        assert_eq!(settings.is_enabled("nonexistent_key"), None);
+        assert_eq!(settings.is_enabled(""), None);
+    }
 }
