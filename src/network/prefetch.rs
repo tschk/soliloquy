@@ -319,6 +319,38 @@ mod tests {
     }
 
     #[test]
+    fn test_hover_empty_string() {
+        let mut manager = PrefetchManager::new();
+
+        manager.record_hover("".to_string());
+        manager.record_hover("".to_string());
+
+        assert!(manager.pending_count() > 0);
+        let req = manager.next_request().unwrap();
+        assert_eq!(req.url, "");
+    }
+
+    #[test]
+    fn test_hover_prediction_disabled() {
+        let mut manager = PrefetchManager::new();
+        manager.set_predictive(false);
+
+        manager.record_hover("https://example.com".to_string());
+        manager.record_hover("https://example.com".to_string());
+
+        assert_eq!(manager.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_hover_single_no_trigger() {
+        let mut manager = PrefetchManager::new();
+
+        manager.record_hover("https://example.com".to_string());
+
+        assert_eq!(manager.pending_count(), 0);
+    }
+
+    #[test]
     fn test_dns_prefetch_cache() {
         let mut cache = DnsPrefetchCache::new();
 
