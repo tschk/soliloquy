@@ -484,26 +484,6 @@ impl QuicTransport {
         debug!("Cached QUIC session ticket for {}", hostname);
     }
 
-    /// Close connection
-    ///
-    /// # Arguments
-    /// * `connection_id` - Connection identifier
-    pub fn close_connection(&self, connection_id: u64) {
-        let mut connections = self.connections.lock().unwrap();
-        connections.retain(|_, conn| {
-            if conn.connection_id == connection_id {
-                debug!("Closing QUIC connection {}", connection_id);
-                // Quinn connection is dropped when removed from map, which sends CLOSE
-                if let Some(q_conn) = &conn.connection {
-                    q_conn.close(0u32.into(), b"closed");
-                }
-                false
-            } else {
-                true
-            }
-        });
-    }
-
     /// Clean up expired tickets and idle connections
     pub fn cleanup_expired(&self) {
         // Clean session tickets
