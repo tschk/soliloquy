@@ -100,11 +100,9 @@ pub fn upgrade_image_to_v2(path: impl AsRef<Path>, target_size: u64) -> crate::R
     }
 
     for extent in &layout.extents {
-        let entry = entry_map
-            .get(&extent.inode)
-            .ok_or_else(|| {
-                crate::SolfsError::Invalid("v2 extent references missing inode".into())
-            })?;
+        let entry = entry_map.get(&extent.inode).ok_or_else(|| {
+            crate::SolfsError::Invalid("v2 extent references missing inode".into())
+        })?;
         file.seek(SeekFrom::Start(entry.data_offset))?;
         let mut data = vec![0_u8; entry.size as usize];
         file.read_exact(&mut data)?;
