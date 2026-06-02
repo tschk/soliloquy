@@ -250,6 +250,19 @@ mod tests {
     }
 
     #[test]
+    fn test_prefetch_request_empty_url() {
+        let req = PrefetchRequest::new(
+            "".to_string(),
+            ResourceType::Dns,
+            PrefetchPriority::Low,
+        );
+
+        assert_eq!(req.url, "");
+        assert_eq!(req.resource_type, ResourceType::Dns);
+        assert_eq!(req.priority, PrefetchPriority::Low);
+    }
+
+    #[test]
     fn test_prefetch_manager() {
         let mut manager = PrefetchManager::new();
 
