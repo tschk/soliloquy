@@ -710,8 +710,10 @@ async fn main() {
         .unwrap_or_else(|| PathBuf::from(DEFAULT_RUNTIME_EVENTS_FILE));
     let token = std::env::var("SOL_TOKEN").ok().and_then(|value| {
         let trimmed = value.trim().to_string();
-        if trimmed.is_empty() || trimmed == "dev-token-change-me" {
+        if trimmed.is_empty() {
             None
+        } else if trimmed == "dev-token-change-me" {
+            panic!("SOL_TOKEN is set to the default value ('dev-token-change-me'). Please change it for security.");
         } else {
             Some(trimmed)
         }
