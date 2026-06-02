@@ -117,12 +117,6 @@ impl DriverCatalog {
         Ok(())
     }
 
-    pub fn remove_record(&self, id: &str) -> Result<(), DriverCatalogError> {
-        self.records.remove(id.as_bytes())?;
-        self.db.flush()?;
-        Ok(())
-    }
-
     pub fn clear(&self) -> Result<(), DriverCatalogError> {
         self.records.clear()?;
         self.capability_sources.clear()?;
