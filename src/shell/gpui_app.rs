@@ -38,6 +38,16 @@ fn spawn_servo_renderer(address: &str) -> Option<Child> {
 
     let servo_bin = std::env::var("SERVO_BIN")
         .unwrap_or_else(|_| "third_party/servo/target/release/servoshell".to_string());
+
+    let bin_name = std::path::Path::new(&servo_bin)
+        .file_name()
+        .and_then(|n| n.to_str());
+
+    if bin_name != Some("servo") && bin_name != Some("servoshell") {
+        eprintln!("Security error: Invalid SERVO_BIN path. Must be an executable named 'servo' or 'servoshell'.");
+        return None;
+    }
+
     let window_size = std::env::var("SOL_WINDOW_SIZE").unwrap_or_else(|_| "1280x820".to_string());
     let js_engine =
         std::env::var("SOLILOQUY_JS_ENGINE").unwrap_or_else(|_| "v8-experimental".to_string());
