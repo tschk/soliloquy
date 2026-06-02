@@ -302,6 +302,15 @@ mod tests {
     }
 
     #[test]
+    fn test_v8_snapshot_empty_data() {
+        let data: Vec<u8> = vec![];
+        let snapshot = V8Snapshot::new(data.clone());
+
+        assert_eq!(snapshot.size(), 0);
+        assert_eq!(snapshot.data(), &data[..]);
+    }
+
+    #[test]
     fn test_bytecode_cache_creation() {
         let bytecode = vec![1, 2, 3];
         let cache = BytecodeCache::new(bytecode.clone(), 12345);
