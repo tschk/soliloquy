@@ -147,4 +147,11 @@ mod tests {
             Some(crate::driver_manager::DriverState::Disabled)
         );
     }
+
+    #[test]
+    fn is_enabled_returns_none_for_unknown_key() {
+        let settings = SettingsManager::default();
+        assert_eq!(settings.is_enabled("unknown_key"), None);
+        assert_eq!(settings.is_enabled(""), None);
+    }
 }
