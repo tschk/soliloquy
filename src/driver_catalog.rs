@@ -8,7 +8,6 @@ use crate::driver_manager::{
     Capability, DriverError, DriverLease, DriverManager, DriverManifest, DriverRecord, DriverState,
     RequireSignedPackages, TrustPolicy,
 };
-use serde::{Deserialize, Serialize};
 use sled::Db;
 use std::fmt;
 use std::path::Path;
@@ -55,7 +54,7 @@ impl From<DriverError> for DriverCatalogError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct PersistedDriverRecord {
     record: DriverRecord,
 }
