@@ -254,16 +254,18 @@ impl TabResidencyManager {
     /// Run eviction pass - check all tabs and evict idle ones
     pub fn run_eviction_pass(&mut self) -> usize {
         let mut evicted_count = 0;
-        let tab_ids: Vec<u64> = self.tabs.keys().copied().collect();
 
-        for tab_id in tab_ids {
-            if let Some(tab) = self.tabs.get(&tab_id) {
-                if tab.should_evict() {
-                    debug!("Evicting idle tab {}", tab_id);
-                    if self.evict_tab(tab_id).is_ok() {
-                        evicted_count += 1;
-                    }
-                }
+        let to_evict: Vec<u64> = self
+            .tabs
+            .iter()
+            .filter(|(_, tab)| tab.should_evict())
+            .map(|(&tab_id, _)| tab_id)
+            .collect();
+
+        for tab_id in to_evict {
+            debug!("Evicting idle tab {}", tab_id);
+            if self.evict_tab(tab_id).is_ok() {
+                evicted_count += 1;
             }
         }
 
