@@ -115,7 +115,7 @@ impl PrefetchManager {
 
     /// Record link hover for predictive prefetching
     pub fn record_hover(&mut self, url: String) {
-        if !self.predictive_enabled {
+        if !self.predictive_enabled || url.is_empty() {
             return;
         }
 
@@ -325,6 +325,16 @@ mod tests {
 
         // Should trigger prefetch
         assert!(manager.pending_count() > 0);
+    }
+
+    #[test]
+    fn test_hover_empty_string_ignored() {
+        let mut manager = PrefetchManager::new();
+
+        manager.record_hover("".to_string());
+        manager.record_hover("".to_string());
+
+        assert_eq!(manager.pending_count(), 0);
     }
 
     #[test]

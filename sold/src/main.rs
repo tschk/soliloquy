@@ -708,14 +708,9 @@ async fn main() {
     let runtime_events_path = std::env::var_os("SOLILOQUY_RUNTIME_EVENTS_FILE")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_RUNTIME_EVENTS_FILE));
-    let token = std::env::var("SOL_TOKEN").ok().and_then(|value| {
-        let trimmed = value.trim().to_string();
-        if trimmed.is_empty() || trimmed == "dev-token-change-me" {
-            None
-        } else {
-            Some(trimmed)
-        }
-    });
+    let token = std::env::var("SOL_TOKEN")
+        .ok()
+        .and_then(|value| configured_token(&value));
     let plugin_state_path = Arc::new(system_plugin_state_path());
     let plugin_install_state_path = Arc::new(system_plugin_install_state_path());
     let system_config = Arc::new(RwLock::new(load_system_config(plugin_state_path.as_ref())));
@@ -2285,6 +2280,15 @@ fn check_mutation_auth(headers: &HeaderMap, state: &AppState) -> Result<(), Stat
     Ok(())
 }
 
+fn configured_token(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 fn origin_allowed(headers: &HeaderMap) -> bool {
     let mut has_header = false;
     for header in ["origin", "referer"] {
@@ -2878,6 +2882,15 @@ mod tests {
         assert_eq!(header_token(&headers).as_deref(), Some("local-secret"));
         headers.insert("x-sol-token", "header-secret".parse().unwrap());
         assert_eq!(header_token(&headers).as_deref(), Some("header-secret"));
+    }
+
+    #[test]
+    fn default_token_is_still_enforced_when_configured() {
+        assert_eq!(
+            configured_token("dev-token-change-me").as_deref(),
+            Some("dev-token-change-me")
+        );
+        assert_eq!(configured_token("   "), None);
     }
 
     #[test]
