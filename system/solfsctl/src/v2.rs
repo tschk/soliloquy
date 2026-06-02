@@ -94,11 +94,14 @@ pub fn upgrade_image_to_v2(path: impl AsRef<Path>, target_size: u64) -> crate::R
     let mut file = OpenOptions::new().read(true).write(true).open(path)?;
     file.set_len(target_size)?;
 
+    let mut entry_map = std::collections::HashMap::with_capacity(image.entries.len());
+    for entry in &image.entries {
+        entry_map.insert(entry.inode, entry);
+    }
+
     for extent in &layout.extents {
-        let entry = image
-            .entries
-            .iter()
-            .find(|entry| entry.inode == extent.inode)
+        let entry = entry_map
+            .get(&extent.inode)
             .ok_or_else(|| {
                 crate::SolfsError::Invalid("v2 extent references missing inode".into())
             })?;
