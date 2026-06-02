@@ -2224,14 +2224,16 @@ fn apply_persisted_plugin_state(
     let Ok(persisted) = serde_json::from_str::<PersistedPluginState>(&raw) else {
         return config;
     };
-    for persisted_plugin in persisted.plugins {
-        if let Some(plugin) = config
-            .plugins
-            .iter_mut()
-            .find(|plugin| plugin.id == persisted_plugin.id)
-        {
+    let persisted_map: HashMap<_, _> = persisted
+        .plugins
+        .into_iter()
+        .map(|p| (p.id.clone(), p))
+        .collect();
+
+    for plugin in config.plugins.iter_mut() {
+        if let Some(persisted_plugin) = persisted_map.get(&plugin.id) {
             plugin.enabled = persisted_plugin.enabled;
-            plugin.sync = persisted_plugin.sync;
+            plugin.sync = persisted_plugin.sync.clone();
         }
     }
     config
