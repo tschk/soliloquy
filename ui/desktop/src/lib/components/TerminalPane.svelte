@@ -5,7 +5,7 @@
 	export let mode: 'overlay' | 'inline' = 'overlay';
 
 	const apiBase = import.meta.env.VITE_SOL_API_BASE_URL ?? 'http://127.0.0.1:8080';
-	const apiToken = import.meta.env.VITE_SOL_TOKEN ?? 'dev-token-change-me';
+	const apiToken = import.meta.env.VITE_SOL_TOKEN ?? '';
 
 	let output = '';
 	let sessionId: string | null = null;
