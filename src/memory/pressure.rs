@@ -192,7 +192,18 @@ impl SystemMemoryInfo {
 
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     pub fn get() -> Result<Self, String> {
-        Err("System memory probing is not implemented for this platform".to_string())
+        let mut sys = sysinfo::System::new();
+        sys.refresh_memory();
+
+        let total_memory = sys.total_memory() as usize;
+        let available_memory = sys.available_memory() as usize;
+        let used_memory = sys.used_memory() as usize;
+
+        Ok(SystemMemoryInfo {
+            total_memory,
+            available_memory,
+            used_memory,
+        })
     }
 }
 
