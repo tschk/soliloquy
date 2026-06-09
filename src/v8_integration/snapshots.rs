@@ -395,6 +395,18 @@ mod tests {
     }
 
     #[test]
+    fn test_snapshot_manager_total_size() {
+        let mut manager = SnapshotManager::new();
+        assert_eq!(manager.total_size(), 0);
+
+        manager.store_snapshot("snap1".to_string(), V8Snapshot::new(vec![1, 2, 3, 4]));
+        assert_eq!(manager.total_size(), 4);
+
+        manager.store_snapshot("snap2".to_string(), V8Snapshot::new(vec![5, 6, 7, 8, 9]));
+        assert_eq!(manager.total_size(), 9);
+    }
+
+    #[test]
     fn test_hash_source() {
         let hash1 = hash_source("console.log('hello')");
         let hash2 = hash_source("console.log('hello')");
