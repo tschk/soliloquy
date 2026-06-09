@@ -415,4 +415,54 @@ mod tests {
         assert_eq!(cleared, 3);
         assert_eq!(storage.get_stats().tab_count, 0);
     }
+
+    #[test]
+    fn test_disk_storage_clear_all_empty() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let mut storage =
+            DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create storage");
+
+        let cleared = storage.clear_all().expect("Failed to clear all");
+        assert_eq!(cleared, 0);
+        assert_eq!(storage.get_stats().tab_count, 0);
+    }
+
+    #[test]
+    fn test_disk_storage_clear_all_with_dummy_files() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let mut storage =
+            DiskStorage::new(temp_dir.path(), 10 * 1024 * 1024).expect("Failed to create storage");
+
+        // Save a valid tab
+        let state = FrozenTabState {
+            tab_id: 1,
+            url: "https://clear1.com".to_string(),
+            dom_snapshot: vec![],
+            render_snapshot: vec![],
+            v8_snapshot: vec![],
+            scroll_position: (0.0, 0.0),
+            viewport_size: (1920, 1080),
+            frozen_at: 1234567890,
+            original_size: 1000,
+            compressed_size: 500,
+        };
+        storage.save_tab(&state).expect("Failed to save tab");
+
+        // Create a dummy non-tab file
+        let dummy_file_path = temp_dir.path().join("not_a_tab.txt");
+        std::fs::write(&dummy_file_path, "dummy data").expect("Failed to write dummy file");
+
+        // Create a dummy tab file with invalid id
+        let dummy_tab_invalid_id = temp_dir.path().join("tab_invalid.bin");
+        std::fs::write(&dummy_tab_invalid_id, "dummy data").expect("Failed to write invalid tab");
+
+        // clear_all should only clear the valid tab
+        let cleared = storage.clear_all().expect("Failed to clear all");
+        assert_eq!(cleared, 1);
+        assert_eq!(storage.get_stats().tab_count, 0);
+
+        // Verify non-tab files still exist
+        assert!(dummy_file_path.exists());
+        assert!(dummy_tab_invalid_id.exists());
+    }
 }
