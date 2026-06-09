@@ -295,4 +295,22 @@ mod tests {
         // Should not auto-schedule
         assert!(scheduler.should_run_gc().is_none());
     }
+
+    #[test]
+    fn test_should_run_gc_auto_schedule() {
+        let mut scheduler = GcScheduler::new();
+        scheduler.set_idle_threshold(Duration::from_millis(50));
+
+        // Test Incremental Marking (100ms threshold)
+        scheduler.last_interaction = Instant::now() - Duration::from_millis(150);
+        assert_eq!(scheduler.should_run_gc(), Some(GcType::IncrementalMarking));
+
+        // Test Minor GC (2s threshold)
+        scheduler.last_interaction = Instant::now() - Duration::from_secs(3);
+        assert_eq!(scheduler.should_run_gc(), Some(GcType::Minor));
+
+        // Test Major GC (5s threshold)
+        scheduler.last_interaction = Instant::now() - Duration::from_secs(6);
+        assert_eq!(scheduler.should_run_gc(), Some(GcType::Major));
+    }
 }
