@@ -88,11 +88,6 @@ impl MemoryPressureMonitor {
         self.get_pressure_level() != MemoryPressureLevel::Normal
     }
 
-    /// Get current memory usage
-    pub fn get_current_usage(&self) -> usize {
-        self.current_usage.load(Ordering::SeqCst)
-    }
-
     /// Get memory usage as percentage of critical threshold
     pub fn get_usage_percentage(&self) -> f32 {
         let usage = self.current_usage.load(Ordering::SeqCst);
