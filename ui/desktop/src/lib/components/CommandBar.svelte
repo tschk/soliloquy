@@ -200,8 +200,12 @@
 				boostRecent: true
 			});
 			
+			const tabMap: Record<string, BrowserTab> = {};
+			for (const tab of browser.tabs) {
+				tabMap[tab.id] = tab;
+			}
 			for (const match of matches) {
-				const tab = browser.tabs.find(t => t.id === (match.item as SearchableItem).id)!;
+				const tab = tabMap[(match.item as SearchableItem).id]!;
 				suggestions.push(createTabSuggestion(tab, match.score));
 			}
 		}
@@ -317,8 +321,12 @@
 			boostRecent: true
 		});
 		
+		const tabMap: Record<string, BrowserTab> = {};
+		for (const tab of browser.tabs) {
+			tabMap[tab.id] = tab;
+		}
 		return matches.map(match => {
-			const tab = browser.tabs.find(t => t.id === (match.item as SearchableItem).id)!;
+			const tab = tabMap[(match.item as SearchableItem).id]!;
 			return createTabSuggestion(tab, match.score);
 		});
 	}
