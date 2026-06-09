@@ -168,14 +168,16 @@ impl V8BytecodeCache {
     /// For production with many entries, consider using a more efficient data structure
     /// like a combination of HashMap + doubly-linked list, or maintaining sorted order.
     fn evict_lru(&mut self) {
-        if let Some((url, _)) = self
+        let url_ptr = self
             .cache
             .iter()
             .min_by_key(|(_, entry)| entry.last_access)
-            .map(|(k, v)| (k.clone(), v.bytecode.len()))
-        {
+            .map(|(k, _)| k.as_str() as *const str);
+
+        if let Some(ptr) = url_ptr {
+            let url = unsafe { &*ptr };
             debug!("Evicting bytecode cache entry: {}", url);
-            if let Some(entry) = self.cache.remove(&url) {
+            if let Some(entry) = self.cache.remove(url) {
                 self.current_size = self.current_size.saturating_sub(entry.bytecode.len());
             }
         }
