@@ -229,10 +229,9 @@ impl DiskCache {
         let mut oldest_time = u64::MAX;
 
         // Find entry with oldest access time
-        for item in self.db.iter().flatten() {
-            let (key, value) = item;
-            if let Ok(key_str) = std::str::from_utf8(&key) {
-                if key_str.starts_with("meta:") {
+        for item in self.db.iter() {
+            if let Ok((key, value)) = item {
+                if key.starts_with(b"meta:") {
                     if let Ok(metadata) = bincode::deserialize::<DiskCacheEntry>(&value) {
                         if metadata.last_access < oldest_time {
                             oldest_time = metadata.last_access;
@@ -255,11 +254,10 @@ impl DiskCache {
     fn recalculate_size(&mut self) -> Result<(), String> {
         self.current_size = 0;
 
-        for item in self.db.iter().flatten() {
-            let (key, value) = item;
-            if let Ok(key_str) = std::str::from_utf8(&key) {
+        for item in self.db.iter() {
+            if let Ok((key, value)) = item {
                 // Only count data entries, not metadata
-                if !key_str.starts_with("meta:") {
+                if !key.starts_with(b"meta:") {
                     self.current_size += value.len();
                 }
             }
@@ -273,11 +271,7 @@ impl DiskCache {
         self.db
             .iter()
             .filter_map(|item| item.ok())
-            .filter(|(key, _)| {
-                std::str::from_utf8(key)
-                    .map(|s| !s.starts_with("meta:"))
-                    .unwrap_or(false)
-            })
+            .filter(|(key, _)| !key.starts_with(b"meta:"))
             .count()
     }
 }
