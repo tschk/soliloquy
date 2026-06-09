@@ -200,8 +200,9 @@
 				boostRecent: true
 			});
 			
+			const tabsById = new Map(browser.tabs.map(t => [t.id, t]));
 			for (const match of matches) {
-				const tab = browser.tabs.find(t => t.id === (match.item as SearchableItem).id)!;
+				const tab = tabsById.get((match.item as SearchableItem).id)!;
 				suggestions.push(createTabSuggestion(tab, match.score));
 			}
 		}
@@ -317,8 +318,9 @@
 			boostRecent: true
 		});
 		
+		const tabsById = new Map(browser.tabs.map(t => [t.id, t]));
 		return matches.map(match => {
-			const tab = browser.tabs.find(t => t.id === (match.item as SearchableItem).id)!;
+			const tab = tabsById.get((match.item as SearchableItem).id)!;
 			return createTabSuggestion(tab, match.score);
 		});
 	}
