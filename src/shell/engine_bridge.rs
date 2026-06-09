@@ -207,7 +207,36 @@ impl EngineBridge {
     fn init_dom_bindings(&self) -> Result<(), String> {
         debug!("Initializing DOM bindings in V8");
 
-        let dom_script = r#"
+        self.init_node_binding()?;
+        self.init_style_binding()?;
+        self.init_element_binding()?;
+        self.init_document_binding()?;
+
+        let global_script = r#"
+            // Global node registry
+            const __nodeRegistry = new Map();
+
+            function __registerNode(nodeId, node) {
+                __nodeRegistry.set(nodeId, node);
+            }
+
+            function __getNodeById(nodeId) {
+                return __nodeRegistry.get(nodeId) || null;
+            }
+
+            // Create global document
+            globalThis.document = new Document();
+
+            console.log('DOM bindings initialized');
+            'DOM bindings ready';
+        "#;
+
+        self.execute_script(global_script)?;
+        Ok(())
+    }
+
+    fn init_node_binding(&self) -> Result<(), String> {
+        let script = r#"
             // DOM Node implementation
             class Node {
                 constructor(nodeId, nodeType) {
@@ -240,7 +269,41 @@ impl EngineBridge {
                     return child;
                 }
             }
-            
+        "#;
+        self.execute_script(script)?;
+        Ok(())
+    }
+
+    fn init_style_binding(&self) -> Result<(), String> {
+        let script = r#"
+            // CSSStyleDeclaration for element.style
+            class CSSStyleDeclaration {
+                constructor(nodeId) {
+                    this._nodeId = nodeId;
+                    this._properties = {};
+                }
+
+                setProperty(name, value) {
+                    this._properties[name] = value;
+                    __native_dom_setStyle(this._nodeId, name, value);
+                }
+
+                getPropertyValue(name) {
+                    return this._properties[name] || '';
+                }
+
+                removeProperty(name) {
+                    delete this._properties[name];
+                    __native_dom_removeStyle(this._nodeId, name);
+                }
+            }
+        "#;
+        self.execute_script(script)?;
+        Ok(())
+    }
+
+    fn init_element_binding(&self) -> Result<(), String> {
+        let script = r#"
             // Element implementation
             class Element extends Node {
                 constructor(nodeId, tagName) {
@@ -323,29 +386,13 @@ impl EngineBridge {
                     return __native_dom_getBoundingClientRect(this._nodeId);
                 }
             }
-            
-            // CSSStyleDeclaration for element.style
-            class CSSStyleDeclaration {
-                constructor(nodeId) {
-                    this._nodeId = nodeId;
-                    this._properties = {};
-                }
-                
-                setProperty(name, value) {
-                    this._properties[name] = value;
-                    __native_dom_setStyle(this._nodeId, name, value);
-                }
-                
-                getPropertyValue(name) {
-                    return this._properties[name] || '';
-                }
-                
-                removeProperty(name) {
-                    delete this._properties[name];
-                    __native_dom_removeStyle(this._nodeId, name);
-                }
-            }
-            
+        "#;
+        self.execute_script(script)?;
+        Ok(())
+    }
+
+    fn init_document_binding(&self) -> Result<(), String> {
+        let script = r#"
             // Document implementation
             class Document extends Node {
                 constructor() {
@@ -399,26 +446,8 @@ impl EngineBridge {
                     return nodeIds.map(id => __getNodeById(id));
                 }
             }
-            
-            // Global node registry
-            const __nodeRegistry = new Map();
-            
-            function __registerNode(nodeId, node) {
-                __nodeRegistry.set(nodeId, node);
-            }
-            
-            function __getNodeById(nodeId) {
-                return __nodeRegistry.get(nodeId) || null;
-            }
-            
-            // Create global document
-            globalThis.document = new Document();
-            
-            console.log('DOM bindings initialized');
-            'DOM bindings ready';
         "#;
-
-        self.execute_script(dom_script)?;
+        self.execute_script(script)?;
         Ok(())
     }
 
