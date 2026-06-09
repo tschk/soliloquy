@@ -20,7 +20,22 @@ export SERVO_DISPLAY_BACKEND="${SERVO_DISPLAY_BACKEND:-wayland}"
 export WINIT_UNIX_BACKEND="${WINIT_UNIX_BACKEND:-wayland}"
 export EGL_PLATFORM="${EGL_PLATFORM:-wayland}"
 export WLR_XWAYLAND="${WLR_XWAYLAND:-0}"
-export SOL_TOKEN="${SOL_TOKEN:-dev-token-change-me}"
+
+if [ -z "${SOL_TOKEN:-}" ]; then
+  TOKEN_FILE="/var/lib/soliloquy/system/api-token"
+  if [ ! -f "${TOKEN_FILE}" ] && [ -w "$(dirname "${TOKEN_FILE}")" ]; then
+    head -c 32 /dev/urandom | base64 | tr -d '+/=' > "${TOKEN_FILE}" || true
+    chmod 600 "${TOKEN_FILE}" 2>/dev/null || true
+  fi
+  if [ -f "${TOKEN_FILE}" ]; then
+    export SOL_TOKEN="$(cat "${TOKEN_FILE}")"
+  else
+    export SOL_TOKEN="$(head -c 32 /dev/urandom | base64 | tr -d '+/=')"
+  fi
+else
+  export SOL_TOKEN="${SOL_TOKEN}"
+fi
+
 export SOLILOQUY_HOME="${SOLILOQUY_HOME:-/var/lib/soliloquy}"
 export SOLILOQUY_SYSTEM_CONFIG="${SOLILOQUY_SYSTEM_CONFIG:-/etc/soliloquy/system.json}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-${SOLILOQUY_HOME}/data}"

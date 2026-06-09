@@ -2885,10 +2885,10 @@ mod tests {
     }
 
     #[test]
-    fn default_token_is_still_enforced_when_configured() {
+    fn token_configuration_trims_whitespace() {
         assert_eq!(
-            configured_token("dev-token-change-me").as_deref(),
-            Some("dev-token-change-me")
+            configured_token("some-secret-token").as_deref(),
+            Some("some-secret-token")
         );
         assert_eq!(configured_token("   "), None);
     }
