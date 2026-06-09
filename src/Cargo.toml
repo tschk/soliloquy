@@ -31,6 +31,7 @@ pollster = "0.3"
 bytemuck = { version = "1.14", features = ["derive"] }
 futures = "0.3"
 
+
 [dev-dependencies]
 env_logger = "0.10"
 tempfile = "3.8"
@@ -41,3 +42,5 @@ default = ["real_compression", "wgpu_rendering"]
 real_compression = []
 # Enable WGPU GPU rendering
 wgpu_rendering = []
+[target.'cfg(not(any(target_os = "linux", target_os = "macos")))'.dependencies]
+sysinfo = "0.30"
