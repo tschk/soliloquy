@@ -536,15 +536,6 @@ impl EngineBridge {
                     isFullscreen: function() { return __native_window_isFullscreen(); },
                 },
                 
-                // System integration
-                system: {
-                    getEnv: function(key) { return __native_system_getEnv(key); },
-                    exec: async function(cmd, args) { return await __native_system_exec(cmd, args); },
-                    readFile: async function(path) { return await __native_fs_readFile(path); },
-                    writeFile: async function(path, data) { return await __native_fs_writeFile(path, data); },
-                    readDir: async function(path) { return await __native_fs_readDir(path); },
-                },
-                
                 // IPC for multi-window communication
                 ipc: {
                     send: function(channel, data) { return __native_ipc_send(channel, data); },
