@@ -33,3 +33,48 @@ impl MemoryPressureMonitor {
         MONITORING_ACTIVE.load(Ordering::SeqCst)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_memory_pressure_monitor() {
+        let monitor = MemoryPressureMonitor::default();
+
+        // 1. Initial State
+        // Reset state to ensure clean test
+        MONITORING_ACTIVE.store(false, Ordering::SeqCst);
+        CURRENT_USAGE.store(0, Ordering::SeqCst);
+
+        assert!(!monitor.is_monitoring_active());
+        assert!(!monitor.is_under_pressure());
+        assert_eq!(monitor.get_usage_percentage(), 0.0);
+
+        // 2. Activation
+        monitor.start_monitoring();
+        assert!(monitor.is_monitoring_active());
+
+        // 3. Normal Usage (below warning)
+        let safe_usage = 1 * 1024 * 1024 * 1024; // 1 GB
+        monitor.update_usage(safe_usage);
+        assert!(!monitor.is_under_pressure());
+        assert_eq!(monitor.get_usage_percentage(), (safe_usage as f64 / CRITICAL_THRESHOLD as f64) * 100.0);
+
+        // 4. Warning Threshold
+        monitor.update_usage(WARNING_THRESHOLD); // 2 GB
+        assert!(monitor.is_under_pressure());
+        assert_eq!(monitor.get_usage_percentage(), (WARNING_THRESHOLD as f64 / CRITICAL_THRESHOLD as f64) * 100.0);
+
+        // 5. Critical Threshold
+        monitor.update_usage(CRITICAL_THRESHOLD); // 3 GB
+        assert!(monitor.is_under_pressure());
+        assert_eq!(monitor.get_usage_percentage(), 100.0);
+
+        // 6. Above Critical
+        let extreme_usage = 4 * 1024 * 1024 * 1024; // 4 GB
+        monitor.update_usage(extreme_usage);
+        assert!(monitor.is_under_pressure());
+        assert!(monitor.get_usage_percentage() > 100.0);
+    }
+}
