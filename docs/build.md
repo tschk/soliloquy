@@ -1,12 +1,11 @@
 # Build
 
-Soliloquy uses Cargo for Rust, Bun for the Svelte UI, and `system/alpine/scripts` for appliance staging.
+Soliloquy uses Cargo for Rust and Bun for the Svelte UI. Alpenglow owns appliance staging and install in `../alpenglow`.
 
 ## Rust
 
 ```bash
 cargo build
-cargo test -p sold
 cargo test -p soliloquy-shell --lib
 ```
 
@@ -50,20 +49,11 @@ The real macOS launcher starts or reuses `sold` for local runtime APIs, then lau
 
 The appliance session defaults to `SOL_SERVO_NO_BROWSER_CHROME=1`. Keep Soliloquy's Svelte appliance shell as the single visible browser chrome; Servo should render page content only. Browser UI modes are available from the appliance chrome: Zen sidebar, compact, split columns, split rows, and grid.
 
-## Alpine Appliance
+## Alpenglow OS
 
 ```bash
-./system/alpine/scripts/setup-host.sh
-./system/alpine/scripts/qemu-v0.sh
+cd ../alpenglow
+./install.sh --check
 ```
 
-`qemu-v0.sh` builds `ui/desktop/build`, prepares Linux runtime binaries, stages the bundle at `/usr/local/share/soliloquy/bundle`, builds the rootfs image, creates the initramfs, and runs QEMU. Use `QEMU_RUN=0 ./system/alpine/scripts/qemu-v0.sh` to verify all build and staging steps without launching the VM.
-
-Validate the custom appliance kernel profile without a full kernel build:
-
-```bash
-./system/alpine/kernel/validate-kernel-config.sh
-./system/alpine/kernel/validate-kernel-config.sh /path/to/linux/.config
-```
-
-The custom kernel packaging scaffold lives under `system/alpine/kernel`. Its fragment keeps cgroup v2, zram, virtio, DRM/KMS, seccomp, Landlock, fq, and BBR enabled while rejecting unused desktop/server drivers, filesystems, and network protocols.
+Build `ui/desktop/build` here before composing an Alpenglow image. Alpenglow stages that bundle into the OS image.

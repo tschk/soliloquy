@@ -1,18 +1,15 @@
 # Soliloquy Documentation Index
 
-Soliloquy is currently documented around Cargo, Bun, the appliance backend flow, `sold`, Servo, and RV8/V8 bridge work.
+Soliloquy is currently documented around Cargo, Bun, Servo, RV8/V8 bridge work, and the desktop environment. OS install work lives in `../alpenglow`.
 
 ## Start Here
 
 - [Project README](../readme.md)
 - [Build Guide](./build.md)
 - [Contributing](./contributing.md)
-- [V0 Architecture](./v0-architecture.md)
 
-## Runtime And Appliance
+## Runtime And Desktop
 
-- [Appliance System Architecture](./architecture/appliance-system.md)
-- [Soliloquy Alpine OS Optimization Plan](./architecture/os-optimization-plan.md)
 - [API Contract](./api_contract.md)
 - [RV8 Linkage Roadmap](./rv8_linkage_roadmap.md)
 - [Browser Optimizations](./browser_optimizations.md)
@@ -29,7 +26,6 @@ Soliloquy is currently documented around Cargo, Bun, the appliance backend flow,
 ## Current Commands
 
 ```bash
-cargo test -p sold
 cargo test -p soliloquy-shell --lib
 ./tools/rv8_servo_test.sh bridge
 ./tools/soliloquy/build_ui.sh

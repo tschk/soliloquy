@@ -152,8 +152,7 @@ fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSetting
         } else {
             PlatformTier::Desktop
         };
-        let surface =
-            SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
+        let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
         if let Err(e) = engine_bridge.attach_surface(surface) {
             error!("Failed to attach surface: {}", e);
             return;
@@ -183,8 +182,7 @@ fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSetting
 
                 WindowEvent::Resized { width, height } => {
                     debug!("Window resized to {}x{}", width, height);
-                    let resized_surface =
-                        SurfaceDescriptor::new(1, width, height, platform_tier);
+                    let resized_surface = SurfaceDescriptor::new(1, width, height, platform_tier);
                     if let Err(e) = runtime_bridge.attach_surface(resized_surface) {
                         warn!("Failed to update attached surface after resize: {}", e);
                     }
@@ -194,9 +192,9 @@ fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSetting
                     // Begin frame timing
                     let _delta = frame_pacer.begin_frame();
 
-                    if let Err(e) = runtime_bridge.present_frame(
-                        soliloquy_browser_optimizations::runtime::SurfaceId(1),
-                    ) {
+                    if let Err(e) = runtime_bridge
+                        .present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1))
+                    {
                         warn!("Failed to present frame through runtime contract: {}", e);
                     }
 
@@ -244,8 +242,8 @@ fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSetting
                 WindowEvent::KeyboardInput { key, pressed, .. } => {
                     if pressed {
                         debug!("Key pressed: {}", key);
-                        if let Err(e) = runtime_bridge
-                            .handle_input(RuntimeInputEvent::Key { code: key })
+                        if let Err(e) =
+                            runtime_bridge.handle_input(RuntimeInputEvent::Key { code: key })
                         {
                             warn!("Failed to forward key input: {}", e);
                         }
@@ -263,8 +261,8 @@ fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSetting
                 }
 
                 WindowEvent::Scroll { delta_x, delta_y } => {
-                    if let Err(e) = runtime_bridge
-                        .handle_input(RuntimeInputEvent::Scroll { delta_x, delta_y })
+                    if let Err(e) =
+                        runtime_bridge.handle_input(RuntimeInputEvent::Scroll { delta_x, delta_y })
                     {
                         warn!("Failed to forward scroll: {}", e);
                     }
@@ -296,8 +294,7 @@ fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSetting
         };
 
         let platform_tier = PlatformTier::Desktop;
-        let surface =
-            SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
+        let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
         if let Err(e) = engine_bridge.attach_surface(surface) {
             error!("Failed to attach macOS surface: {}", e);
             return;
@@ -319,8 +316,8 @@ fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSetting
         for _ in 0..frame_limit {
             let _delta = frame_pacer.begin_frame();
 
-            if let Err(e) = runtime_bridge
-                .present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1))
+            if let Err(e) =
+                runtime_bridge.present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1))
             {
                 warn!(
                     "Failed to present macOS frame through runtime contract: {}",

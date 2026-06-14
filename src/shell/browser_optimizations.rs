@@ -59,12 +59,18 @@ mod tests {
         let safe_usage = 1 * 1024 * 1024 * 1024; // 1 GB
         monitor.update_usage(safe_usage);
         assert!(!monitor.is_under_pressure());
-        assert_eq!(monitor.get_usage_percentage(), (safe_usage as f64 / CRITICAL_THRESHOLD as f64) * 100.0);
+        assert_eq!(
+            monitor.get_usage_percentage(),
+            (safe_usage as f64 / CRITICAL_THRESHOLD as f64) * 100.0
+        );
 
         // 4. Warning Threshold
         monitor.update_usage(WARNING_THRESHOLD); // 2 GB
         assert!(monitor.is_under_pressure());
-        assert_eq!(monitor.get_usage_percentage(), (WARNING_THRESHOLD as f64 / CRITICAL_THRESHOLD as f64) * 100.0);
+        assert_eq!(
+            monitor.get_usage_percentage(),
+            (WARNING_THRESHOLD as f64 / CRITICAL_THRESHOLD as f64) * 100.0
+        );
 
         // 5. Critical Threshold
         monitor.update_usage(CRITICAL_THRESHOLD); // 3 GB

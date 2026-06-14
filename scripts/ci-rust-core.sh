@@ -34,13 +34,9 @@ metadata="$(cargo_ci metadata --no-deps --format-version 1)"
 printf '%s\n' "${metadata}" | grep -q '"name":"rv8"' && fail "rv8 must not be a root workspace package"
 grep -Eq 'third_party/servo|src/rv8|\.\./rv8' Cargo.toml && fail "root Cargo.toml must not depend on browser engine paths"
 
-cargo_ci fmt --package sold -- --check
-cargo_ci fmt --package sol-netd -- --check
-cargo_ci fmt --package solfsctl -- --check
-cargo_ci test -p sold
-cargo_ci test -p sol-kernelctl
-cargo_ci test -p sol-netd
-cargo_ci test -p solfsctl
-cargo_ci test -p soliloquy-drivers
+cargo_ci fmt --package soliloquy-shell -- --check
+cargo_ci fmt --package soliloquy_browser_optimizations -- --check
+cargo_ci test -p soliloquy-shell --lib
+cargo_ci test -p soliloquy_browser_optimizations
 
 printf 'ci-rust-core: ok\n'

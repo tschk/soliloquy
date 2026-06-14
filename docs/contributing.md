@@ -1,12 +1,11 @@
 # Contributing
 
-Use current repo paths only: Cargo, Bun, `sold`, Servo/RV8 bridge scripts, and Alpine appliance scripts.
+Use current repo paths only: Cargo, Bun, Servo/RV8 bridge scripts, and desktop UI scripts.
 
 ## Gates
 
 ```bash
 cargo fmt --check
-cargo test -p sold
 cargo test -p soliloquy-shell --lib
 cd ui/desktop && bun run check && bun run build
 ```

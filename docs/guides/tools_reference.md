@@ -15,7 +15,5 @@
 
 ## Appliance
 
-- `system/alpine/scripts/setup-host.sh` prepares host tools.
-- `system/alpine/scripts/qemu-v0.sh` builds the UI, prepares Linux runtime binaries, stages `/usr/local/share/soliloquy/bundle`, builds the rootfs image and initramfs, and boots the appliance path unless `QEMU_RUN=0`.
-- `scripts/ci-os-appliance.sh` checks appliance script syntax and staging contracts.
-- `scripts/ci-qemu-appliance.sh` runs the headless QEMU visual-smoke log gate against an already built `build/alpine/qemu` tree.
+- `../alpenglow/install.sh --check` validates the installable OS layer.
+- `../alpenglow/system/alpine/scripts/qemu-v0.sh` runs the current reference OS image flow.

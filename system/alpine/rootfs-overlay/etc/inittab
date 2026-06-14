@@ -1,6 +1,0 @@
-# /etc/inittab for Soliloquy v0
-
-::sysinit:/sbin/openrc sysinit
-::sysinit:/sbin/openrc boot
-::wait:/sbin/openrc default
-::shutdown:/sbin/openrc shutdown

@@ -3,7 +3,7 @@
 ## Local Loop
 
 ```bash
-cargo test -p sold
+cargo test -p soliloquy-shell --lib
 ./tools/soliloquy/start.sh
 ```
 
@@ -36,14 +36,8 @@ The real `tools/soliloquy/start_macos.sh` launcher can start or reuse `sold` for
 ## Appliance Loop
 
 ```bash
-./system/alpine/scripts/setup-host.sh
-./system/alpine/scripts/qemu-v0.sh
+cd ../alpenglow
+./install.sh --check
 ```
 
-For build-only appliance validation:
-
-```bash
-QEMU_RUN=0 ./system/alpine/scripts/qemu-v0.sh
-```
-
-The QEMU script builds the Svelte UI, prepares Linux runtime binaries, stages `ui/desktop/build` as `/usr/local/share/soliloquy/bundle`, overlays the terminal/static bundle assets, builds the rootfs image, and starts QEMU when `QEMU_RUN=1`.
+Alpenglow consumes Soliloquy's `ui/desktop/build` output when composing an OS image.

@@ -4,7 +4,7 @@
 2. Run Rust checks:
 
 ```bash
-cargo test -p sold
+cargo test -p soliloquy-shell --lib
 ```
 
 3. Build the UI:

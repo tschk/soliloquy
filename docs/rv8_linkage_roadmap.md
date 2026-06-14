@@ -65,7 +65,7 @@ This document tracks the remaining work to move Soliloquy from the current hybri
 - Merged the local Servo branch forward over the latest upstream Servo mainline and updated the root Soliloquy gitlink.
 - Removed the obsolete local `sea-query-rusqlite` patch from the active Servo dependency graph after the upstream merge; Servo now uses the pinned upstream crate release.
 - Aligned the local `surfman` patch to Servo's current `glow 0.17` dependency so targeted `soliloquy_v8` checks pass again.
-- Updated `scripts/build-ghostty-wasm.sh` to prefer `GHOSTTY_ZIG` or Homebrew's unlinked `zig@0.15` binary, then built `bundle/terminal/ghostty-vt.wasm`.
+- The Ghostty WASM terminal build moved to `../alpenglow` with the OS bridge bundle.
 - Added typed RV8 script-result IPC, DOM mutation/event tests, and a bounded compositor present-queue test.
 
 ## What Is Still Missing

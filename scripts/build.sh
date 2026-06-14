@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
-# Soliloquy Build Orchestrator
-# Main entry point for all build operations
+# Soliloquy Desktop Build Orchestrator
+# Main entry point for desktop build operations
 #
 # Usage: ./scripts/build.sh [target] [options]
 #
 # Targets:
-#   all       - Build Rust workspace and UI (default)
+#   all       - Build desktop shell and UI (default)
 #   ui        - Build Svelte UI only
 #   shell     - Build Servo shell
-#   sold      - Build sold service
 #
 # Options:
 #   --release  - Release build (default: debug)
@@ -81,30 +80,6 @@ build_ui() {
     log_success "UI built"
 }
 
-build_sold() {
-    log_info "Building sold service with Cargo..."
-    cd "${PROJECT_ROOT}"
-
-    if ! command -v cargo &> /dev/null; then
-        log_error "Cargo not found. Install Rust first."
-        exit 1
-    fi
-
-    local cargo_flags="-p sold"
-    if $RELEASE_MODE; then
-        cargo_flags="$cargo_flags --release"
-    fi
-
-    cargo build $cargo_flags
-    log_success "sold built"
-
-    if $RUN_TESTS; then
-        log_info "Running sold tests..."
-        cargo test -p sold
-        log_success "sold tests passed"
-    fi
-}
-
 build_shell() {
     log_info "Building Servo shell with Cargo..."
     cd "${PROJECT_ROOT}"
@@ -135,7 +110,6 @@ build_shell() {
 
 build_all() {
     log_info "Building all targets..."
-    build_sold
     build_ui
     build_shell
     log_success "All targets built successfully"
@@ -153,15 +127,12 @@ case "$TARGET" in
     ui)
         build_ui
         ;;
-    sold)
-        build_sold
-        ;;
     shell)
         build_shell
         ;;
     *)
         log_error "Unknown target: $TARGET"
-        echo "Valid targets: all, ui, shell, sold"
+        echo "Valid targets: all, ui, shell"
         exit 1
         ;;
 esac

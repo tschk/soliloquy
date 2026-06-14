@@ -6,11 +6,6 @@ resolver = "2"
 members = [
     "src",
     "src/shell",
-    "sold",
-    "drivers/generic",
-    "system/kernelctl",
-    "system/netd",
-    "system/solfsctl",
 ]
 
 [workspace.package]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Soliloquy Display Detection Test
-# Tests Alpine/Linux display detection or simulates headless mode
+# Soliloquy Desktop Display Detection Test
+# Tests host display detection or simulates headless mode
 #
 # Usage: ./scripts/display_test.sh [options]
 #

@@ -10,28 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  os-appliance:
-    name: OS appliance gates
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - name: Check appliance OS policy
-        run: scripts/ci-os-appliance.sh
-
-  solfs-kernel-module:
-    name: SolFS kernel module compile
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - name: Compile SolFS module against Linux headers
-        run: scripts/ci-solfs-kernel-module.sh
-
   rust-core:
-    name: Rust core gates
+    name: Soliloquy desktop Rust gates
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

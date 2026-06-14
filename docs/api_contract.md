@@ -1,6 +1,6 @@
 # Soliloquy / Engine Contract
 
-This repo treats RV8 as the browser-engine boundary for page loading, tab state, and runtime integration. Soliloquy owns the appliance shell and browser chrome.
+This repo treats RV8 as the browser-engine boundary for page loading, tab state, and runtime integration. Soliloquy owns the desktop shell and browser chrome.
 
 ## Services
 
@@ -27,5 +27,6 @@ This repo treats RV8 as the browser-engine boundary for page loading, tab state,
 ## Ownership
 
 - `rv8`: engine loop, scheduler, tab/session model, service contracts, optional FFI
-- `ui/desktop`: appliance browser chrome, modes, compositor/input integration, control plane
-- `soliloquy`: appliance runtime, desktop browser launcher, policy layer, local tools, and backend packaging
+- `ui/desktop`: browser chrome, modes, compositor/input integration, control plane
+- `soliloquy`: desktop browser launcher, RV8 bridge, runtime integration, and browser-facing optimization work
+- `alpenglow`: installable OS, kernel policy, `sold`, rootfs, service graph, and backend packaging
