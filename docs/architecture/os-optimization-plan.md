@@ -1,6 +1,6 @@
 # Soliloquy Alpine OS Optimization Plan
 
-Reasoning path: Soliloquy should borrow operating-system shapes that make a browser appliance faster, safer, and easier to recover, while staying on Alpine/Linux, keeping `../rv8` as the browser-engine boundary, and treating Vinix as reference-only because of GPL-2.0.
+Reasoning path: Soliloquy should borrow operating-system shapes that make a browser appliance faster, safer, and easier to recover, while using an explicit Linux appliance backend, keeping `../rv8` as the browser-engine boundary, and treating Vinix as reference-only because of GPL-2.0.
 
 Confidence score: 8/10.
 
@@ -177,7 +177,7 @@ Soliloquy is not a general desktop distribution. It is a browser appliance on Al
 - Importing Vinix code.
 - Moving browser-engine ownership back into Soliloquy root.
 - Adding telemetry that leaves the device by default.
-- Supporting many distro families directly. Borrow concepts, keep Alpine base.
+- Supporting many distro families directly. Keep one active backend, one reference backend, and use the backend contract for experiments.
 
 ### Plan Corrections From Review
 
@@ -689,7 +689,7 @@ Borrow Solaris SMF, MINIX restartable services, QNX supervision, and ChromeOS re
 
 ## Non-Goals
 
-- Do not replace Linux or Alpine to chase theoretical kernel wins.
+- Do not replace the active Linux appliance backend to chase theoretical kernel wins.
 - Do not import Vinix code.
 - Do not move browser-engine ownership back into Soliloquy root.
 - Do not add broad package managers beside Wax for system packages.

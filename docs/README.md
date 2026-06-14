@@ -1,10 +1,10 @@
 # Soliloquy Docs
 
-Current docs cover the active Cargo, Bun, Alpine, Servo/RV8, and `sold` paths.
+Current docs cover the active Cargo, Bun, appliance backend, Servo/RV8, and `sold` paths.
 
 Browser-engine work lives in `atechnology-company/rv8` (`../rv8` locally). Soliloquy no longer carries an active in-repo RV8 crate. See [Repo Split Plan](./repo_split_plan.md).
 
-The Alpine appliance owns the Svelte browser chrome and `sold` bridge. Servo is launched with its browser chrome disabled there so `os://terminal`, tabs, modes, and navigation controls do not double up.
+The Linux appliance owns the Svelte browser chrome and `sold` bridge. The active backend direction is Oasis-style composition with Void musl and runit. Servo is launched with its browser chrome disabled there so `os://terminal`, tabs, modes, and navigation controls do not double up.
 
 The macOS desktop path uses Crepuscularity GPUI chrome with Servo's built-in chrome disabled. Its smoke check is dry-run only; the real launcher can start or reuse `sold` for local runtime APIs, but it must not load the Svelte appliance chrome. See [Browser Chrome](./browser_chrome.md).
 

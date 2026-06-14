@@ -1,6 +1,6 @@
 # Soliloquy Documentation Index
 
-Soliloquy is currently documented around Cargo, Bun, the Alpine appliance flow, `sold`, Servo, and RV8/V8 bridge work.
+Soliloquy is currently documented around Cargo, Bun, the appliance backend flow, `sold`, Servo, and RV8/V8 bridge work.
 
 ## Start Here
 

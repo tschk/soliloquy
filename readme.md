@@ -1,6 +1,6 @@
 # Soliloquy
 
-Soliloquy is an experimental browser appliance built around a Rust shell, Servo integration work, a V8 runtime layer, and an Alpine-based runtime image. The repository also contains older architecture notes and adjacent experiments, but the code that is wired up today is primarily Linux/Alpine-focused.
+Soliloquy is an experimental browser appliance built around a Rust shell, Servo integration work, a V8 runtime layer, and an immutable Linux appliance image. The active base-system direction is Oasis-style rootfs composition with a Void musl and runit backend, using `../oil` as the installer bridge. Alpine remains the existing reference backend while the backend abstraction comes online.
 
 This project is early-stage and not production-ready.
 
@@ -18,7 +18,9 @@ The root workspace currently contains these Rust packages:
 
 Other important top-level areas:
 
-- `system/alpine/` - appliance rootfs assembly, staging, and QEMU scripts
+- `system/appliance/` - shared appliance backend contract and backend selection
+- `system/backends/void/` - Void musl and runit backend inputs
+- `system/alpine/` - reference appliance rootfs assembly, staging, and QEMU scripts
 - `ui/desktop/` - Svelte appliance UI used by the dev flow and Alpine staging
 - `bundle/` - supplemental static assets served by `sold`, including the terminal page and Ghostty VT bundle
 - `third_party/servo/` - in-tree Servo checkout used by the Alpine flow
@@ -30,7 +32,8 @@ Other important top-level areas:
 - `soliloquy_browser_optimizations` provides cache, memory residency, GPU, network, and V8 support modules
 - `../rv8` is the sibling experimental browser/runtime engine checkout with IPC, rendering, parsing, and JS execution paths
 - `sold` is a local Axum service that serves bundled UI assets and simple file/settings APIs
-- `system/alpine` packages the runtime into an appliance-style Alpine image and boots it under QEMU
+- `system/backends/void` is the active base-system target for the appliance backend abstraction
+- `system/alpine` packages the runtime into the current reference image and boots it under QEMU
 - `third_party/servo` is an in-tree Servo checkout with local `rv8` bridge patches and a typed snapshot bridge module
 
 ## Build And Run
@@ -62,7 +65,13 @@ cargo test -p sol-kernelctl
 
 `./scripts/dev.sh` starts the Rust shell and the Svelte UI dev server from `ui/desktop/`.
 
-### Alpine appliance / QEMU flow
+### Appliance backend / QEMU flow
+
+```sh
+./system/appliance/scripts/select-backend.sh
+```
+
+The default backend is `void-musl-runit`. The existing QEMU flow still uses the Alpine reference backend until the Void boot path lands:
 
 ```sh
 ./system/alpine/scripts/setup-host.sh
@@ -71,14 +80,15 @@ cargo test -p sol-kernelctl
 
 `qemu-v0.sh` is the canonical appliance entry point. It builds the Svelte bundle with Bun, prepares Linux runtime binaries for the selected `QEMU_ARCH`, stages the current `ui/desktop/build` output at `/usr/local/share/soliloquy/bundle`, adds the supplemental `bundle/terminal` assets, builds the rootfs image, and launches QEMU unless `QEMU_RUN=0` is set.
 
-More detail lives in [system/alpine/README.md](system/alpine/README.md).
+More detail lives in [system/appliance/README.md](system/appliance/README.md), [system/backends/void/README.md](system/backends/void/README.md), and [system/alpine/README.md](system/alpine/README.md).
 
 ## Current Build-System Reality
 
 Current build paths:
 
 - `Cargo` is the clearest active path for local Rust work
-- `system/alpine/scripts/*` is the clearest active path for appliance packaging and QEMU boot
+- `system/appliance` and `system/backends/void` define the active backend direction
+- `system/alpine/scripts/*` is the existing reference path for appliance packaging and QEMU boot
 - `Bun` is the only JavaScript package manager used for the Svelte UI
 
 ## Current Bridge State

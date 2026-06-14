@@ -46,6 +46,16 @@ test -L CLAUDE.md || fail "CLAUDE.md must be a symlink"
 [ ! -e src/rv8 ] || fail "src/rv8 must stay deleted"
 
 for path in \
+  system/appliance/scripts/select-backend.sh \
+  system/appliance/scripts/oil-installer.sh \
+  system/backends/void/scripts/build-rootfs.sh \
+  system/backends/void/scripts/configure-rootfs.sh \
+  system/backends/void/runit/seatd/run \
+  system/backends/void/runit/sol-kernel-policy/run \
+  system/backends/void/runit/sol-netd/run \
+  system/backends/void/runit/sol-session/run \
+  system/backends/void/runit/sol-zram/run \
+  system/backends/void/runit/sold/run \
   system/alpine/scripts/configure-rootfs.sh \
   system/alpine/scripts/apply-kernel-policy.sh \
   system/alpine/scripts/apply-zram-policy.sh \
@@ -69,6 +79,56 @@ do
   assert_file "${path}"
   sh -n "${path}"
 done
+assert_file system/appliance/README.md
+assert_file system/appliance/backend.schema.json
+assert_file system/appliance/backends.json
+assert_file system/appliance/filesystems/rootfs-layout.json
+assert_file system/appliance/filesystems/state-mounts.json
+assert_file system/appliance/installers/oil.json
+assert_file system/backends/void/README.md
+assert_file system/backends/void/backend.json
+assert_file system/backends/void/packages-runtime.txt
+assert_file system/backends/void/packages-dev.txt
+assert_contains system/appliance/backends.json '"default": "void-musl-runit"'
+assert_contains system/appliance/backends.json '"composition_model": "oasis-static"'
+assert_contains system/appliance/installers/oil.json '"source": "../oil"'
+assert_contains system/appliance/installers/oil.json '"binary": "wax"'
+assert_contains system/appliance/scripts/oil-installer.sh 'OIL_ROOT'
+assert_contains system/appliance/scripts/oil-installer.sh 'WAX_SYSTEM_PREFIX'
+assert_contains system/appliance/scripts/oil-installer.sh 'system add --no-script'
+assert_contains system/appliance/filesystems/rootfs-layout.json '"role": "immutable-system"'
+assert_contains system/appliance/filesystems/rootfs-layout.json '"solfs"'
+assert_contains system/appliance/filesystems/rootfs-layout.json '"erofs"'
+assert_contains system/appliance/filesystems/rootfs-layout.json '"squashfs"'
+assert_contains system/appliance/filesystems/rootfs-layout.json '"/etc/soliloquy/world"'
+assert_not_contains system/appliance/filesystems/rootfs-layout.json '"/etc/apk/world.soliloquy"'
+assert_contains system/appliance/filesystems/state-mounts.json '"target": "/var/lib/soliloquy"'
+assert_contains system/appliance/filesystems/state-mounts.json '"target": "/home"'
+assert_contains system/backends/void/backend.json '"id": "void-musl-runit"'
+assert_contains system/backends/void/backend.json '"libc": "musl"'
+assert_contains system/backends/void/backend.json '"init": "runit"'
+assert_contains system/backends/void/backend.json '"installer": "oil"'
+assert_contains system/backends/void/backend.json '"composition_model": "oasis-static"'
+assert_contains system/backends/void/packages-runtime.txt '^base-minimal$'
+assert_contains system/backends/void/packages-runtime.txt '^runit$'
+assert_contains system/backends/void/packages-runtime.txt '^seatd$'
+assert_contains system/backends/void/packages-runtime.txt '^cage$'
+assert_contains system/backends/void/packages-dev.txt '^base-devel$'
+assert_contains system/backends/void/scripts/build-rootfs.sh 'x86_64-musl'
+assert_contains system/backends/void/scripts/build-rootfs.sh 'current/musl'
+assert_contains system/backends/void/scripts/build-rootfs.sh 'SOLILOQUY_OIL_SYSTEM_PACKAGES'
+assert_contains system/backends/void/scripts/build-rootfs.sh 'oil-installer.sh'
+assert_contains system/backends/void/scripts/configure-rootfs.sh 'world.void'
+assert_contains system/backends/void/scripts/configure-rootfs.sh 'system/appliance/filesystems'
+assert_contains system/backends/void/scripts/configure-rootfs.sh 'rm -rf "\$\{ROOTFS\}/etc/apk"'
+assert_contains system/backends/void/scripts/configure-rootfs.sh '::wait:/etc/runit/2'
+assert_contains system/backends/void/scripts/configure-rootfs.sh 'void-musl-runit'
+assert_contains system/backends/void/scripts/configure-rootfs.sh 'oasis-static'
+assert_contains system/backends/void/scripts/configure-rootfs.sh '/etc/runit/runsvdir/default'
+assert_contains system/backends/void/runit/sold/run 'SOLD_UI_DIR'
+assert_contains system/backends/void/runit/sol-session/run 'sol-session-start'
+assert_executable system/appliance/scripts/select-backend.sh
+[ "$(system/appliance/scripts/select-backend.sh)" = "${REPO_ROOT}/system/backends/void" ] || fail "default backend selector must resolve Void"
 assert_file scripts/ci-qemu-appliance.sh
 sh -n scripts/ci-qemu-appliance.sh
 assert_file scripts/ci-qemu-solfs-disk-root.sh

@@ -2,11 +2,11 @@
 
 ## What is Soliloquy?
 
-Soliloquy is an experimental, web-native operating system appliance built on Alpine Linux. It uses Servo as its fullscreen rendering engine, RV8/V8 for the JavaScript runtime path, and `sold` as the local system bridge, targeting the Radxa Cubie A5E (Allwinner A527 ARM64 SBC). The project is in early development and is not production-ready.
+Soliloquy is an experimental, web-native operating system appliance built around an immutable Linux appliance backend. The active base-system direction is Oasis-style composition with Void musl and runit. Alpine remains the existing reference backend while the backend abstraction comes online. It uses Servo as its fullscreen rendering engine, RV8/V8 for the JavaScript runtime path, and `sold` as the local system bridge, targeting the Radxa Cubie A5E (Allwinner A527 ARM64 SBC). The project is in early development and is not production-ready.
 
 ## Architecture
 
-Alpine Appliance -------- Immutable base image, OpenRC service startup
+Linux Appliance --------- Immutable base image, backend-selected service startup
   Servo Surface ---------- Fullscreen browser shell loading the desktop bundle
   sold Bridge ------------ Local authenticated system and terminal APIs
   RV8 Runtime ------------ Servo/V8 bridge work and RV8 browser engine path
@@ -21,6 +21,8 @@ Drivers (Rust) ----------- AIC8800 WiFi, GPIO, Mali G57 GPU (stubs)
 
 Build paths currently coexist:
 
+- Shared appliance backend contract under `system/appliance`
+- Void musl and runit backend inputs under `system/backends/void`
 - Alpine image assembly and OpenRC service staging under `system/alpine`
 - Servo/RV8 bridge checks through Cargo and the local Servo checkout
 - Cargo: cargo build / cargo test
@@ -42,6 +44,8 @@ Build paths currently coexist:
     tools/              RV8/Servo checks, UI build/dev/start helpers, serial debug
     test/               support lib, component tests, vm tests
     docs/               v0-architecture.md, browser_optimizations.md, build.md, guides/
+    system/appliance/   Backend contract, selector, shared appliance metadata
+    system/backends/    Distro backends, with Void musl and runit as active target
 
 ## Key Crates and Dependencies
 
