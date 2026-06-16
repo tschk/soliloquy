@@ -134,17 +134,102 @@ impl DamageTracker {
 
     /// Get all damaged tiles for this frame
     pub fn get_damaged_tiles(&self) -> HashSet<(u32, u32)> {
-        let mut tiles = HashSet::new();
+        #[derive(Debug, Clone, Copy, PartialEq)]
+        struct TileRect {
+            min_x: u32,
+            min_y: u32,
+            max_x: u32,
+            max_y: u32,
+        }
+
+        impl TileRect {
+            fn intersects(&self, other: &TileRect) -> bool {
+                self.min_x < other.max_x
+                    && self.max_x > other.min_x
+                    && self.min_y < other.max_y
+                    && self.max_y > other.min_y
+            }
+
+            fn subtract(&self, other: &TileRect) -> Vec<TileRect> {
+                let mut result = Vec::new();
+                if !self.intersects(other) {
+                    result.push(*self);
+                    return result;
+                }
+
+                if self.min_y < other.min_y {
+                    result.push(TileRect {
+                        min_x: self.min_x,
+                        min_y: self.min_y,
+                        max_x: self.max_x,
+                        max_y: other.min_y,
+                    });
+                }
+                if self.max_y > other.max_y {
+                    result.push(TileRect {
+                        min_x: self.min_x,
+                        min_y: other.max_y,
+                        max_x: self.max_x,
+                        max_y: self.max_y,
+                    });
+                }
+                if self.min_x < other.min_x {
+                    let y_start = self.min_y.max(other.min_y);
+                    let y_end = self.max_y.min(other.max_y);
+                    if y_start < y_end {
+                        result.push(TileRect {
+                            min_x: self.min_x,
+                            min_y: y_start,
+                            max_x: other.min_x,
+                            max_y: y_end,
+                        });
+                    }
+                }
+                if self.max_x > other.max_x {
+                    let y_start = self.min_y.max(other.min_y);
+                    let y_end = self.max_y.min(other.max_y);
+                    if y_start < y_end {
+                        result.push(TileRect {
+                            min_x: other.max_x,
+                            min_y: y_start,
+                            max_x: self.max_x,
+                            max_y: y_end,
+                        });
+                    }
+                }
+                result
+            }
+        }
+
+        let mut disjoint_rects: Vec<TileRect> = Vec::new();
 
         for damage in &self.current_damage {
-            // Calculate tile range for this damage rect
-            let start_tile_x = damage.x / self.tile_size;
-            let start_tile_y = damage.y / self.tile_size;
-            let end_tile_x = (damage.x + damage.width).div_ceil(self.tile_size);
-            let end_tile_y = (damage.y + damage.height).div_ceil(self.tile_size);
+            let new_rect = TileRect {
+                min_x: damage.x / self.tile_size,
+                min_y: damage.y / self.tile_size,
+                max_x: (damage.x + damage.width).div_ceil(self.tile_size),
+                max_y: (damage.y + damage.height).div_ceil(self.tile_size),
+            };
 
-            for ty in start_tile_y..end_tile_y {
-                for tx in start_tile_x..end_tile_x {
+            let mut to_process = vec![new_rect];
+            for existing in &disjoint_rects {
+                let mut next_process = Vec::new();
+                for rect in to_process {
+                    next_process.extend(rect.subtract(existing));
+                }
+                to_process = next_process;
+                if to_process.is_empty() {
+                    break;
+                }
+            }
+
+            disjoint_rects.extend(to_process);
+        }
+
+        let mut tiles = HashSet::new();
+        for rect in disjoint_rects {
+            for ty in rect.min_y..rect.max_y {
+                for tx in rect.min_x..rect.max_x {
                     tiles.insert((tx, ty));
                 }
             }
