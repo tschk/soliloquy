@@ -1,5 +1,52 @@
 import { readable } from 'svelte/store';
 
+export type NetworkInfo = {
+online: boolean;
+type: string;
+};
+
+export const networkStore = readable<NetworkInfo>({ online: true, type: 'wifi' }, (set) => {
+	const updateNetwork = () => {
+		let type = 'unknown';
+		try {
+			// Typecast needed as connection isn't standard in all TS DOM lib versions
+			const nav = navigator as any;
+			if (nav.connection && nav.connection.type) {
+				type = nav.connection.type;
+			}
+		} catch (e) { /* ignore */ }
+
+		set({
+			online: navigator.onLine ?? true,
+			type
+		});
+	};
+
+	if (typeof window !== 'undefined') {
+		window.addEventListener('online', updateNetwork);
+		window.addEventListener('offline', updateNetwork);
+
+		const nav = navigator as any;
+		if (nav.connection) {
+			nav.connection.addEventListener('change', updateNetwork);
+		}
+
+		// Initial update
+		updateNetwork();
+	}
+
+	return () => {
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('online', updateNetwork);
+			window.removeEventListener('offline', updateNetwork);
+			const nav = navigator as any;
+			if (nav.connection) {
+				nav.connection.removeEventListener('change', updateNetwork);
+			}
+		}
+	};
+});
+
 export type BatteryInfo = {
 level: number;
 charging: boolean;
