@@ -318,6 +318,18 @@ mod tests {
     }
 
     #[test]
+    fn test_atlas_dimensions_edge_cases() {
+        let atlas_zero = TextureAtlas::new(1, 0, 0);
+        assert_eq!(atlas_zero.dimensions(), (0, 0));
+
+        let atlas_max = TextureAtlas::new(2, u32::MAX, u32::MAX);
+        assert_eq!(atlas_max.dimensions(), (u32::MAX, u32::MAX));
+
+        let atlas_mixed = TextureAtlas::new(3, 0, u32::MAX);
+        assert_eq!(atlas_mixed.dimensions(), (0, u32::MAX));
+    }
+
+    #[test]
     fn test_add_texture() {
         let mut atlas = TextureAtlas::new(1, 1024, 1024);
 
