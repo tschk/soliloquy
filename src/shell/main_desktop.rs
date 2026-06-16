@@ -55,7 +55,10 @@ fn start_daemon() {
     let port = if let Ok(v) = std::env::var("SOLILOQUY_DAEMON_PORT") {
         v.parse::<u16>().unwrap_or(9842)
     } else if let Ok(v) = std::env::var("SOLD_BIND") {
-        v.split(':').nth(1).and_then(|p| p.parse::<u16>().ok()).unwrap_or(9842)
+        v.split(':')
+            .nth(1)
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(9842)
     } else {
         9842
     };
@@ -68,7 +71,11 @@ fn start_daemon() {
                 d
             })
             .unwrap_or_else(|| std::path::PathBuf::from("soliloquy-daemon"));
-        info!("Launching DE daemon: {} --port {}", daemon_path.display(), port);
+        info!(
+            "Launching DE daemon: {} --port {}",
+            daemon_path.display(),
+            port
+        );
         let _ = std::process::Command::new(&daemon_path)
             .arg("--port")
             .arg(port.to_string())
