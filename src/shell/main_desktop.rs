@@ -164,232 +164,216 @@ fn main() {
 }
 
 #[cfg(all(feature = "desktop", not(feature = "gpui")))]
-#[allow(unused_variables)]
 fn run_native_window(engine_bridge: EngineBridge, settings: &OptimizationSettings) {
+    let _ = &engine_bridge;
+    let _ = settings;
+
     info!("Creating native window...");
 
     #[cfg(target_os = "linux")]
-    run_linux_window(engine_bridge, settings);
+    {
+        use platform::linux::LinuxWindow;
+        // ... rest of linux window code ...
 
-    #[cfg(target_os = "macos")]
-    run_macos_window(engine_bridge, settings);
-}
+        let window = match LinuxWindow::new() {
+            Ok(w) => {
+                info!("Linux window created ({}x{})", w.size().0, w.size().1);
+                info!("Display server: {:?}", w.display_server());
+                w
+            }
+            Err(e) => {
+                error!("Failed to create Linux window: {}", e);
+                return;
+            }
+        };
 
-#[cfg(all(target_os = "linux", feature = "desktop", not(feature = "gpui")))]
-fn run_linux_window(engine_bridge: EngineBridge, settings: &OptimizationSettings) {
-    use platform::linux::LinuxWindow;
-
-    let window = match LinuxWindow::new() {
-        Ok(w) => {
-            info!("Linux window created ({}x{})", w.size().0, w.size().1);
-            info!("Display server: {:?}", w.display_server());
-            w
-        }
-        Err(e) => {
-            error!("Failed to create Linux window: {}", e);
+        let platform_tier = if cfg!(all(target_os = "linux", feature = "mobile")) {
+            PlatformTier::Mobile
+        } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+            PlatformTier::ArmLinux
+        } else {
+            PlatformTier::Desktop
+        };
+        let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
+        if let Err(e) = engine_bridge.attach_surface(surface) {
+            error!("Failed to attach surface: {}", e);
             return;
         }
-    };
 
-    let platform_tier = if cfg!(all(target_os = "linux", feature = "mobile")) {
-        PlatformTier::Mobile
-    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-        PlatformTier::ArmLinux
-    } else {
-        PlatformTier::Desktop
-    };
-    let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
-    if let Err(e) = engine_bridge.attach_surface(surface) {
-        error!("Failed to attach surface: {}", e);
-        return;
-    }
+        let engine_bridge = Arc::new(engine_bridge);
+        let runtime_bridge = Arc::clone(&engine_bridge);
 
-    let engine_bridge = Arc::new(engine_bridge);
-    let runtime_bridge = Arc::clone(&engine_bridge);
+        // Create frame pacer for 60 FPS
+        let mut frame_pacer = FramePacer::new(settings.render.target_fps);
+        let mut frame_count: u64 = 0;
 
-    // Create frame pacer for 60 FPS
-    let mut frame_pacer = FramePacer::new(settings.render.target_fps);
-    let mut frame_count: u64 = 0;
-
-    info!(
-        "Starting main event loop at {} FPS target",
-        settings.render.target_fps
-    );
-
-    // Run the event loop
-    if let Err(e) = window.run(move |event, _window| {
-        handle_linux_window_event(
-            event,
-            &runtime_bridge,
-            platform_tier,
-            &mut frame_pacer,
-            &mut frame_count,
+        info!(
+            "Starting main event loop at {} FPS target",
+            settings.render.target_fps
         );
-    }) {
-        error!("Event loop error: {}", e);
-    }
-}
 
-#[cfg(all(target_os = "linux", feature = "desktop", not(feature = "gpui")))]
-fn handle_linux_window_event(
-    event: WindowEvent,
-    runtime_bridge: &Arc<EngineBridge>,
-    platform_tier: PlatformTier,
-    frame_pacer: &mut FramePacer,
-    frame_count: &mut u64,
-) {
-    match event {
-        WindowEvent::CloseRequested => {
-            info!("Close requested, shutting down...");
-            let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Shutdown);
-            info!("Total frames rendered: {}", frame_count);
-            info!("Average FPS: {:.1}", frame_pacer.current_fps());
-        }
+        // Run the event loop
+        if let Err(e) = window.run(move |event, _window| {
+            match event {
+                WindowEvent::CloseRequested => {
+                    info!("Close requested, shutting down...");
+                    let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Shutdown);
+                    info!("Total frames rendered: {}", frame_count);
+                    info!("Average FPS: {:.1}", frame_pacer.current_fps());
+                }
 
-        WindowEvent::Resized { width, height } => {
-            debug!("Window resized to {}x{}", width, height);
-            let resized_surface = SurfaceDescriptor::new(1, width, height, platform_tier);
-            if let Err(e) = runtime_bridge.attach_surface(resized_surface) {
-                warn!("Failed to update attached surface after resize: {}", e);
+                WindowEvent::Resized { width, height } => {
+                    debug!("Window resized to {}x{}", width, height);
+                    let resized_surface = SurfaceDescriptor::new(1, width, height, platform_tier);
+                    if let Err(e) = runtime_bridge.attach_surface(resized_surface) {
+                        warn!("Failed to update attached surface after resize: {}", e);
+                    }
+                }
+
+                WindowEvent::RedrawRequested => {
+                    // Begin frame timing
+                    let _delta = frame_pacer.begin_frame();
+
+                    if let Err(e) = runtime_bridge
+                        .present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1))
+                    {
+                        warn!("Failed to present frame through runtime contract: {}", e);
+                    }
+
+                    // Wait for frame pacing
+                    frame_pacer.wait_for_frame();
+                    frame_count = frame_pacer.frame_count();
+
+                    // Log FPS every second
+                    if frame_count % 60 == 0 {
+                        debug!("FPS: {:.1}", frame_pacer.current_fps());
+                    }
+                }
+
+                WindowEvent::MouseInput {
+                    x,
+                    y,
+                    button,
+                    pressed,
+                } => {
+                    debug!(
+                        "Mouse {:?} at ({}, {}): {:?}",
+                        if pressed { "pressed" } else { "released" },
+                        x,
+                        y,
+                        button
+                    );
+                    let input = if pressed {
+                        RuntimeInputEvent::Touch { x, y }
+                    } else {
+                        RuntimeInputEvent::PointerMove { x, y }
+                    };
+                    if let Err(e) = runtime_bridge.handle_input(input) {
+                        warn!("Failed to forward pointer input: {}", e);
+                    }
+                }
+
+                WindowEvent::MouseMoved { x, y } => {
+                    if let Err(e) =
+                        runtime_bridge.handle_input(RuntimeInputEvent::PointerMove { x, y })
+                    {
+                        warn!("Failed to forward pointer move: {}", e);
+                    }
+                }
+
+                WindowEvent::KeyboardInput { key, pressed, .. } => {
+                    if pressed {
+                        debug!("Key pressed: {}", key);
+                        if let Err(e) =
+                            runtime_bridge.handle_input(RuntimeInputEvent::Key { code: key })
+                        {
+                            warn!("Failed to forward key input: {}", e);
+                        }
+                    }
+                }
+
+                WindowEvent::Focused => {
+                    debug!("Window focused");
+                    let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Foregrounded);
+                }
+
+                WindowEvent::Unfocused => {
+                    debug!("Window unfocused");
+                    let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Backgrounded);
+                }
+
+                WindowEvent::Scroll { delta_x, delta_y } => {
+                    if let Err(e) =
+                        runtime_bridge.handle_input(RuntimeInputEvent::Scroll { delta_x, delta_y })
+                    {
+                        warn!("Failed to forward scroll: {}", e);
+                    }
+                }
+
+                _ => {}
             }
+        }) {
+            error!("Event loop error: {}", e);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use platform::macos::MacOSWindow;
+
+        let window = match MacOSWindow::new() {
+            Ok(w) => {
+                info!("macOS window created ({}x{})", w.size().0, w.size().1);
+                if MacOSWindow::is_apple_silicon() {
+                    info!("Running on Apple Silicon");
+                }
+                w
+            }
+            Err(e) => {
+                error!("Failed to create macOS window: {}", e);
+                return;
+            }
+        };
+
+        let platform_tier = PlatformTier::Desktop;
+        let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
+        if let Err(e) = engine_bridge.attach_surface(surface) {
+            error!("Failed to attach macOS surface: {}", e);
+            return;
         }
 
-        WindowEvent::RedrawRequested => {
-            // Begin frame timing
+        let runtime_bridge = Arc::new(engine_bridge);
+        let mut frame_pacer = FramePacer::new(settings.render.target_fps);
+        let frame_limit = std::env::var("SOLILOQUY_DESKTOP_FRAME_LIMIT")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(1);
+
+        info!(
+            "Starting macOS frame pump at {} FPS target for {} frame(s)",
+            settings.render.target_fps, frame_limit
+        );
+
+        for _ in 0..frame_limit {
             let _delta = frame_pacer.begin_frame();
 
             if let Err(e) =
                 runtime_bridge.present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1))
             {
-                warn!("Failed to present frame through runtime contract: {}", e);
+                warn!(
+                    "Failed to present macOS frame through runtime contract: {}",
+                    e
+                );
             }
 
-            // Wait for frame pacing
+            window.request_redraw();
             frame_pacer.wait_for_frame();
-            *frame_count = frame_pacer.frame_count();
-
-            // Log FPS every second
-            if *frame_count % 60 == 0 {
-                debug!("FPS: {:.1}", frame_pacer.current_fps());
-            }
         }
 
-        WindowEvent::MouseInput {
-            x,
-            y,
-            button,
-            pressed,
-        } => {
-            debug!(
-                "Mouse {:?} at ({}, {}): {:?}",
-                if pressed { "pressed" } else { "released" },
-                x,
-                y,
-                button
-            );
-            let input = if pressed {
-                RuntimeInputEvent::Touch { x, y }
-            } else {
-                RuntimeInputEvent::PointerMove { x, y }
-            };
-            if let Err(e) = runtime_bridge.handle_input(input) {
-                warn!("Failed to forward pointer input: {}", e);
-            }
-        }
-
-        WindowEvent::MouseMoved { x, y } => {
-            if let Err(e) = runtime_bridge.handle_input(RuntimeInputEvent::PointerMove { x, y }) {
-                warn!("Failed to forward pointer move: {}", e);
-            }
-        }
-
-        WindowEvent::KeyboardInput { key, pressed, .. } => {
-            if pressed {
-                debug!("Key pressed: {}", key);
-                if let Err(e) = runtime_bridge.handle_input(RuntimeInputEvent::Key { code: key }) {
-                    warn!("Failed to forward key input: {}", e);
-                }
-            }
-        }
-
-        WindowEvent::Focused => {
-            debug!("Window focused");
-            let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Foregrounded);
-        }
-
-        WindowEvent::Unfocused => {
-            debug!("Window unfocused");
-            let _ = runtime_bridge.handle_lifecycle(LifecycleEvent::Backgrounded);
-        }
-
-        WindowEvent::Scroll { delta_x, delta_y } => {
-            if let Err(e) =
-                runtime_bridge.handle_input(RuntimeInputEvent::Scroll { delta_x, delta_y })
-            {
-                warn!("Failed to forward scroll: {}", e);
-            }
-        }
-
-        _ => {}
+        info!("Total frames rendered: {}", frame_pacer.frame_count());
+        info!("Average FPS: {:.1}", frame_pacer.current_fps());
     }
-}
-
-#[cfg(all(target_os = "macos", feature = "desktop", not(feature = "gpui")))]
-fn run_macos_window(engine_bridge: EngineBridge, settings: &OptimizationSettings) {
-    use platform::macos::MacOSWindow;
-
-    let window = match MacOSWindow::new() {
-        Ok(w) => {
-            info!("macOS window created ({}x{})", w.size().0, w.size().1);
-            if MacOSWindow::is_apple_silicon() {
-                info!("Running on Apple Silicon");
-            }
-            w
-        }
-        Err(e) => {
-            error!("Failed to create macOS window: {}", e);
-            return;
-        }
-    };
-
-    let platform_tier = PlatformTier::Desktop;
-    let surface = SurfaceDescriptor::new(1, window.size().0, window.size().1, platform_tier);
-    if let Err(e) = engine_bridge.attach_surface(surface) {
-        error!("Failed to attach macOS surface: {}", e);
-        return;
-    }
-
-    let runtime_bridge = Arc::new(engine_bridge);
-    let mut frame_pacer = FramePacer::new(settings.render.target_fps);
-    let frame_limit = std::env::var("SOLILOQUY_DESKTOP_FRAME_LIMIT")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(1);
-
-    info!(
-        "Starting macOS frame pump at {} FPS target for {} frame(s)",
-        settings.render.target_fps, frame_limit
-    );
-
-    for _ in 0..frame_limit {
-        let _delta = frame_pacer.begin_frame();
-
-        if let Err(e) =
-            runtime_bridge.present_frame(soliloquy_browser_optimizations::runtime::SurfaceId(1))
-        {
-            warn!(
-                "Failed to present macOS frame through runtime contract: {}",
-                e
-            );
-        }
-
-        window.request_redraw();
-        frame_pacer.wait_for_frame();
-    }
-
-    info!("Total frames rendered: {}", frame_pacer.frame_count());
-    info!("Average FPS: {:.1}", frame_pacer.current_fps());
 }
 
 #[cfg(test)]
