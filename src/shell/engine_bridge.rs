@@ -681,22 +681,17 @@ impl EngineBridge {
         event_type: &str,
         event_data: &str,
     ) -> Result<(), String> {
-        let safe_event_type = serde_json::to_string(event_type)
-            .map_err(|e| format!("Failed to serialize event type: {}", e))?;
-        let safe_event_data = serde_json::to_string(event_data)
-            .map_err(|e| format!("Failed to serialize event data: {}", e))?;
-
         let script = format!(
             r#"
             (function() {{
                 const node = __getNodeById({});
-                if (node && node._eventListeners && node._eventListeners[{}]) {{
-                    const event = JSON.parse({});
-                    node._eventListeners[{}].forEach(listener => listener(event));
+                if (node && node._eventListeners && node._eventListeners['{}']) {{
+                    const event = JSON.parse('{}');
+                    node._eventListeners['{}'].forEach(listener => listener(event));
                 }}
             }})();
             "#,
-            node_id, safe_event_type, safe_event_data, safe_event_type
+            node_id, event_type, event_data, event_type
         );
 
         self.execute_script(&script)?;

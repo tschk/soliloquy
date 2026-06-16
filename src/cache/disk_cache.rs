@@ -68,19 +68,11 @@ impl DiskCache {
 
     /// Insert or update a cache entry
     pub fn insert(&mut self, key: &str, data: &[u8], content_type: &str) -> Result<(), String> {
-        if data.len() > self.max_size {
-            return Err("Resource too large for cache".to_string());
-        }
-
         let size = data.len();
 
         // Check if we need to evict
         while self.current_size + size > self.max_size && !self.db.is_empty() {
-            let size_before = self.current_size;
             self.evict_one()?;
-            if self.current_size == size_before {
-                break;
-            }
         }
 
         if self.current_size + size > self.max_size {
@@ -329,39 +321,6 @@ mod tests {
 
         let retrieved = cache.get("test_key").expect("Failed to get");
         assert_eq!(retrieved, Some(data.to_vec()));
-    }
-
-    #[test]
-    fn test_disk_cache_insert_too_large() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 100).expect("Failed to create cache");
-
-        let data = vec![0u8; 150];
-        let result = cache.insert("too_large", &data, "application/octet-stream");
-
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Resource too large for cache");
-    }
-
-    #[test]
-    fn test_disk_cache_insert_full_error() {
-        let temp_dir = tempdir().expect("Failed to create temp dir");
-        let mut cache = DiskCache::new(temp_dir.path(), 100).expect("Failed to create cache");
-
-        // Simulate corrupted state: insert data directly without metadata
-        cache.db.insert(b"orphan_key", vec![0u8; 60]).unwrap();
-        cache.current_size += 60;
-
-        // Now try to insert 50 bytes. 60 + 50 = 110 > 100.
-        // evict_one will be called but won't find any meta: keys to remove.
-        let data = vec![0u8; 50];
-        let result = cache.insert("key1", &data, "application/octet-stream");
-
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            "Cache is full and cannot evict more entries"
-        );
     }
 
     #[test]

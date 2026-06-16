@@ -558,6 +558,17 @@ mod tests {
         assert!(manifest.removable);
     }
 
+    fn signed_manifest(id: &str, capability: Capability) -> DriverManifest {
+        let mut manifest = DriverManifest::new(id, id, "1.0.0");
+        manifest.capabilities.push(capability);
+        let digest = manifest.signed_digest().expect("digest");
+        manifest.signature = Some(PackageSignature {
+            key_id: "test-key".to_string(),
+            digest_sha256: digest,
+        });
+        manifest
+    }
+
     #[test]
     fn install_resolves_dependencies() {
         let mut manager = DriverManager::new();
@@ -572,8 +583,7 @@ mod tests {
             key_id: "test-key".to_string(),
             digest_sha256: digest,
         });
-        let firmware =
-            crate::test_utils::signed_manifest("bluetooth-firmware", Capability::Storage);
+        let firmware = signed_manifest("bluetooth-firmware", Capability::Storage);
 
         manager.register_driver(bluetooth).unwrap();
         manager.register_driver(firmware).unwrap();
@@ -590,10 +600,7 @@ mod tests {
     fn acquire_and_release_capability() {
         let mut manager = DriverManager::new();
         manager
-            .register_driver(crate::test_utils::signed_manifest(
-                "bluetooth",
-                Capability::Bluetooth,
-            ))
+            .register_driver(signed_manifest("bluetooth", Capability::Bluetooth))
             .unwrap();
 
         let driver_id = manager.acquire_capability(Capability::Bluetooth).unwrap();
@@ -610,8 +617,8 @@ mod tests {
     fn remove_is_blocked_by_dependents() {
         let mut manager = DriverManager::new();
 
-        let bluetooth = crate::test_utils::signed_manifest("bluetooth", Capability::Bluetooth);
-        let mut settings = crate::test_utils::signed_manifest("settings", Capability::Storage);
+        let bluetooth = signed_manifest("bluetooth", Capability::Bluetooth);
+        let mut settings = signed_manifest("settings", Capability::Storage);
         settings.dependencies.push("bluetooth".to_string());
 
         manager.register_driver(bluetooth).unwrap();
@@ -625,10 +632,7 @@ mod tests {
     fn lease_releases_on_drop() {
         let mut manager = DriverManager::new();
         manager
-            .register_driver(crate::test_utils::signed_manifest(
-                "bluetooth",
-                Capability::Bluetooth,
-            ))
+            .register_driver(signed_manifest("bluetooth", Capability::Bluetooth))
             .unwrap();
 
         let broker = CapabilityBroker::new(manager);

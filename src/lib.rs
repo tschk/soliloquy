@@ -49,5 +49,3 @@ pub use driver_manager::{
 pub use driver_catalog::{DriverCatalog, DriverCatalogError, PersistentDriverManager};
 
 pub use settings::{SettingToggle, SettingsManager};
-#[cfg(test)]
-pub mod test_utils;

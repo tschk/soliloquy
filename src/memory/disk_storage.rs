@@ -5,7 +5,6 @@
 
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -58,8 +57,6 @@ pub struct DiskStorage {
     max_disk_usage: usize,
     /// Current disk usage (bytes)
     current_usage: usize,
-    /// Cache of tab IDs currently on disk
-    cached_tab_ids: HashSet<u64>,
 }
 
 impl DiskStorage {
@@ -79,7 +76,6 @@ impl DiskStorage {
             storage_path,
             max_disk_usage,
             current_usage: 0,
-            cached_tab_ids: HashSet::new(),
         };
 
         // Calculate current disk usage
@@ -124,7 +120,6 @@ impl DiskStorage {
             .map_err(|e| format!("Failed to write file: {}", e))?;
 
         self.current_usage += size;
-        self.cached_tab_ids.insert(state.tab_id);
 
         info!(
             "Saved frozen tab {} ({} KB, compression ratio: {:.2}%)",
@@ -175,7 +170,6 @@ impl DiskStorage {
         fs::remove_file(&file_path).map_err(|e| format!("Failed to delete file: {}", e))?;
 
         self.current_usage = self.current_usage.saturating_sub(size);
-        self.cached_tab_ids.remove(&tab_id);
 
         debug!("Deleted frozen tab {} ({} KB freed)", tab_id, size / 1024);
 
@@ -184,12 +178,32 @@ impl DiskStorage {
 
     /// Check if a tab exists on disk
     pub fn has_tab(&self, tab_id: u64) -> bool {
-        self.cached_tab_ids.contains(&tab_id)
+        self.get_tab_path(tab_id).exists()
     }
 
     /// List all frozen tabs
     pub fn list_tabs(&self) -> Result<Vec<u64>, String> {
-        Ok(self.cached_tab_ids.iter().copied().collect())
+        let mut tab_ids = Vec::new();
+
+        let entries = fs::read_dir(&self.storage_path)
+            .map_err(|e| format!("Failed to read storage directory: {}", e))?;
+
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.starts_with("tab_") && name.ends_with(".bin") {
+                    if let Some(id_str) = name
+                        .strip_prefix("tab_")
+                        .and_then(|s| s.strip_suffix(".bin"))
+                    {
+                        if let Ok(id) = id_str.parse::<u64>() {
+                            tab_ids.push(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(tab_ids)
     }
 
     /// Get current disk usage statistics
@@ -198,7 +212,7 @@ impl DiskStorage {
             current_usage: self.current_usage,
             max_usage: self.max_disk_usage,
             usage_percentage: (self.current_usage as f32 / self.max_disk_usage as f32) * 100.0,
-            tab_count: self.cached_tab_ids.len(),
+            tab_count: self.list_tabs().map(|t| t.len()).unwrap_or(0),
         }
     }
 
@@ -210,8 +224,6 @@ impl DiskStorage {
         for tab_id in tab_ids {
             self.delete_tab(tab_id)?;
         }
-
-        self.cached_tab_ids.clear();
 
         info!("Cleared {} frozen tabs from disk", count);
 
@@ -226,26 +238,13 @@ impl DiskStorage {
     /// Recalculate current disk usage
     fn recalculate_usage(&mut self) -> Result<(), String> {
         self.current_usage = 0;
-        self.cached_tab_ids.clear();
 
         let entries = fs::read_dir(&self.storage_path)
             .map_err(|e| format!("Failed to read storage directory: {}", e))?;
 
         for entry in entries.flatten() {
             if let Ok(metadata) = entry.metadata() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.starts_with("tab_") && name.ends_with(".bin") {
-                        if let Some(id_str) = name
-                            .strip_prefix("tab_")
-                            .and_then(|s| s.strip_suffix(".bin"))
-                        {
-                            if let Ok(id) = id_str.parse::<u64>() {
-                                self.current_usage += metadata.len() as usize;
-                                self.cached_tab_ids.insert(id);
-                            }
-                        }
-                    }
-                }
+                self.current_usage += metadata.len() as usize;
             }
         }
 
