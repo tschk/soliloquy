@@ -191,18 +191,6 @@ impl QuicTransport {
 
         let client_config = ClientConfig::new(Arc::new(quic_client_config));
 
-        // Configure transport parameters from QuicConfig
-        // let mut transport_config = quinn::TransportConfig::default();
-        // transport_config.max_idle_timeout(Some(quinn::IdleTimeout::try_from(config.max_idle_timeout).unwrap()));
-        // transport_config.initial_max_data(config.initial_max_data);
-        // transport_config.initial_max_stream_data_bidi_local(config.initial_max_stream_data_bidi_local);
-        // transport_config.initial_max_stream_data_bidi_remote(config.initial_max_stream_data_bidi_remote);
-        // transport_config.initial_max_stream_data_uni(config.initial_max_stream_data_uni);
-        // transport_config.max_concurrent_bidi_streams(quinn::VarInt::from_u64(config.max_concurrent_bidi_streams).unwrap());
-        // transport_config.max_concurrent_uni_streams(quinn::VarInt::from_u64(config.max_concurrent_uni_streams).unwrap());
-
-        // client_config.transport_config(Arc::new(transport_config));
-
         endpoint.set_default_client_config(client_config);
 
         Self {
