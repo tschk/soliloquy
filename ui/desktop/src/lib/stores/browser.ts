@@ -179,24 +179,11 @@ const DEFAULT_SEARCH_ENGINES: SearchEngine[] = [
 ];
 
 // ============================================================================
-// Stores
+// Action Creators
 // ============================================================================
 
-function createBrowserStore() {
-	const { subscribe, set, update } = writable<BrowserState>({
-		tabs: [],
-		workspaces: DEFAULT_WORKSPACES,
-		activeTabId: null,
-		activeWorkspaceId: 'default',
-		searchEngines: DEFAULT_SEARCH_ENGINES,
-		history: [],
-		bookmarks: [],
-	});
-
+function createTabActions(update: (updater: (state: BrowserState) => BrowserState) => void, subscribe: (run: (value: BrowserState) => void) => () => void) {
 	return {
-		subscribe,
-		
-		// Tab Management
 		openTab: (url: string, options?: { workspaceId?: string; activate?: boolean }) => {
 			const tabId = crypto.randomUUID();
 			const workspaceId = options?.workspaceId ?? get({ subscribe }).activeWorkspaceId;
@@ -284,9 +271,12 @@ function createBrowserStore() {
 					t.id === tabId ? { ...t, pinned } : t
 				),
 			}));
-		},
-		
-		// Workspace Management
+		}
+	};
+}
+
+function createWorkspaceActions(update: (updater: (state: BrowserState) => BrowserState) => void) {
+	return {
 		createWorkspace: (name: string, icon = '📁', color = '#6B7280') => {
 			const id = crypto.randomUUID();
 			update(state => ({
@@ -345,9 +335,12 @@ function createBrowserStore() {
 					w.id === workspaceId ? { ...w, ...updates } : w
 				),
 			}));
-		},
-		
-		// History
+		}
+	};
+}
+
+function createHistoryActions(update: (updater: (state: BrowserState) => BrowserState) => void) {
+	return {
 		addToHistory: (url: string, title: string) => {
 			update(state => {
 				const existing = state.history.find(h => h.url === url);
@@ -374,9 +367,12 @@ function createBrowserStore() {
 		
 		clearHistory: () => {
 			update(state => ({ ...state, history: [] }));
-		},
-		
-		// Bookmarks
+		}
+	};
+}
+
+function createBookmarkActions(update: (updater: (state: BrowserState) => BrowserState) => void) {
+	return {
 		addBookmark: (url: string, title: string, folderId?: string) => {
 			const id = crypto.randomUUID();
 			update(state => ({
@@ -397,18 +393,34 @@ function createBrowserStore() {
 				...state,
 				bookmarks: state.bookmarks.filter(b => b.id !== bookmarkId),
 			}));
-		},
-		
-		// Reset
-		reset: () => set({
-			tabs: [],
-			workspaces: DEFAULT_WORKSPACES,
-			activeTabId: null,
-			activeWorkspaceId: 'default',
-			searchEngines: DEFAULT_SEARCH_ENGINES,
-			history: [],
-			bookmarks: [],
-		}),
+		}
+	};
+}
+
+// ============================================================================
+// Stores
+// ============================================================================
+
+const INITIAL_BROWSER_STATE: BrowserState = {
+	tabs: [],
+	workspaces: DEFAULT_WORKSPACES,
+	activeTabId: null,
+	activeWorkspaceId: 'default',
+	searchEngines: DEFAULT_SEARCH_ENGINES,
+	history: [],
+	bookmarks: [],
+};
+
+function createBrowserStore() {
+	const { subscribe, set, update } = writable<BrowserState>(INITIAL_BROWSER_STATE);
+
+	return {
+		subscribe,
+		...createTabActions(update, subscribe),
+		...createWorkspaceActions(update),
+		...createHistoryActions(update),
+		...createBookmarkActions(update),
+		reset: () => set(INITIAL_BROWSER_STATE),
 	};
 }
 
