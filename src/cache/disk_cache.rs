@@ -68,6 +68,10 @@ impl DiskCache {
 
     /// Insert or update a cache entry
     pub fn insert(&mut self, key: &str, data: &[u8], content_type: &str) -> Result<(), String> {
+        if data.len() > self.max_size {
+            return Err("Resource too large for cache".to_string());
+        }
+
         let size = data.len();
 
         // Check if we need to evict
@@ -321,6 +325,42 @@ mod tests {
 
         let retrieved = cache.get("test_key").expect("Failed to get");
         assert_eq!(retrieved, Some(data.to_vec()));
+    }
+
+    #[test]
+    fn test_disk_cache_insert_too_large() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        // Create cache with 100 bytes max size
+        let mut cache = DiskCache::new(temp_dir.path(), 100).expect("Failed to create cache");
+
+        // Try to insert 150 bytes of data
+        let data = vec![0u8; 150];
+        let result = cache.insert("too_large", &data, "application/octet-stream");
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Resource too large for cache");
+    }
+
+    #[test]
+    fn test_disk_cache_insert_full_error() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        // Create cache with 100 bytes max size
+        let mut cache = DiskCache::new(temp_dir.path(), 100).expect("Failed to create cache");
+
+        // We can trigger "Cache is full and cannot evict more entries" by inserting an item that fits max_size but leaves the database with no metadata keys to evict.
+        // Wait, if there are no metadata keys, `evict_one` does nothing, so `db.is_empty()` could be false but `current_size + size > max_size`.
+        // Let's manually insert an item directly into the db to bypass metadata creation, simulating a corrupted state.
+        cache.db.insert(b"orphan_key", vec![0u8; 60]).unwrap();
+        cache.current_size += 60; // manually update size to reflect the orphan key
+
+        // Now attempt to insert an item of 50 bytes. 60 + 50 = 110 > 100.
+        // `evict_one` will be called, but it won't find any `meta:` keys to remove!
+        // So the loop will exit because it can't evict, but size > max_size, triggering the error.
+        let data = vec![0u8; 50];
+        let result = cache.insert("key1", &data, "application/octet-stream");
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Cache is full and cannot evict more entries");
     }
 
     #[test]
