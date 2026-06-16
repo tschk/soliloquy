@@ -13,5 +13,3 @@ pub mod status;
 pub use app_registry::{AppEntry, AppInstance, AppRegistry, AppState};
 pub use session::SessionManager;
 pub use status::{AppInfo, DesktopStatus, SessionInfo};
-
-

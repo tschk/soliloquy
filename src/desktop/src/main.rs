@@ -11,14 +11,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::{
-    Router,
-    extract::State,
-    http::Method,
-    routing::get,
-};
+use axum::{extract::State, http::Method, routing::get, Router};
 use log::info;
-use soliloquy_daemon::{AppRegistry, DesktopStatus, SessionManager, status::AlpenglowPaths};
+use soliloquy_daemon::{status::AlpenglowPaths, AppRegistry, DesktopStatus, SessionManager};
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::EnvFilter;
 
@@ -43,12 +38,16 @@ async fn main() {
         v.parse::<u16>().unwrap_or(9842)
     } else if let Ok(v) = std::env::var("SOLD_BIND") {
         // Backwards compat: sold OpenRC scripts use SOLD_BIND=127.0.0.1:8080
-        v.split(':').nth(1).and_then(|p| p.parse::<u16>().ok()).unwrap_or(9842)
+        v.split(':')
+            .nth(1)
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(9842)
     } else {
         9842
     };
 
-    let port_arg = std::env::args().position(|a| a == "--port")
+    let port_arg = std::env::args()
+        .position(|a| a == "--port")
         .and_then(|i| std::env::args().nth(i + 1))
         .and_then(|v| v.parse::<u16>().ok());
     let port = port_arg.unwrap_or(port);

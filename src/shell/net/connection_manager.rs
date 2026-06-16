@@ -238,7 +238,10 @@ impl ConnectionManager {
             };
 
             pool.insert(connection_id, conn);
-            host_index.entry(hostname.to_string()).or_default().push(connection_id);
+            host_index
+                .entry(hostname.to_string())
+                .or_default()
+                .push(connection_id);
 
             debug!(
                 "Created new pooled connection {} for {}",
