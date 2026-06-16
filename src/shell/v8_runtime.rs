@@ -13,7 +13,7 @@ use crate::browser_optimizations::GcType;
 use crate::js_engine::{JsEngineKind, JsEngineStatus, JsEngineSwapStage};
 
 const SOLILOQUY_BRIDGE_SCHEMA: &str =
-    include_str!("../../../third_party/servo/components/servo/soliloquy_bridge_schema.json");
+    include_str!("../../third_party/servo/components/servo/soliloquy_bridge_schema.json");
 const SOLILOQUY_BRIDGE_SCHEMA_VERSION: &str = "rv8-bridge-v1";
 
 const SOLILOQUY_JS_ENGINE_ENV: &str = "SOLILOQUY_JS_ENGINE";
