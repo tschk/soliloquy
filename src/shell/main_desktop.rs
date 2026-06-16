@@ -46,6 +46,36 @@ use std::sync::Arc;
 #[cfg(all(feature = "desktop", not(feature = "gpui")))]
 use platform::{Window, WindowEvent};
 
+fn start_daemon() {
+    // Start the DE daemon in background unless SOLILOQUY_NO_DAEMON is set.
+    if std::env::var("SOLILOQUY_NO_DAEMON").is_ok() {
+        info!("DE daemon disabled by SOLILOQUY_NO_DAEMON");
+        return;
+    }
+    let port = if let Ok(v) = std::env::var("SOLILOQUY_DAEMON_PORT") {
+        v.parse::<u16>().unwrap_or(9842)
+    } else if let Ok(v) = std::env::var("SOLD_BIND") {
+        v.split(':').nth(1).and_then(|p| p.parse::<u16>().ok()).unwrap_or(9842)
+    } else {
+        9842
+    };
+    std::thread::spawn(move || {
+        let daemon_path = std::env::current_exe()
+            .ok()
+            .map(|p| {
+                let mut d = p.clone();
+                d.set_file_name("soliloquy-daemon");
+                d
+            })
+            .unwrap_or_else(|| std::path::PathBuf::from("soliloquy-daemon"));
+        info!("Launching DE daemon: {} --port {}", daemon_path.display(), port);
+        let _ = std::process::Command::new(&daemon_path)
+            .arg("--port")
+            .arg(port.to_string())
+            .spawn();
+    });
+}
+
 fn main() {
     // Initialize logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -53,6 +83,9 @@ fn main() {
         .init();
 
     info!("Soliloquy Desktop v0.1");
+
+    // Start DE daemon
+    start_daemon();
 
     // Initialize optimizations
     let settings = OptimizationSettings::desktop();

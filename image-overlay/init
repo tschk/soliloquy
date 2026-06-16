@@ -1,0 +1,10 @@
+#!/bin/sh
+# Fast boot — start sold directly, no OpenRC (matches alpenglow ~1s)
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm /run/alpenglow
+mount -t devpts devpts /dev/pts 2>/dev/null
+mount -t tmpfs -o mode=1777 tmpfs /dev/shm 2>/dev/null
+/usr/local/bin/sold &
+exec sh
