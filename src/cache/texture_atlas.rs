@@ -67,6 +67,9 @@ struct RectPacker {
     width: u32,
     height: u32,
     used_regions: Vec<AtlasRect>,
+    current_x: u32,
+    current_y: u32,
+    row_height: u32,
 }
 
 impl RectPacker {
@@ -75,6 +78,9 @@ impl RectPacker {
             width,
             height,
             used_regions: Vec::new(),
+            current_x: 0,
+            current_y: 0,
+            row_height: 0,
         }
     }
 
@@ -88,32 +94,27 @@ impl RectPacker {
     /// - MaxRects (best area fit)
     ///   These provide better space utilization and O(n) or O(n log n) performance.
     fn pack(&mut self, width: u32, height: u32) -> Option<AtlasRect> {
-        // Try to find a spot using simple shelf algorithm
-        for y in (0..self.height).step_by(32) {
-            for x in (0..self.width).step_by(32) {
-                let rect = AtlasRect::new(x, y, width, height);
-
-                // Check if this position fits
-                if x + width > self.width || y + height > self.height {
-                    continue;
-                }
-
-                // Check for overlaps with existing regions
-                let overlaps = self.used_regions.iter().any(|used| {
-                    rect.x < used.x + used.width
-                        && rect.x + rect.width > used.x
-                        && rect.y < used.y + used.height
-                        && rect.y + rect.height > used.y
-                });
-
-                if !overlaps {
-                    self.used_regions.push(rect);
-                    return Some(rect);
-                }
-            }
+        if width > self.width || height > self.height {
+            return None;
         }
 
-        None
+        if self.current_x + width > self.width {
+            self.current_y += self.row_height;
+            self.current_x = 0;
+            self.row_height = 0;
+        }
+
+        if self.current_y + height > self.height {
+            return None;
+        }
+
+        let rect = AtlasRect::new(self.current_x, self.current_y, width, height);
+
+        self.current_x += width;
+        self.row_height = self.row_height.max(height);
+
+        self.used_regions.push(rect);
+        Some(rect)
     }
 }
 
