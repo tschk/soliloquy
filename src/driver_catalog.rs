@@ -526,6 +526,17 @@ mod tests {
     use crate::driver_manager::{AllowUnsignedPackages, PackageSignature, RequireSignedPackages};
     use tempfile::tempdir;
 
+    fn signed_manifest(id: &str, capability: Capability) -> DriverManifest {
+        let mut manifest = DriverManifest::new(id, id, "1.0.0");
+        manifest.capabilities.push(capability);
+        let digest = manifest.signed_digest().expect("digest");
+        manifest.signature = Some(PackageSignature {
+            key_id: "test-key".to_string(),
+            digest_sha256: digest,
+        });
+        manifest
+    }
+
     #[test]
     fn persists_state_across_reopen() {
         let tempdir = tempdir().expect("tempdir");
@@ -538,10 +549,7 @@ mod tests {
                     PersistentDriverManager::new_empty(&path, trust_policy).unwrap()
                 });
             manager
-                .register_driver(crate::test_utils::signed_manifest(
-                    "bluetooth",
-                    Capability::Bluetooth,
-                ))
+                .register_driver(signed_manifest("bluetooth", Capability::Bluetooth))
                 .unwrap();
             manager.enable_driver("bluetooth").unwrap();
             assert_eq!(manager.state("bluetooth"), Some(DriverState::Enabled));
@@ -563,7 +571,7 @@ mod tests {
         std::fs::create_dir_all(&source_dir).unwrap();
 
         let manifest_path = source_dir.join("bluetooth.json");
-        let manifest = crate::test_utils::signed_manifest("bluetooth", Capability::Bluetooth);
+        let manifest = signed_manifest("bluetooth", Capability::Bluetooth);
         std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
 
         let mut manager = PersistentDriverManager::open(&path, trust_policy).unwrap_or_else(|_| {
@@ -590,7 +598,7 @@ mod tests {
         std::fs::create_dir_all(&source_dir).unwrap();
 
         let manifest_path = source_dir.join("bluetooth.json");
-        let manifest = crate::test_utils::signed_manifest("bluetooth", Capability::Bluetooth);
+        let manifest = signed_manifest("bluetooth", Capability::Bluetooth);
         std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
 
         {
