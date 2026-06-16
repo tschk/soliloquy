@@ -89,6 +89,8 @@ pub struct ConnectionManager {
     tls_sessions: Arc<Mutex<HashMap<String, TlsSession>>>,
     /// Connection pool: connection_id -> PooledConnection
     connection_pool: Arc<Mutex<HashMap<u64, PooledConnection>>>,
+    /// Host index: hostname -> [connection_id]
+    host_index: Arc<Mutex<HashMap<String, Vec<u64>>>>,
     /// Next connection ID
     next_connection_id: Arc<Mutex<u64>>,
 }
@@ -100,6 +102,7 @@ impl ConnectionManager {
             dns_cache: Arc::new(Mutex::new(HashMap::new())),
             tls_sessions: Arc::new(Mutex::new(HashMap::new())),
             connection_pool: Arc::new(Mutex::new(HashMap::new())),
+            host_index: Arc::new(Mutex::new(HashMap::new())),
             next_connection_id: Arc::new(Mutex::new(1)),
         }
     }
@@ -202,18 +205,23 @@ impl ConnectionManager {
     /// Optional connection ID if available
     pub fn get_connection(&self, hostname: &str) -> Option<u64> {
         let mut pool = self.connection_pool.lock().unwrap();
+        let mut host_index = self.host_index.lock().unwrap();
 
-        for (id, conn) in pool.iter_mut() {
-            if conn.hostname == hostname && !conn.in_use && !conn.is_idle_timeout() {
-                conn.in_use = true;
-                conn.last_used = current_timestamp();
-                debug!("Reusing pooled connection {} for {}", id, hostname);
-                return Some(*id);
+        if let Some(ids) = host_index.get(hostname) {
+            for &id in ids {
+                if let Some(conn) = pool.get_mut(&id) {
+                    if !conn.in_use && !conn.is_idle_timeout() {
+                        conn.in_use = true;
+                        conn.last_used = current_timestamp();
+                        debug!("Reusing pooled connection {} for {}", id, hostname);
+                        return Some(id);
+                    }
+                }
             }
         }
 
         // No available connection, create new if under limit
-        let host_connections = pool.values().filter(|c| c.hostname == hostname).count();
+        let host_connections = host_index.get(hostname).map(|v| v.len()).unwrap_or(0);
         if host_connections < MAX_CONNECTIONS_PER_HOST {
             let connection_id = {
                 let mut next_id = self.next_connection_id.lock().unwrap();
@@ -230,6 +238,8 @@ impl ConnectionManager {
             };
 
             pool.insert(connection_id, conn);
+            host_index.entry(hostname.to_string()).or_default().push(connection_id);
+
             debug!(
                 "Created new pooled connection {} for {}",
                 connection_id, hostname
@@ -300,12 +310,20 @@ impl ConnectionManager {
         // Clean idle connections
         {
             let mut pool = self.connection_pool.lock().unwrap();
+            let mut host_index = self.host_index.lock().unwrap();
+
             pool.retain(|id, conn| {
                 let keep = !conn.is_idle_timeout();
                 if !keep {
                     debug!("Removing idle connection {}", id);
                 }
                 keep
+            });
+
+            // Sync host_index with pool
+            host_index.retain(|_, ids| {
+                ids.retain(|id| pool.contains_key(id));
+                !ids.is_empty()
             });
         }
     }
