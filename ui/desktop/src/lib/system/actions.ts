@@ -23,6 +23,7 @@ export function getPendingNavigation(): string | null {
 
 // Check if a string looks like a URL
 export function isValidUrl(input: string): boolean {
+	input = input.trim();
 	// Check for explicit protocol
 	if (/^https?:\/\//i.test(input)) {
 		try {
@@ -34,6 +35,10 @@ export function isValidUrl(input: string): boolean {
 	}
 	// Check for domain-like patterns (e.g., google.com, sub.domain.org/path)
 	if (/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+/.test(input)) {
+		return true;
+	}
+	// Check for localhost and typical local dev patterns
+	if (/^localhost(:\d+)?(\/.*)?$/.test(input) || /^127\.0\.0\.1(:\d+)?(\/.*)?$/.test(input)) {
 		return true;
 	}
 	return false;
