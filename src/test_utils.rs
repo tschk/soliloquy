@@ -1,4 +1,4 @@
-use crate::driver_manager::{Capability, DriverManifest, PackageSignature};
+use rv8_browser_optimizations::driver_manager::{Capability, DriverManifest, PackageSignature};
 
 pub fn signed_manifest(id: &str, capability: Capability) -> DriverManifest {
     let mut manifest = DriverManifest::new(id, id, "1.0.0");
