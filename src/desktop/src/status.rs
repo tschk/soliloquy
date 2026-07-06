@@ -116,13 +116,15 @@ impl DesktopStatus {
         };
 
         let mut profile = String::new();
-        let mut cgroup_state = String::new();
+        let cgroup_state = String::new();
 
         for line in content.lines() {
             if let Some((key, value)) = line.split_once('=') {
                 match key {
                     "ALPENGLOW_KERNEL_POLICY_PROFILE" => profile = value.to_string(),
-                    "ALPENGLOW_KERNEL_POLICY_CGROUPS" => cgroup_state = value.to_string(),
+                    // ponytail: kernelctl-zig no longer emits CGROUPS; leave default
+                    "ALPENGLOW_KERNEL_POLICY_CGROUPS" |
+                    "ALPENGLOW_KERNEL_POLICY_FILE" => {}
                     _ => {}
                 }
             }
