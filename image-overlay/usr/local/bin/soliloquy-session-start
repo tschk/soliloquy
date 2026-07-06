@@ -1,0 +1,15 @@
+#!/bin/sh
+# Soliloquy logged-in graphical session — starts sold (DE daemon) instead of alpenglowed.
+set -eu
+
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export GDK_BACKEND=wayland
+export QT_QPA_PLATFORM=wayland
+export SDL_VIDEODRIVER=wayland
+export _JAVA_AWT_WM_NONREPARENTING=1
+export CLUTTER_BACKEND=wayland
+
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 700 "${XDG_RUNTIME_DIR}"
+
+exec /usr/local/bin/sold

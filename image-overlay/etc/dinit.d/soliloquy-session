@@ -1,0 +1,7 @@
+# Soliloquy desktop session
+type = scripted
+command = /usr/local/bin/soliloquy-session-start
+depends-on = seatd
+depends-on = alpenglow-zram
+depends-on = alpenglow-pressure
+restart = yes

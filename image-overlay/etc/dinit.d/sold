@@ -1,0 +1,6 @@
+# Soliloquy desktop daemon (replaces alpenglowed)
+type = process
+command = /usr/local/bin/sold
+restart = yes
+depends-on = pipewire
+depends-on = wireplumber
