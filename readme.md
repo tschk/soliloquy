@@ -2,7 +2,7 @@
 
 Soliloquy is the desktop environment and browser shell for the Alpenglow OS appliance. It owns the Rust shell, Servo integration work, V8/RV8 runtime bridge, browser chrome, UI bundle, desktop controls, and browser-facing optimization code.
 
-The installable operating system, rootfs composition, kernel policy, service graph, board support, and netd live in `../alpenglow-os`.
+The installable operating system, rootfs composition, kernel policy, service graph, board support, and system daemons live in `../alpenglow`.
 
 This project is early-stage and not production-ready.
 
@@ -28,9 +28,9 @@ Other important top-level areas:
 - `soliloquy-daemon` is the desktop environment daemon — reads alpenglow OS state (network, kernel), manages apps/sessions, exposes an HTTP API for the Svelte UI
 - `../rv8` is the sibling experimental browser/runtime engine checkout with IPC, rendering, parsing, and JS execution paths
 - `ui/desktop` provides the appliance desktop surface that Alpenglow stages into its image
-- `../alpenglow-os` owns OS packaging, install, kernel policy, rootfs generation, target-board boot, and the system daemons (`alpenglow-netd`, `oil`)
+- `../alpenglow` owns OS packaging, install, kernel policy, rootfs generation, target-board boot, and the system daemons (netd, kernelctl, oil)
 
-**Boundary**: Soliloquy consumes `alpenglow-netd` for state types (from `../alpenglow-os`) but owns all desktop-environment concerns — windowing, browser shell, app launcher, session management, Svelte UI.
+**Boundary**: Soliloquy reads alpenglow daemon state files at `/run/alpenglow/...` but owns all desktop-environment concerns — windowing, browser shell, app launcher, session management, Svelte UI. The DE daemon (`soliloquy-daemon` / `sold`) replaces `alpenglowed` as the session compositor.
 
 ## Build And Run
 
@@ -69,9 +69,8 @@ sh: can't access tty; job control turned off
 2026-06-16T05:37:24Z INFO soliloquy_daemon: listening on 127.0.0.1:9842
 ```
 
-The image is built from `../alpenglow-os` (Alpine Linux base + kernel) with 
-the `soliloquy-daemon` binary cross-compiled for aarch64-musl and a minimal 
-init that skips OpenRC — just mounts filesystems and starts the daemon directly.
+The image is built from `../alpenglow` (custom Linux + dinit + Oil package manager) with 
+the `soliloquy-daemon` (sold) binary layered in as the session compositor.
 
 ### Desktop bundle
 
@@ -83,7 +82,7 @@ cd ui/desktop && bun run build
 
 - `Cargo` — local Rust desktop work
 - `Bun` — Svelte UI bundle
-- `../alpenglow-os` — OS install, QEMU, kernel, image gates
+- `../alpenglow` — OS install, QEMU, kernel, image gates
 
 ## Current Bridge State
 

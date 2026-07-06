@@ -4,12 +4,12 @@
 
 Soliloquy is the desktop environment and browser shell for the Alpenglow OS appliance. It owns the Rust shell, Servo integration work, V8/RV8 runtime bridge, browser chrome, UI bundle, desktop controls, and browser-facing optimization code.
 
-The installable operating system, rootfs composition, kernel policy, service graph, board support, and netd live in `../alpenglow-os`.
+The installable operating system, rootfs composition, kernel policy, service graph, board support, and system daemons live in `../alpenglow`.
 
 ## Architecture
 
 Soliloquy Desktop ------ Browser shell and desktop controls
-  DE Daemon ------------ Background daemon consuming alpenglow OS state (netd, kernelctl),
+  DE Daemon (sold) ----- Background daemon consuming alpenglow OS state (netd, kernelctl),
                          managing apps/sessions, exposing HTTP API for Svelte UI
   Servo Surface -------- Fullscreen browser shell loading the desktop bundle
   RV8 Runtime ---------- Servo/V8 bridge work and RV8 browser engine path
@@ -17,12 +17,11 @@ Soliloquy Desktop ------ Browser shell and desktop controls
   GPU Rendering -------- WGPU compute shaders and damage-based compositing
   Cache System --------- LRU, disk cache, V8 bytecode, texture atlas
 RV8 Browser Engine ----- Multi-process browser engine in `../rv8`
-Alpenglow OS ----------- OS daemons (netd, oil), kernel policy,
-                         rootfs, initramfs, service graph in `../alpenglow-os`
+Alpenglow OS ----------- OS daemons (netd-zig, kernelctl-zig, oil), kernel policy,
+                         rootfs, initramfs, service graph in `../alpenglow`
 
-Consumption boundary: Soliloquy depends on `alpenglow-netd`
-  as Rust library crate for state types (from ../alpenglow-os).
-  It reads daemon output files (`/run/alpenglow/...`) at runtime.
+Consumption boundary: Soliloquy reads daemon output files (`/run/alpenglow/...`) at runtime.
+  No Rust crate dependency on alpenglow — state files parsed locally.
   Do not add OS daemon logic to soliloquy.
 
 ## Build Systems
@@ -39,17 +38,16 @@ Build paths currently coexist:
     src/shell/          Rust shell: servo_embedder, v8_runtime, engine_bridge, platform/*
     src/shell/net/      Networking: quic.rs, resource_loader.rs, connection_manager.rs,
                         speculation.rs, code_cache.rs
-    src/desktop/        DE daemon (soliloquy-daemon): consumes alpenglow netd/kernelctl state,
+    src/desktop/        DE daemon (soliloquy-daemon / sold): consumes alpenglow netd/kernelctl state,
                         app registry, session manager, Axum HTTP API for Svelte UI
-    src/memory/         Tab residency, compression, pressure monitoring, disk storage
-    src/gpu/            layout_compute.rs, compositor.rs, wgpu_integration.rs
-    src/cache/          unified.rs (LRU), texture_atlas.rs, disk_cache.rs
+    src/                Browser optimization stubs (rv8 integration handled by sibling agent)
     ui/desktop/         Svelte desktop environment and browser chrome
     third_party/servo/  Servo checkout and local bridge work
     tools/              RV8/Servo checks, UI build/dev/start helpers
     docs/               Architecture, build, browser, and development docs
+    build/              Custom alpenglow build overlay (replaces alpenglowed with sold)
     ../rv8/             Canonical RV8 browser engine
-    ../alpenglow-os/        Alpenglow OS (netd, oil, kernel policy, rootfs, initramfs, boot)
+    ../alpenglow/       Alpenglow OS (netd-zig, kernelctl-zig, oil, kernel policy, rootfs, initramfs, boot)
 
 ## Testing
 
@@ -67,7 +65,7 @@ Build paths currently coexist:
 ## Boundaries
 
 - Do not add OS image, kernel, service-manager, rootfs, board, or installer work back into this repo.
-- Put installable OS changes in `../alpenglow-os`.
+- Put installable OS changes in `../alpenglow`.
 - Keep `../rv8` as the browser-engine boundary.
-- Soliloquy consumes `alpenglow-netd` as a path dep for state types only.
-  OS daemon logic stays in `../alpenglow-os/system/{netd,oil}`.
+- Soliloquy reads alpenglow state files at runtime (`/run/alpenglow/...`).
+  OS daemon logic stays in `../alpenglow/system/{netd-zig,kernelctl-zig,oil}`.
