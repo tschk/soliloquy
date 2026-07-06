@@ -1,20 +1,23 @@
 #!/bin/sh
+# Build Soliloquy desktop atop Alpenglow and boot in QEMU.
+# Layers soliloquy-daemon (sold) into alpenglow base, replacing alpenglowed.
 set -eu
 
 ROOT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-ALPENGLOW_OS="$(CDPATH='' cd -- "${ROOT_DIR}/../alpenglow-os" && pwd)"
+ALPENGLOW_DIR="$(CDPATH='' cd -- "${ROOT_DIR}/../alpenglow" && pwd)"
 QEMU_RUN="${QEMU_RUN:-1}"
 QEMU_HEADLESS="${QEMU_HEADLESS:-0}"
-QEMU_ARCH="${QEMU_ARCH:-aarch64}"
+QEMU_ARCH="${QEMU_ARCH:-x86_64}"
+BUILD_PROFILE="${BUILD_PROFILE:-desktop}"
 
 usage() {
   cat <<'USAGE'
 Usage: ./start.sh [options]
 
-Build the Soliloquy desktop Alpine image and boot it in QEMU.
+Build the Soliloquy desktop atop Alpenglow and boot it in QEMU.
 
 Options:
-  --build-only  Prepare QEMU artifacts, skip VM launch
+  --build-only  Prepare artifacts, skip VM launch
   --headless    Run QEMU in headless serial mode
   -h, --help    Show this help
 USAGE
@@ -30,123 +33,127 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-# Step 1: Build base Alpine rootfs from alpenglow-os
-"${ALPENGLOW_OS}/system/alpine/scripts/build-rootfs.sh"
-"${ALPENGLOW_OS}/system/alpine/scripts/fetch-qemu-kernel.sh" "${ALPENGLOW_OS}/build/alpine/qemu"
+# Build sold (soliloquy-daemon) for target
+SOLD_BIN="${ROOT_DIR}/target/release/soliloquy-daemon"
+echo "→ Building soliloquy-daemon (sold)..."
+cargo build -p soliloquy-daemon --release 2>&1 | tail -3
+[ -f "${SOLD_BIN}" ] || { echo "ERROR: sold build failed"; exit 1; }
+echo "  sold: $(ls -lh "${SOLD_BIN}" | awk '{print $5}')"
 
-# Step 2: Layer soliloquy desktop into the rootfs
-ROOTFS="${ALPENGLOW_OS}/build/alpine/rootfs"
-OVERLAY="${ROOT_DIR}/image-overlay"
+# Build alpenglow base via boot-native.sh (build-only mode)
+echo "→ Building Alpenglow base (${BUILD_PROFILE}, ${QEMU_ARCH})..."
+ALPENGLOW_OUT="${ALPENGLOW_DIR}/build/native"
+ALPENGLOW_ROOTFS="${ALPENGLOW_OUT}/rootfs"
 
-mkdir -p "${ROOTFS}/usr/local/bin"
-
-# Build and deploy soliloquy-daemon binary for ${QEMU_ARCH}
-SOLD_BIN="${ROOT_DIR}/target/${QEMU_ARCH}-linux-musl/release/soliloquy-daemon"
-if [ ! -f "${SOLD_BIN}" ]; then
-  echo "  building soliloquy-daemon for ${QEMU_ARCH}..."
-  BUILD_DIR="/tmp/sold-${QEMU_ARCH}-build"
-  mkdir -p "${BUILD_DIR}/src"
-  cp -r "${ROOT_DIR}/src/desktop/src/"* "${BUILD_DIR}/src/"
-  cat > "${BUILD_DIR}/Cargo.toml" << EOF
-[package]
-name = "soliloquy-daemon"
-version = "0.1.0"
-edition = "2021"
-[dependencies]
-tokio = { version = "1.40", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-axum = { version = "0.8", features = ["ws", "json"] }
-tower-http = { version = "0.6", features = ["cors", "fs"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
-anyhow = "1.0"
-log = "0.4"
-env_logger = "0.11"
-whoami = "1"
-uuid = { version = "1.11", features = ["v4", "serde"] }
-EOF
-  PLATFORM="linux/amd64"
-  [ "${QEMU_ARCH}" = "aarch64" ] && PLATFORM="linux/arm64"
-  docker run --rm --platform="${PLATFORM}" -v "${BUILD_DIR}:/work" -w /work alpine:3.21 sh -c '
-    apk add --no-cache curl gcc musl-dev 2>/dev/null
-    curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal 2>/dev/null
-    source "$HOME/.cargo/env"
-    cargo build --release 2>&1 | tail -1
-    cp target/release/soliloquy-daemon /work/soliloquy-daemon
-  ' >/dev/null 2>&1
-  mkdir -p "$(dirname "${SOLD_BIN}")"
-  cp "${BUILD_DIR}/soliloquy-daemon" "${SOLD_BIN}" 2>/dev/null || true
-  rm -rf "${BUILD_DIR}"
-fi
-if [ -f "${SOLD_BIN}" ]; then
-  cp "${SOLD_BIN}" "${ROOTFS}/usr/local/bin/sold"
-  chmod +x "${ROOTFS}/usr/local/bin/sold"
-  echo "  sold: $(ls -lh "${ROOTFS}/usr/local/bin/sold" | awk '{print $5}')"
+# Run alpenglow's boot-native in build-only mode if artifacts missing
+if [ ! -f "${ALPENGLOW_OUT}/vmlinuz" ] || [ ! -d "${ALPENGLOW_ROOTFS}" ]; then
+  (cd "${ALPENGLOW_DIR}" && \
+   BUILD_PROFILE="${BUILD_PROFILE}" \
+   GRAPHICAL=1 \
+   QEMU_RUN=0 \
+   sh scripts/boot-native.sh) 2>&1 | tail -10
 fi
 
-# Strip bloat from rootfs (LLVM 154M, gallium 83M, fonts, X11, etc.)
-rm -rf "${ROOTFS}/usr/lib/libLLVM.so.19.1" "${ROOTFS}/usr/lib/gallium-pipe" "${ROOTFS}/usr/lib/libgallium-24.2.8.so" 2>/dev/null || true
-rm -rf "${ROOTFS}/usr/lib/dri" "${ROOTFS}/usr/share/fonts" "${ROOTFS}/usr/share/X11" 2>/dev/null || true
-rm -rf "${ROOTFS}/usr/lib/gstreamer-1.0" "${ROOTFS}/usr/lib/alsa-lib" 2>/dev/null || true
-echo "  trimmed: LLVM, gallium, DRI, fonts, X11, gstreamer, alsa"
+if [ ! -d "${ALPENGLOW_ROOTFS}" ]; then
+  echo "ERROR: alpenglow rootfs not built at ${ALPENGLOW_ROOTFS}" >&2
+  exit 1
+fi
 
-# Replace Alpine init with fast boot — starts sold directly, no OpenRC
-cp "${OVERLAY}/init" "${ROOTFS}/init"
-chmod +x "${ROOTFS}/init"
+# Layer sold into rootfs
+echo "→ Layering soliloquy into rootfs..."
+cp "${SOLD_BIN}" "${ALPENGLOW_ROOTFS}/usr/local/bin/sold"
+chmod 755 "${ALPENGLOW_ROOTFS}/usr/local/bin/sold"
 
-# Step 4: Build initramfs with soliloquy desktop layered in
-QEMU_DIR="${ALPENGLOW_OS}/build/alpine/qemu"
-mkdir -p "${QEMU_DIR}"
-(
-  cd "${ROOTFS}"
-  find . -print | cpio -o -H newc 2>/dev/null | gzip -9 > "${QEMU_DIR}/rootfs.cpio.gz"
-)
-echo "Initramfs: $(ls -lh "${QEMU_DIR}/rootfs.cpio.gz" | awk '{print $5}')"
+# Copy soliloquy session start script
+cp "${ROOT_DIR}/build/alpenglow/scripts/soliloquy-session-start" "${ALPENGLOW_ROOTFS}/usr/local/bin/"
+chmod 755 "${ALPENGLOW_ROOTFS}/usr/local/bin/soliloquy-session-start"
 
-# Step 4: Launch QEMU
+# Replace alpenglowed dinit service with sold
+cp "${ROOT_DIR}/build/alpenglow/dinit/sold" "${ALPENGLOW_ROOTFS}/etc/dinit.d/alpenglowed"
+cp "${ROOT_DIR}/build/alpenglow/dinit/soliloquy-session" "${ALPENGLOW_ROOTFS}/etc/dinit.d/"
+
+# Install soliloquy desktop UI bundle if built
+UI_BUNDLE="${ROOT_DIR}/ui/desktop/build"
+if [ -d "${UI_BUNDLE}" ]; then
+  mkdir -p "${ALPENGLOW_ROOTFS}/usr/share/soliloquy/ui"
+  cp -R "${UI_BUNDLE}/." "${ALPENGLOW_ROOTFS}/usr/share/soliloquy/ui/"
+  echo "  UI bundle: $(du -sh "${ALPENGLOW_ROOTFS}/usr/share/soliloquy/ui" | cut -f1)"
+fi
+
+# Rebuild initramfs with sold layered in
+echo "→ Rebuilding initramfs..."
+INITRAMFS="${ALPENGLOW_OUT}/initramfs.cpio.zst"
+(cd "${ALPENGLOW_ROOTFS}" && find . -print | cpio -o -H newc 2>/dev/null | zstd -6 -T0 > "${INITRAMFS}")
+echo "  initramfs: ${INITRAMFS} ($(du -sh "${INITRAMFS}" | cut -f1))"
+
+KERNEL="${ALPENGLOW_OUT}/vmlinuz"
+
 if [ "${QEMU_RUN}" != "1" ]; then
   echo "QEMU_RUN=0 set; build artifacts ready."
+  echo "  kernel:    ${KERNEL}"
+  echo "  initramfs: ${INITRAMFS}"
   exit 0
 fi
 
-KERNEL="${QEMU_DIR}/vmlinuz-virt"
-INITRAMFS="${QEMU_DIR}/rootfs.cpio.gz"
+# Boot QEMU
+require_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1"; exit 1; }; }
+require_cmd qemu-system-${QEMU_ARCH}
 
-if [ "${QEMU_ARCH}" = "aarch64" ]; then
-  SERIAL="ttyAMA0"
-else
-  SERIAL="ttyS0"
-fi
-KERNEL_CMDLINE="quiet loglevel=3 console=tty0 console=${SERIAL} random.trust_cpu=on rdinit=/init alpenglow.ram_root=auto alpenglow.ram_root_min_mb=3072 alpenglow.root_fallback=/dev/vda alpenglow.root_fallback_fstype=ext4"
+echo "→ Booting Soliloquy desktop in QEMU..."
+echo "  kernel:    ${KERNEL}"
+echo "  initramfs: ${INITRAMFS}"
+echo "  (Ctrl-A X to quit)"
+echo ""
 
-# Use hvf acceleration on macOS for aarch64 guests (native speed)
+SERIAL="ttyS0"
+[ "${QEMU_ARCH}" = "aarch64" ] && SERIAL="ttyAMA0"
+
+KERNEL_CMDLINE="quiet console=ttyS0 console=tty0 init=/init"
+
+# Auto-detect acceleration
 ACCEL="tcg"
-MACHINE="virt"
 case "$(uname -s)" in
   Darwin)
-    QEMU_BIN="$(which qemu-system-${QEMU_ARCH})"
-    # Sign QEMU for HVF entitlement if not already signed
-    if ! codesign -d --entitlements - "${QEMU_BIN}" 2>/dev/null | grep -q hypervisor; then
-      cat >/tmp/qemu-hvf-entitlements.plist <<'EOF2'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>com.apple.security.hypervisor</key><true/></dict></plist>
-EOF2
-      codesign -s - --entitlements /tmp/qemu-hvf-entitlements.plist -f "${QEMU_BIN}" 2>/dev/null || true
-      rm -f /tmp/qemu-hvf-entitlements.plist
+    if timeout 2 qemu-system-${QEMU_ARCH} -machine virt,accel=hvf -M none </dev/null >/dev/null 2>&1; then
+      ACCEL="hvf"
     fi
-    ACCEL="hvf" ;;
+    ;;
+  Linux)
+    [ -c /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ] && ACCEL="kvm"
+    ;;
 esac
 
-echo "Starting QEMU (${QEMU_ARCH}, accel=${ACCEL})..."
-exec qemu-system-${QEMU_ARCH} \
-  -machine "${MACHINE},accel=${ACCEL}" \
-  -m 2048 -smp 4 \
-  $( [ "${QEMU_HEADLESS}" = "1" ] && echo "-nographic" || echo "-display default" ) \
-  -device virtio-gpu-pci \
-  -device virtio-keyboard-pci -device virtio-mouse-pci \
-  -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 \
-  -device virtio-net-pci,netdev=n1 -netdev user,id=n1 \
-  -kernel "${KERNEL}" -initrd "${INITRAMFS}" \
-  -append "${KERNEL_CMDLINE}"
+MACHINE="q35"
+[ "${QEMU_ARCH}" = "aarch64" ] && MACHINE="virt"
+
+if [ "${QEMU_HEADLESS}" = "1" ]; then
+  exec qemu-system-${QEMU_ARCH} \
+    -machine "${MACHINE},accel=${ACCEL}" -m 4096 -smp 4 \
+    -nographic -no-reboot \
+    -device virtio-gpu-pci \
+    -device virtio-keyboard-pci -device virtio-mouse-pci \
+    -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 \
+    -device virtio-net-pci,netdev=n1 -netdev user,id=n1 \
+    -kernel "${KERNEL}" -initrd "${INITRAMFS}" \
+    -append "${KERNEL_CMDLINE}"
+else
+  # Pick display backend
+  QEMU_DISPLAY=""
+  for backend in gtk sdl cocoa; do
+    if timeout 2 qemu-system-${QEMU_ARCH} -display ${backend},show-cursor=off -M none </dev/null >/dev/null 2>&1; then
+      QEMU_DISPLAY="${backend}"
+      break
+    fi
+  done
+  QEMU_DISPLAY="${QEMU_DISPLAY:-gtk}"
+
+  exec qemu-system-${QEMU_ARCH} \
+    -machine "${MACHINE},accel=${ACCEL}" -m 4096 -smp 4 -no-reboot \
+    -display "${QEMU_DISPLAY}" \
+    -device virtio-gpu-pci \
+    -device virtio-keyboard-pci -device virtio-mouse-pci \
+    -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0 \
+    -device virtio-net-pci,netdev=n1 -netdev user,id=n1 \
+    -kernel "${KERNEL}" -initrd "${INITRAMFS}" \
+    -append "${KERNEL_CMDLINE}"
+fi
