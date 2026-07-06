@@ -8,21 +8,19 @@ name = "soliloquy_browser_optimizations"
 path = "lib.rs"
 
 [dependencies]
-# ponytail: rv8_browser_optimizations merged into main rv8 crate
-# Another agent handles rv8 linkages — stubs defined in src/*.rs
-rv8 = { path = "../../rv8" }
+rv8_browser_optimizations = { path = "../../rv8/crates/rv8_browser_optimizations" }
 
 [dev-dependencies]
 env_logger = "0.10"
 tempfile = "3.8"
 
-# ponytail: examples disabled until rv8 agent lands
-# [[example]]
-# name = "browser_simulation"
-# path = "../examples/browser_simulation.rs"
-# [[example]]
-# name = "production_demo"
-# path = "../examples/production_demo.rs"
+[[example]]
+name = "browser_simulation"
+path = "../examples/browser_simulation.rs"
+
+[[example]]
+name = "production_demo"
+path = "../examples/production_demo.rs"
 
 [features]
 default = ["real_compression", "wgpu_rendering"]
