@@ -8,7 +8,8 @@ license-file.workspace = true
 # Workspace dependencies
 log.workspace = true
 futures.workspace = true
-rusty_v8.workspace = true
+# ponytail: rusty_v8 removed — rv8 handles V8 integration
+# rusty_v8.workspace = true
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
