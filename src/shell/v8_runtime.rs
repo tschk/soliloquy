@@ -37,12 +37,12 @@ impl V8Runtime {
             last_gc: None,
             engine_kind: JsEngineKind::V8,
             status: JsEngineStatus {
-            requested_engine: JsEngineKind::V8,
-            active_engine: JsEngineKind::V8,
-            swap_stage: JsEngineSwapStage::EmbedderV8Experiment,
-            dom_bridge_ready: true,
-            servo_controls_javascript: false,
-        },
+                requested_engine: JsEngineKind::V8,
+                active_engine: JsEngineKind::V8,
+                swap_stage: JsEngineSwapStage::EmbedderV8Experiment,
+                dom_bridge_ready: true,
+                servo_controls_javascript: false,
+            },
         })
     }
 
