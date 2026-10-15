@@ -11,3 +11,7 @@ src/shell/target/** linguist-vendored
 *.sh linguist-vendored
 docs/** linguist-documentation
 LICENSE linguist-documentation
+
+# Exclude Shell from GitHub language statistics.
+*.sh linguist-detectable=false
+/image-overlay/init linguist-detectable=false
