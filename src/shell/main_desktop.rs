@@ -92,15 +92,13 @@ fn main() {
 
     info!("Soliloquy Desktop v0.1");
 
-    // Start DE daemon
-    start_daemon();
-
     // Initialize optimizations
     let settings = OptimizationSettings::desktop();
     init_optimizations(&settings);
 
     #[cfg(all(feature = "desktop", feature = "gpui"))]
     {
+        start_daemon();
         info!("Launching Crepuscularity GPUI Shell...");
         gpui_app::run();
         info!("Soliloquy Desktop Shell shutdown complete");
@@ -144,6 +142,10 @@ fn main() {
             std::process::exit(1);
         }
         info!("Engine bridge initialized with DOM, Web APIs, and Soliloquy APIs");
+
+        // Start the DE daemon only once the shell can actually run, so a
+        // failed startup does not leave an orphaned daemon behind.
+        start_daemon();
 
         // Test V8 with desktop APIs
         match engine_bridge.execute_script("soliloquy.version") {

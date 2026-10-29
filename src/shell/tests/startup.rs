@@ -15,6 +15,8 @@ fn run(bin: &str) -> (bool, String) {
     )
 }
 
+// The gpui build launches the GPUI shell instead of the V8 path.
+#[cfg(not(feature = "gpui"))]
 #[test]
 fn desktop_exits_with_missing_js_engine_error() {
     let (success, stderr) = run(env!("CARGO_BIN_EXE_soliloquy_desktop"));
