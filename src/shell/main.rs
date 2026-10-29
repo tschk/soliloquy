@@ -12,9 +12,6 @@ mod platform;
 mod servo_embedder;
 mod v8_runtime;
 
-#[cfg(test)]
-mod integration_tests;
-
 use log::{error, info};
 use servo_embedder::ServoEmbedder;
 use std::env;
@@ -42,7 +39,7 @@ fn main() {
         }
         Err(e) => {
             error!("Failed to initialize Servo embedder: {}", e);
-            return;
+            std::process::exit(1);
         }
     };
 

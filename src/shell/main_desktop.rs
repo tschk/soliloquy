@@ -1,8 +1,9 @@
 //! Desktop main entry point for Soliloquy shell
 //!
 //! This is the main entry point for running Soliloquy on Linux and macOS.
-//! It uses winit for windowing and wgpu for graphics, with Servo for
-//! rendering and V8 for JavaScript execution.
+//! It uses winit for windowing and wgpu for graphics. Servo and V8 are not
+//! linked in yet, so the default (non-gpui) build exits at startup with an
+//! "is not implemented" error; see `v8_runtime.rs`.
 //!
 //! ## Usage
 //!
@@ -91,15 +92,13 @@ fn main() {
 
     info!("Soliloquy Desktop v0.1");
 
-    // Start DE daemon
-    start_daemon();
-
     // Initialize optimizations
     let settings = OptimizationSettings::desktop();
     init_optimizations(&settings);
 
     #[cfg(all(feature = "desktop", feature = "gpui"))]
     {
+        start_daemon();
         info!("Launching Crepuscularity GPUI Shell...");
         gpui_app::run();
         info!("Soliloquy Desktop Shell shutdown complete");
@@ -120,7 +119,7 @@ fn main() {
             }
             Err(e) => {
                 error!("Failed to initialize V8 runtime: {}", e);
-                return;
+                std::process::exit(1);
             }
         };
 
@@ -133,16 +132,20 @@ fn main() {
             }
             Err(e) => {
                 error!("Failed to create engine bridge: {}", e);
-                return;
+                std::process::exit(1);
             }
         };
 
         // Initialize bridge (sets up DOM bindings, Web APIs, Soliloquy APIs)
         if let Err(e) = engine_bridge.initialize() {
             error!("Failed to initialize engine bridge: {}", e);
-            return;
+            std::process::exit(1);
         }
         info!("Engine bridge initialized with DOM, Web APIs, and Soliloquy APIs");
+
+        // Start the DE daemon only once the shell can actually run, so a
+        // failed startup does not leave an orphaned daemon behind.
+        start_daemon();
 
         // Test V8 with desktop APIs
         match engine_bridge.execute_script("soliloquy.version") {
@@ -390,22 +393,4 @@ fn run_macos_window(engine_bridge: EngineBridge, settings: &OptimizationSettings
 
     info!("Total frames rendered: {}", frame_pacer.frame_count());
     info!("Average FPS: {:.1}", frame_pacer.current_fps());
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_v8_initialization() {
-        let runtime = v8_runtime::V8Runtime::new();
-        assert!(runtime.is_ok());
-    }
-
-    #[test]
-    fn test_engine_bridge() {
-        let runtime = v8_runtime::V8Runtime::new().unwrap();
-        let bridge = EngineBridge::new(runtime);
-        assert!(bridge.is_ok());
-    }
 }

@@ -64,13 +64,16 @@ echo "→ Layering soliloquy into rootfs..."
 cp "${SOLD_BIN}" "${ALPENGLOW_ROOTFS}/usr/local/bin/sold"
 chmod 755 "${ALPENGLOW_ROOTFS}/usr/local/bin/sold"
 
+# Session files are tracked in image-overlay/ (there is no build/ directory).
+OVERLAY="${ROOT_DIR}/image-overlay"
+
 # Copy soliloquy session start script
-cp "${ROOT_DIR}/build/alpenglow/scripts/soliloquy-session-start" "${ALPENGLOW_ROOTFS}/usr/local/bin/"
+cp "${OVERLAY}/usr/local/bin/soliloquy-session-start" "${ALPENGLOW_ROOTFS}/usr/local/bin/"
 chmod 755 "${ALPENGLOW_ROOTFS}/usr/local/bin/soliloquy-session-start"
 
 # Replace alpenglowed dinit service with sold
-cp "${ROOT_DIR}/build/alpenglow/dinit/sold" "${ALPENGLOW_ROOTFS}/etc/dinit.d/alpenglowed"
-cp "${ROOT_DIR}/build/alpenglow/dinit/soliloquy-session" "${ALPENGLOW_ROOTFS}/etc/dinit.d/"
+cp "${OVERLAY}/etc/dinit.d/sold" "${ALPENGLOW_ROOTFS}/etc/dinit.d/alpenglowed"
+cp "${OVERLAY}/etc/dinit.d/soliloquy-session" "${ALPENGLOW_ROOTFS}/etc/dinit.d/"
 
 # Install soliloquy desktop UI bundle if built
 UI_BUNDLE="${ROOT_DIR}/ui/desktop/build"

@@ -1,17 +1,22 @@
-//! V8 Runtime stub — rv8 agent replaces with real rv8 V8 integration.
-//! ponytail: rusty_v8 removed, stubs until rv8 linkage lands.
+//! V8 runtime placeholder.
+//!
+//! Soliloquy has no JavaScript engine linked in yet: rusty_v8 was removed and
+//! the rv8 linkage has not landed. `V8Runtime::new` therefore fails in every
+//! build, tests included, so callers see the missing engine instead of a stub
+//! that only works under `cfg(test)`.
 
 use std::time::Duration;
 
 use log::info;
 
-#[cfg(test)]
-use serde_json::Value;
-
 use crate::browser_optimizations::GcType;
 use crate::js_engine::{JsEngineKind, JsEngineStatus, JsEngineSwapStage};
 
 const SOLILOQUY_JS_ENGINE_ENV: &str = "SOLILOQUY_JS_ENGINE";
+
+/// Error returned wherever JavaScript execution is requested.
+pub const V8_UNIMPLEMENTED: &str =
+    "V8 runtime is not implemented: no JavaScript engine is linked into soliloquy (rv8 linkage pending)";
 
 #[derive(Clone, Debug)]
 pub struct GcCollectionRecord {
@@ -30,20 +35,7 @@ pub struct V8Runtime {
 
 impl V8Runtime {
     pub fn new() -> Result<Self, String> {
-        info!("V8Runtime stub — rv8 integration pending");
-        Ok(V8Runtime {
-            initialized: true,
-            gc_count: 0,
-            last_gc: None,
-            engine_kind: JsEngineKind::V8,
-            status: JsEngineStatus {
-                requested_engine: JsEngineKind::V8,
-                active_engine: JsEngineKind::V8,
-                swap_stage: JsEngineSwapStage::EmbedderV8Experiment,
-                dom_bridge_ready: true,
-                servo_controls_javascript: false,
-            },
-        })
+        Err(V8_UNIMPLEMENTED.to_string())
     }
 
     pub fn record_navigation(&mut self, _url: &str) {}
@@ -68,15 +60,8 @@ impl V8Runtime {
         self.last_gc.clone()
     }
 
-    pub fn execute_script(&mut self, script: &str) -> Result<String, String> {
-        // ponytail: stub echoes script text until rv8 agent lands real V8.
-        // Tests expect "1 + 1" → "2", but this stub just returns the input.
-        if cfg!(test) {
-            // rv8 agent: replace with real V8 evaluation via rv8::js::JsEngine
-            Ok(script.to_string())
-        } else {
-            Err("V8 stub: execution unavailable until rv8 linkage lands".to_string())
-        }
+    pub fn execute_script(&mut self, _script: &str) -> Result<String, String> {
+        Err(V8_UNIMPLEMENTED.to_string())
     }
 
     pub fn is_initialized(&self) -> bool {
@@ -100,24 +85,17 @@ impl V8Runtime {
     }
 
     pub fn get_version() -> String {
-        format!("soliloquy-v8-stub")
+        "unavailable".to_string()
     }
+}
 
-    #[cfg(test)]
-    fn emit_bridge_response(&self, _data: &str) -> String {
-        String::new()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_reports_missing_engine() {
+        let error = V8Runtime::new().err().expect("no JS engine is linked in");
+        assert!(error.contains("not implemented"), "{error}");
     }
-
-    #[cfg(test)]
-    fn extract_bridge_value(&self, _json: &Value) -> Option<String> {
-        None
-    }
-
-    #[cfg(test)]
-    fn raw_execute_internal(&self, _script: &str) -> Result<String, String> {
-        Err("stub".to_string())
-    }
-
-    #[cfg(test)]
-    fn on_script_failure(&self, _script: &str, _error: &str) {}
 }

@@ -1,8 +1,10 @@
-//! Servo embedder for Soliloquy
+//! Placeholder for a Servo embedder.
 //!
-//! This module provides the integration layer between Servo and the local shell,
-//! implementing the necessary traits for windowing, events, and graphics.
-//! It also integrates V8 for JavaScript execution and tab memory optimization.
+//! **Servo is not linked into soliloquy-shell.** Nothing here renders, lays
+//! out, or navigates web content; the state machine below only does
+//! bookkeeping for a future integration. `ServoEmbedder::new` therefore
+//! fails with [`SERVO_UNIMPLEMENTED`] so the shell binaries report the missing
+//! engine at startup instead of pretending to browse.
 
 use log::{debug, info, warn};
 use std::collections::HashMap;
@@ -12,7 +14,12 @@ use std::time::Instant;
 use crate::browser_optimizations::{GcScheduler, MemoryPressureMonitor, TabResidencyManager};
 use crate::js_engine::JsEngineStatus;
 use crate::v8_runtime::V8Runtime;
-/// Main embedder context that bridges Servo browser engine with the shell runtime.
+/// Error returned by [`ServoEmbedder::new`] until Servo is linked in.
+pub const SERVO_UNIMPLEMENTED: &str =
+    "ServoEmbedder is not implemented: Servo is not linked into soliloquy-shell";
+
+/// Intended embedder context for the Servo browser engine (not yet linked in;
+/// see the module docs).
 ///
 /// `ServoEmbedder` manages the lifecycle of a web browser instance running on Soliloquy.
 /// It coordinates between:
@@ -178,55 +185,9 @@ impl EmbedderJsRuntime {
 }
 
 impl ServoEmbedder {
-    /// Creates and initializes a new Servo embedder instance.
-    ///
-    /// Performs the following initialization steps:
-    /// 1. Creates V8 runtime and executes a test script to verify functionality
-    /// 2. Initializes the display session
-    /// 3. Creates view reference tokens for window management
-    /// 4. Initializes tab memory optimization systems
-    /// 5. Transitions state from `Uninitialized` → `Initializing` → `Ready`
-    ///
-    /// # Returns
-    /// - `Ok(ServoEmbedder)`: Fully initialized embedder ready to load URLs
-    /// - `Err(String)`: V8 initialization failure (critical error)
-    ///
-    /// # Examples
-    /// ```no_run
-    /// let embedder = ServoEmbedder::new()?;
-    /// embedder.load_url("https://example.com")?;
-    /// ```
+    /// Always fails with [`SERVO_UNIMPLEMENTED`]: there is no Servo to start.
     pub fn new() -> Result<Self, String> {
-        info!("Initializing Servo embedder with lazy browser startup");
-
-        let mut embedder = ServoEmbedder {
-            display_session: None,
-            event_queue: Arc::new(Mutex::new(Vec::new())),
-            input_dispatches: Arc::new(Mutex::new(Vec::new())),
-            js_runtime: EmbedderJsRuntime::servo_managed(),
-            webview: None,
-            current_url: None,
-            state: EmbedderState::Uninitialized,
-            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
-            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
-            tab_id_map: HashMap::new(),
-        };
-
-        embedder.state = EmbedderState::Initializing;
-
-        // Initialize memory monitoring.
-        // This is intentionally cheap compared to bringing up the browser runtime.
-        {
-            let monitor = embedder.memory_monitor.lock().unwrap();
-            monitor.start_monitoring();
-        }
-        info!("Memory pressure monitoring started");
-
-        embedder.state = EmbedderState::Ready;
-        info!("Servo embedder initialized successfully without eager runtime init");
-
-        Ok(embedder)
+        Err(SERVO_UNIMPLEMENTED.to_string())
     }
 
     /// Lazily initialize the V8 runtime the first time browser execution needs it.
@@ -729,7 +690,6 @@ fn validate_url(url: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::browser_optimizations::GcType;
 
     #[test]
     fn test_url_validation_valid() {
@@ -781,124 +741,6 @@ mod tests {
     }
 
     #[test]
-    fn test_embedder_state_transitions() {
-        let embedder = ServoEmbedder::new().expect("Should initialize");
-        assert_eq!(embedder.get_state(), &EmbedderState::Ready);
-    }
-
-    #[test]
-    fn test_embedder_load_when_uninitialized() {
-        let mut embedder = ServoEmbedder {
-            display_session: None,
-            event_queue: Arc::new(Mutex::new(Vec::new())),
-            input_dispatches: Arc::new(Mutex::new(Vec::new())),
-            js_runtime: EmbedderJsRuntime::servo_managed(),
-            webview: None,
-            current_url: None,
-            state: EmbedderState::Uninitialized,
-            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
-            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
-            tab_id_map: HashMap::new(),
-        };
-
-        let result = embedder.load_url("https://example.com");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not ready"));
-    }
-
-    #[test]
-    fn test_embedder_load_when_initializing() {
-        let mut embedder = ServoEmbedder {
-            display_session: None,
-            event_queue: Arc::new(Mutex::new(Vec::new())),
-            input_dispatches: Arc::new(Mutex::new(Vec::new())),
-            js_runtime: EmbedderJsRuntime::servo_managed(),
-            webview: None,
-            current_url: None,
-            state: EmbedderState::Initializing,
-            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
-            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
-            tab_id_map: HashMap::new(),
-        };
-
-        let result = embedder.load_url("https://example.com");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("not ready"));
-    }
-
-    #[test]
-    fn test_embedder_repeated_loads() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-
-        assert!(embedder.load_url("https://first.com").is_ok());
-        assert_eq!(embedder.get_state(), &EmbedderState::Running);
-        assert_eq!(
-            embedder.get_current_url(),
-            Some(&"https://first.com".to_string())
-        );
-
-        assert!(embedder.load_url("https://second.com").is_ok());
-        assert_eq!(embedder.get_state(), &EmbedderState::Running);
-        assert_eq!(
-            embedder.get_current_url(),
-            Some(&"https://second.com".to_string())
-        );
-    }
-
-    #[test]
-    fn test_embedder_load_invalid_url() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-
-        assert!(embedder.load_url("").is_err());
-        assert_eq!(embedder.get_state(), &EmbedderState::Ready);
-        assert_eq!(embedder.get_current_url(), None);
-    }
-
-    #[test]
-    fn test_embedder_load_url_no_scheme() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-
-        let result = embedder.load_url("example.com");
-        assert!(result.is_err());
-        assert_eq!(embedder.get_state(), &EmbedderState::Ready);
-    }
-
-    #[test]
-    fn test_embedder_state_remains_running_after_multiple_loads() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-
-        for i in 0..5 {
-            let url = format!("https://example{}.com", i);
-            assert!(embedder.load_url(&url).is_ok());
-            assert_eq!(embedder.get_state(), &EmbedderState::Running);
-        }
-    }
-
-    #[test]
-    fn test_embedder_error_state() {
-        let embedder = ServoEmbedder {
-            display_session: None,
-            event_queue: Arc::new(Mutex::new(Vec::new())),
-            input_dispatches: Arc::new(Mutex::new(Vec::new())),
-            js_runtime: EmbedderJsRuntime::servo_managed(),
-            webview: None,
-            current_url: None,
-            state: EmbedderState::Error("Test error".to_string()),
-            tab_residency: Arc::new(Mutex::new(TabResidencyManager::new())),
-            gc_scheduler: Arc::new(Mutex::new(GcScheduler::new())),
-            memory_monitor: Arc::new(Mutex::new(MemoryPressureMonitor)),
-            tab_id_map: HashMap::new(),
-        };
-
-        assert_eq!(
-            embedder.get_state(),
-            &EmbedderState::Error("Test error".to_string())
-        );
-    }
-
-    #[test]
     fn test_url_validation_edge_cases() {
         assert!(validate_url("https://").is_err());
         assert!(validate_url("https://a.b").is_ok());
@@ -907,124 +749,8 @@ mod tests {
     }
 
     #[test]
-    fn test_display_present() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        assert!(embedder.present().is_ok());
-    }
-
-    #[test]
-    fn present_records_display_frame_bookkeeping() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        embedder
-            .load_url("https://frames.example")
-            .expect("URL should load");
-
-        embedder.present().expect("frame should present");
-
-        let session = embedder
-            .display_session
-            .as_ref()
-            .expect("display session should exist")
-            .lock()
-            .expect("display session should lock");
-        assert_eq!(session.presented_frames, 1);
-        assert_eq!(
-            session.last_presented_url.as_deref(),
-            Some("https://frames.example")
-        );
-        assert!(session.last_presented_at.is_some());
-    }
-
-    #[test]
-    fn handle_input_records_typed_dispatch() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-
-        embedder.handle_input(InputEvent::Key { code: 13 });
-
-        let dispatches = embedder
-            .input_dispatches
-            .lock()
-            .expect("input dispatches should lock");
-        assert_eq!(dispatches.len(), 1);
-        assert_eq!(dispatches[0].source, InputEvent::Key { code: 13 });
-        assert_eq!(
-            dispatches[0].converted,
-            ServoInputEvent::KeyDown { code: 13 }
-        );
-        assert!(dispatches[0].dispatched_at <= Instant::now());
-    }
-
-    #[test]
-    fn load_url_records_webview_state() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-
-        embedder
-            .load_url("https://load-state.example")
-            .expect("URL should load");
-
-        let info = embedder
-            .get_webview_info()
-            .expect("webview info should exist");
-        assert_eq!(
-            info.get("url"),
-            Some(&"https://load-state.example".to_string())
-        );
-        assert_eq!(info.get("loading"), Some(&"false".to_string()));
-    }
-
-    #[test]
-    fn run_maintenance_collects_v8_garbage_when_scheduled() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        {
-            let mut gc = embedder
-                .gc_scheduler
-                .lock()
-                .expect("GC scheduler should lock");
-            gc.set_auto_schedule(false);
-            gc.request_gc(GcType::Major);
-        }
-
-        embedder.run_maintenance().expect("maintenance should run");
-
-        match &embedder.js_runtime {
-            EmbedderJsRuntime::V8(runtime) => {
-                assert_eq!(runtime.garbage_collection_count(), 1);
-                assert_eq!(
-                    runtime
-                        .last_garbage_collection()
-                        .expect("GC record should exist")
-                        .gc_type,
-                    GcType::Major
-                );
-            }
-            EmbedderJsRuntime::ServoManaged(_) => {
-                panic!("maintenance should promote runtime for scheduled GC")
-            }
-        }
-    }
-
-    #[test]
-    fn test_embedder_starts_with_servo_owned_javascript() {
-        let embedder = ServoEmbedder::new().expect("Should initialize");
-        let status = embedder.js_engine_status();
-
-        assert!(status.servo_controls_javascript);
-        assert_eq!(status.active_engine, crate::js_engine::JsEngineKind::Mozjs);
-    }
-
-    #[test]
-    fn test_execute_js_promotes_embedder_to_v8_experiment() {
-        let mut embedder = ServoEmbedder::new().expect("Should initialize");
-        // ponytail: stub echoes script; rv8 agent swaps for real V8 eval
-        let result = embedder.execute_js("1 + 1").expect("script should execute");
-        let status = embedder.js_engine_status();
-
-        assert!(!result.is_empty(), "expected script result");
-        // Real V8 runtime: active engine is V8, not V8Mock.
-        assert_eq!(status.active_engine, crate::js_engine::JsEngineKind::V8);
-        assert_eq!(
-            status.swap_stage,
-            crate::js_engine::JsEngineSwapStage::EmbedderV8Experiment
-        );
+    fn new_reports_missing_servo() {
+        let error = ServoEmbedder::new().err().expect("Servo is not linked in");
+        assert_eq!(error, SERVO_UNIMPLEMENTED);
     }
 }
